@@ -1,0 +1,17 @@
+# Secretos: nunca se suben
+.env
+CONTRASE*
+
+# Archivos personales en la raíz (resúmenes, recibos)
+/*.pdf
+/*.PDF
+
+# Base de datos local (perfil dev)
+data/
+
+# Build
+target/
+
+# IDE
+.idea/
+*.iml
