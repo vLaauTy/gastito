@@ -1,0 +1,57 @@
+spring:
+  application:
+    name: gastito
+  profiles:
+    default: dev
+  # Secretos (TELEGRAM_*, ANTHROPIC_API_KEY) desde el .env de la raíz del proyecto.
+  config:
+    import: optional:file:.env[.properties]
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+telegrambots:
+  # En false no arranca el long polling (se usa en los tests).
+  enabled: true
+
+gastito:
+  zona-horaria: America/Argentina/Buenos_Aires
+  telegram:
+    token: ${TELEGRAM_BOT_TOKEN:}
+    username: ${TELEGRAM_BOT_USERNAME:}
+    allowed-user-id: ${TELEGRAM_ALLOWED_USER_ID:0}
+  ia:
+    api-key: ${ANTHROPIC_API_KEY:}
+    modelo: claude-haiku-5-5
+    max-tokens: 1024
+    # Precios en USD por millón de tokens (prompts de hasta 100.000 tokens).
+    precios:
+      claude-haiku-5-5:
+        entrada: 0.10
+        salida: 0.50
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:h2:file:./data/gastito;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;AUTO_SERVER=TRUE
+    username: sa
+    password:
+
+---
+spring:
+  config:
+    activate:
+      on-profile: postgres
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:gastito}
+    username: ${POSTGRES_USER:gastito}
+    password: ${POSTGRES_PASSWORD:gastito}
