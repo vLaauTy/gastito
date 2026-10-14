@@ -18,6 +18,7 @@
 
     <properties>
         <java.version>25</java.version>
+        <postgresql.version>42.7.14</postgresql.version>
         <telegrambots.version>10.3.0</telegrambots.version>
         <anthropic-java.version>2.71.0</anthropic-java.version>
     </properties>
