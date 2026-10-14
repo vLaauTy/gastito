@@ -12,9 +12,12 @@ import org.telegram.telegrambots.longpolling.starter.AfterBotRegistration;
 import org.telegram.telegrambots.longpolling.starter.SpringLongPollingBot;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
+import org.telegram.telegrambots.meta.api.methods.ParseMode;
+import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethod;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendChatAction;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Update;
@@ -30,8 +33,8 @@ import org.telegram.telegrambots.meta.generics.TelegramClient;
 import ar.gastito.config.GastitoProperties;
 
 /**
- * Conexión con Telegram por long polling. Traduce updates a llamadas a {@link ProcesadorMensajes} y sus
- * respuestas a métodos de la API. Con telegrambots.enabled=false (tests) no se crea.
+ * Conexión con Telegram por long polling. Traduce updates a llamadas a {@link ProcesadorMensajes} y ejecuta
+ * las {@link Accion}es que devuelve. Con telegrambots.enabled=false (tests) no se crea.
  */
 @Component
 @ConditionalOnProperty(prefix = "telegrambots", name = "enabled", havingValue = "true", matchIfMissing = true)
@@ -71,7 +74,8 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
                 new BotCommand("hoy", "Gastos de hoy y el total"),
                 new BotCommand("mes", "Total del mes por categoría"),
                 new BotCommand("costos", "Lo gastado en IA este mes"),
-                new BotCommand("ayuda", "Cómo cargar gastos"))).build());
+                new BotCommand("ayuda", "Cómo cargar gastos"),
+                new BotCommand("start", "Empezar y mostrar el menú"))).build());
     }
 
     @Override
@@ -80,70 +84,107 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
             log.debug("Update {} ignorado: no es del usuario permitido", update.getUpdateId());
             return;
         }
+        Long chatId = null;
         try {
             if (update.hasCallbackQuery()) {
-                manejarBoton(update.getCallbackQuery());
+                CallbackQuery boton = update.getCallbackQuery();
+                MaybeInaccessibleMessage tarjeta = boton.getMessage();
+                chatId = tarjeta.getChatId();
+                ejecutar(chatId, boton.getId(),
+                        procesador.procesarBoton(chatId, tarjeta.getMessageId(), boton.getData()));
             } else if (update.hasMessage()) {
-                manejarMensaje(update.getMessage());
+                Message mensaje = update.getMessage();
+                chatId = mensaje.getChatId();
+                if (!mensaje.hasText()) {
+                    ejecutar(chatId, null, List.of(Accion.Enviar.texto("Por ahora solo entiendo mensajes de texto.")));
+                    return;
+                }
+                if (!mensaje.getText().startsWith("/")) {
+                    ejecutar(SendChatAction.builder().chatId(chatId).action("typing").build());
+                }
+                ejecutar(chatId, null, procesador.procesarTexto(chatId, mensaje.getMessageId(), mensaje.getText()));
             }
         } catch (RuntimeException e) {
             log.error("Error procesando el update {}", update.getUpdateId(), e);
-            Long chatId = update.hasMessage() ? update.getMessage().getChatId()
-                    : update.hasCallbackQuery() ? update.getCallbackQuery().getMessage().getChatId() : null;
-            if (chatId != null) {
-                enviar(chatId, Respuesta.texto("Uy, algo salió mal procesando eso 😕 Probá de nuevo."));
+            if (update.hasCallbackQuery()) {
+                ejecutar(AnswerCallbackQuery.builder().callbackQueryId(update.getCallbackQuery().getId())
+                        .text("Uy, algo salió mal 😕").build());
+            } else if (chatId != null) {
+                ejecutar(chatId, null, List.of(Accion.Enviar.texto("Uy, algo salió mal procesando eso 😕 Probá de nuevo.")));
             }
         }
     }
 
-    private void manejarMensaje(Message mensaje) {
-        long chatId = mensaje.getChatId();
-        if (!mensaje.hasText()) {
-            enviar(chatId, Respuesta.texto("Por ahora solo entiendo mensajes de texto."));
-            return;
-        }
-        if (!mensaje.getText().startsWith("/")) {
-            ejecutar(SendChatAction.builder().chatId(chatId).action("typing").build());
-        }
-        enviar(chatId, procesador.procesarTexto(chatId, mensaje.getText()));
-    }
-
-    private void manejarBoton(CallbackQuery boton) {
-        ProcesadorMensajes.ResultadoBoton resultado = procesador.procesarBoton(boton.getData());
-        MaybeInaccessibleMessage mensaje = boton.getMessage();
-        if (resultado.textoMensaje() != null && mensaje != null) {
-            // Editar sin replyMarkup saca los botones, así no se pueden volver a tocar.
-            ejecutar(EditMessageText.builder()
-                    .chatId(mensaje.getChatId())
-                    .messageId(mensaje.getMessageId())
-                    .text(resultado.textoMensaje())
-                    .build());
-        }
-        AnswerCallbackQuery.AnswerCallbackQueryBuilder<?, ?> respuesta =
-                AnswerCallbackQuery.builder().callbackQueryId(boton.getId());
-        if (resultado.aviso() != null) {
-            respuesta.text(resultado.aviso());
-        }
-        ejecutar(respuesta.build());
-    }
-
-    private void enviar(long chatId, Respuesta respuesta) {
-        SendMessage.SendMessageBuilder<?, ?> mensaje = SendMessage.builder().chatId(chatId).text(respuesta.texto());
-        if (!respuesta.botones().isEmpty()) {
-            InlineKeyboardRow fila = new InlineKeyboardRow();
-            for (Respuesta.Boton b : respuesta.botones()) {
-                fila.add(InlineKeyboardButton.builder().text(b.texto()).callbackData(b.datos()).build());
+    /** @param callbackId si las acciones responden a un botón, Telegram espera una respuesta (con o sin aviso) */
+    private void ejecutar(long chatId, String callbackId, List<Accion> acciones) {
+        String aviso = null;
+        for (Accion accion : acciones) {
+            switch (accion) {
+                case Accion.Enviar e -> enviar(chatId, e);
+                case Accion.Editar e -> ejecutar(EditMessageText.builder()
+                        .chatId(chatId)
+                        .messageId(e.mensajeId())
+                        .text(e.html())
+                        .parseMode(ParseMode.HTML)
+                        .replyMarkup(inline(e.teclado()))
+                        .build());
+                case Accion.Borrar b -> ejecutar(DeleteMessage.builder().chatId(chatId).messageId(b.mensajeId()).build());
+                case Accion.Avisar a -> aviso = a.texto();
             }
-            mensaje.replyMarkup(InlineKeyboardMarkup.builder().keyboardRow(fila).build());
         }
-        ejecutar(mensaje.build());
+        if (callbackId != null) {
+            AnswerCallbackQuery.AnswerCallbackQueryBuilder<?, ?> respuesta =
+                    AnswerCallbackQuery.builder().callbackQueryId(callbackId);
+            if (aviso != null) {
+                respuesta.text(aviso);
+            }
+            ejecutar(respuesta.build());
+        }
     }
 
-    private void ejecutar(org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethod<?> metodo) {
+    private void enviar(long chatId, Accion.Enviar e) {
+        SendMessage.SendMessageBuilder<?, ?> mensaje = SendMessage.builder()
+                .chatId(chatId)
+                .text(e.html())
+                .parseMode(ParseMode.HTML);
+        if (!e.teclado().isVacio()) {
+            mensaje.replyMarkup(inline(e.teclado()));
+        }
+        try {
+            Message enviado = telegram.execute(mensaje.build());
+            if (e.tarjetaDeMovimiento() != null) {
+                procesador.tarjetaEnviada(chatId, e.tarjetaDeMovimiento(), enviado.getMessageId());
+            }
+        } catch (TelegramApiException ex) {
+            log.warn("Falló sendMessage en Telegram: {}", sinToken(ex.getMessage()));
+        }
+    }
+
+    /** Sin botones devuelve un teclado vacío, que al editar saca los botones que había. */
+    private static InlineKeyboardMarkup inline(Teclado teclado) {
+        InlineKeyboardMarkup.InlineKeyboardMarkupBuilder<?, ?> markup = InlineKeyboardMarkup.builder();
+        if (teclado.isVacio()) {
+            return markup.keyboard(List.of()).build();
+        }
+        for (List<Teclado.Boton> fila : teclado.filas()) {
+            InlineKeyboardRow row = new InlineKeyboardRow();
+            for (Teclado.Boton b : fila) {
+                row.add(InlineKeyboardButton.builder().text(b.texto()).callbackData(b.datos()).build());
+            }
+            markup.keyboardRow(row);
+        }
+        return markup.build();
+    }
+
+    private void ejecutar(BotApiMethod<?> metodo) {
         try {
             telegram.execute(metodo);
         } catch (TelegramApiException e) {
-            log.warn("Falló {} en Telegram: {}", metodo.getMethod(), sinToken(e.getMessage()));
+            String mensaje = sinToken(e.getMessage());
+            if (mensaje != null && mensaje.contains("message is not modified")) {
+                return; // se tocó un botón que deja la tarjeta igual: no es un error
+            }
+            log.warn("Falló {} en Telegram: {}", metodo.getMethod(), mensaje);
         }
     }
 

@@ -70,6 +70,27 @@ class ResolvedorFechasTest {
     }
 
     @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "ayer|2026-10-12T12:00",
+            "Ayer 21:30|2026-10-12T21:30",
+            "12/10|2026-10-12T12:00",
+            "12/10 9:15|2026-10-12T09:15",
+            "el sábado 20hs|2026-10-10T20:00",
+            "hoy|2026-10-13T16:42",
+            "10:05|2026-10-13T10:05"
+    })
+    void leeLaFechaQueEscribeElUsuarioAlEditar(String texto, String esperado) {
+        assertThat(resolvedor.resolverTexto(texto, AHORA)).hasValue(LocalDateTime.parse(esperado));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"mañana", "kiosco 1500", "20/12/2026", "31/02", "hoy 23:00", "25:00"})
+    void alEditarNoInventaFechas(String texto) {
+        assertThat(resolvedor.resolverTexto(texto, AHORA)).isEmpty();
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"20/12/2026", "2027-01-01", "31/02", "32/10"})
     void fechasFuturasOImposiblesSonHoy(String fecha) {
         assertThat(resolver(fecha, "")).isEqualTo(AHORA);

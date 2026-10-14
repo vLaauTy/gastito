@@ -15,7 +15,9 @@ import org.junit.jupiter.params.provider.CsvSource;
 import ar.gastito.movimiento.Categoria;
 import ar.gastito.movimiento.Cuenta;
 import ar.gastito.movimiento.MedioPago;
+import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
+import ar.gastito.movimiento.Origen;
 
 class FormatoMensajesTest {
 
@@ -26,7 +28,7 @@ class FormatoMensajesTest {
     private final FormatoMensajes formato =
             new FormatoMensajes(Clock.fixed(AHORA.atZone(ARGENTINA).toInstant(), ARGENTINA));
 
-    private final Categoria kiosco = new Categoria("Kiosco", "kiosco");
+    private final Categoria kiosco = new Categoria(1L, "Kiosco", "kiosco", null, "🍬");
 
     @ParameterizedTest
     @CsvSource(delimiter = '|', value = {
@@ -69,27 +71,36 @@ class FormatoMensajesTest {
         assertThat(formato.mes(YearMonth.of(2026, 10))).isEqualTo("octubre 2026");
     }
 
-    @Test
-    void lineaComoEnElEjemplo() {
-        MovimientoInterpretado m = MovimientoInterpretado.conCategoria(new BigDecimal("3700"), "Pan de pancho y papas", kiosco,
-                new MedioPago("Efectivo", null), null, null, AHORA);
+    private static Movimiento movimiento(BigDecimal monto, String descripcion, Categoria categoria, MedioPago medio,
+            Cuenta cuenta) {
+        return Movimiento.pendiente(MovimientoInterpretado.conCategoria(monto, descripcion, categoria, medio, cuenta,
+                null, AHORA), Origen.TEXTO, "x", AHORA);
+    }
 
-        assertThat(formato.linea(m)).isEqualTo("Kiosco – $3.700 – Pan de pancho y papas – Efectivo – Hoy 16:42");
+    @Test
+    void lineaConElEmojiDeLaCategoria() {
+        Movimiento m = movimiento(new BigDecimal("3700"), "Pan de pancho y papas", kiosco,
+                new MedioPago("Efectivo", null), null);
+
+        assertThat(formato.linea(m)).isEqualTo("🍬 Kiosco – $3.700 – Pan de pancho y papas – Efectivo – Hoy 16:42");
     }
 
     @Test
     void lineaSinMedioYConDescripcionIgualALaCategoria() {
-        MovimientoInterpretado m = MovimientoInterpretado.conCategoria(new BigDecimal("1500"), "Kiosco", kiosco, null, null,
-                null, AHORA);
-
-        assertThat(formato.linea(m)).isEqualTo("Kiosco – $1.500 – Sin medio de pago – Hoy 16:42");
+        assertThat(formato.linea(movimiento(new BigDecimal("1500"), "Kiosco", kiosco, null, null)))
+                .isEqualTo("🍬 Kiosco – $1.500 – Sin medio de pago – Hoy 16:42");
     }
 
     @Test
     void lineaConCuentaYSinMonto() {
-        MovimientoInterpretado m = MovimientoInterpretado.conCategoria(null, "Pan", kiosco, new MedioPago("QR", null),
-                new Cuenta("Mercado Pago", null), null, AHORA);
+        Movimiento m = movimiento(null, "Pan", kiosco, new MedioPago("QR", null), new Cuenta("Mercado Pago", null));
 
-        assertThat(formato.linea(m)).isEqualTo("Kiosco – Pan – QR (Mercado Pago) – Hoy 16:42");
+        assertThat(formato.linea(m)).isEqualTo("🍬 Kiosco – Pan – QR (Mercado Pago) – Hoy 16:42");
+    }
+
+    @Test
+    void escapaHtml() {
+        assertThat(FormatoMensajes.html("Pan & <b>papas</b>")).isEqualTo("Pan &amp; &lt;b&gt;papas&lt;/b&gt;");
+        assertThat(formato.linea(movimiento(BigDecimal.TEN, "A<B", kiosco, null, null))).contains("A&lt;B");
     }
 }

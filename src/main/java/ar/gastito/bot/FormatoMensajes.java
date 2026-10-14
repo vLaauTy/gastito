@@ -19,7 +19,6 @@ import ar.gastito.movimiento.Categoria;
 import ar.gastito.movimiento.Cuenta;
 import ar.gastito.movimiento.MedioPago;
 import ar.gastito.movimiento.Movimiento;
-import ar.gastito.movimiento.MovimientoInterpretado;
 
 /** Cómo se muestran montos, fechas y movimientos en los mensajes del bot. */
 @Component
@@ -73,33 +72,26 @@ public class FormatoMensajes {
         return MES.format(mes);
     }
 
-    public String linea(MovimientoInterpretado m) {
-        return linea(m.categoria(), m.monto(), m.descripcion(), m.medioPago(), m.cuenta(), m.fechaHora());
-    }
-
+    /** Una línea en HTML para listados: "🍬 Kiosco – $3.700 – Pan de pancho y papas – Efectivo – Hoy 16:42". */
     public String linea(Movimiento m) {
-        return linea(m.getCategoria(), m.getMonto(), m.getDescripcion(), m.getMedioPago(), m.getCuenta(),
-                m.getFechaHora());
-    }
-
-    /** "Kiosco – $3.700 – Pan de pancho y papas – Efectivo – Hoy 16:42". */
-    String linea(Categoria categoria, BigDecimal monto, String descripcion, MedioPago medio, Cuenta cuenta,
-            LocalDateTime fechaHora) {
+        Categoria categoria = m.getCategoria();
         List<String> partes = new ArrayList<>();
-        String nombreCategoria = categoria == null ? "¿Qué categoría?" : categoria.getNombre();
-        partes.add(nombreCategoria);
-        if (monto != null) {
-            partes.add(pesos(monto));
+        partes.add(html(categoria == null ? "¿Qué categoría?" : categoria.getNombreConEmoji()));
+        if (m.getMonto() != null) {
+            partes.add(pesos(m.getMonto()));
         }
-        if (descripcion != null && !descripcion.isBlank() && !descripcion.equalsIgnoreCase(nombreCategoria)) {
-            partes.add(descripcion);
+        String descripcion = m.getDescripcion();
+        if (descripcion != null && !descripcion.isBlank()
+                && (categoria == null || !descripcion.equalsIgnoreCase(categoria.getNombre()))) {
+            partes.add(html(descripcion));
         }
-        partes.add(medio(medio, cuenta));
-        partes.add(fecha(fechaHora));
+        partes.add(html(medio(m.getMedioPago(), m.getCuenta())));
+        partes.add(fecha(m.getFechaHora()));
         return String.join(SEPARADOR, partes);
     }
 
-    private static String medio(MedioPago medio, Cuenta cuenta) {
+    /** "Efectivo", "Débito (Galicia)", "Sin medio de pago". */
+    public static String medio(MedioPago medio, Cuenta cuenta) {
         if (medio == null && cuenta == null) {
             return "Sin medio de pago";
         }
@@ -107,6 +99,14 @@ public class FormatoMensajes {
             return cuenta.getNombre();
         }
         return cuenta == null ? medio.getNombre() : medio.getNombre() + " (" + cuenta.getNombre() + ")";
+    }
+
+    /** Escapa un texto para mandarlo con parse mode HTML. */
+    public static String html(String texto) {
+        if (texto == null) {
+            return "";
+        }
+        return texto.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     private static DecimalFormat formato(String patron) {

@@ -53,6 +53,32 @@ public class ResolvedorFechas {
         return dia.equals(hoy) ? ahora.truncatedTo(ChronoUnit.MINUTES) : dia.atTime(HORA_POR_DEFECTO);
     }
 
+    /**
+     * Lee una fecha escrita por el usuario al editar: "ayer", "12/10", "sábado 21:30", "12/10 9:15" o solo la hora
+     * ("21:30", que es hoy). A diferencia de {@link #resolver}, si no la entiende o es futura devuelve vacío.
+     */
+    public Optional<LocalDateTime> resolverTexto(String texto, LocalDateTime ahora) {
+        if (texto == null || texto.isBlank()) {
+            return Optional.empty();
+        }
+        String[] partes = texto.trim().split("\\s+");
+        String ultima = partes[partes.length - 1];
+        Optional<LocalTime> hora = ultima.contains(":") || ultima.toLowerCase().endsWith("hs")
+                ? resolverHora(ultima)
+                : Optional.empty();
+        String fecha = hora.isPresent()
+                ? String.join(" ", java.util.Arrays.copyOf(partes, partes.length - 1))
+                : texto.trim();
+        LocalDate hoy = ahora.toLocalDate();
+        Optional<LocalDate> dia = fecha.isBlank() ? Optional.of(hoy) : resolverDia(fecha, hoy);
+        if (dia.isEmpty() || dia.get().isAfter(hoy)) {
+            return Optional.empty();
+        }
+        LocalDateTime resultado = dia.get().atTime(hora.orElse(
+                dia.get().equals(hoy) ? ahora.toLocalTime().truncatedTo(ChronoUnit.MINUTES) : HORA_POR_DEFECTO));
+        return resultado.isAfter(ahora) ? Optional.empty() : Optional.of(resultado);
+    }
+
     Optional<LocalDate> resolverDia(String fecha, LocalDate hoy) {
         if (fecha == null || fecha.isBlank()) {
             return Optional.empty();
