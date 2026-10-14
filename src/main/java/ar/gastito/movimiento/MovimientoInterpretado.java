@@ -15,4 +15,9 @@ public record MovimientoInterpretado(
         Cuenta cuenta,
         Tarjeta tarjeta,
         LocalDateTime fechaHora) {
+
+    /** El mismo movimiento con el monto que faltaba. */
+    public MovimientoInterpretado conMonto(BigDecimal nuevoMonto) {
+        return new MovimientoInterpretado(nuevoMonto, descripcion, categoria, medioPago, cuenta, tarjeta, fechaHora);
+    }
 }

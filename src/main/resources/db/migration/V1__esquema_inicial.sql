@@ -80,7 +80,8 @@ CREATE TABLE uso_ia (
     tokens_entrada BIGINT         NOT NULL,
     tokens_salida  BIGINT         NOT NULL,
     proposito      VARCHAR(20)    NOT NULL,
-    costo_usd      NUMERIC(12, 6) NOT NULL,
+    -- 8 decimales: un token de entrada de Haiku cuesta USD 0,0000001.
+    costo_usd      NUMERIC(14, 8) NOT NULL,
     movimiento_id  BIGINT REFERENCES movimiento (id),
     CONSTRAINT ck_uso_ia_proposito CHECK (proposito IN ('TEXTO', 'AUDIO', 'TICKET', 'RESUMEN', 'CONSULTA'))
 );
