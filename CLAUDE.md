@@ -6,7 +6,7 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
 
 ## Stack
 
-- Java 21, Spring Boot 3 (Maven).
+- Java 25, Spring Boot 3 (Maven).
 - Spring Data JPA + Flyway para la base de datos.
 - Base de datos:
   - Perfil `dev` (por defecto): H2 en archivo (`./data/gastito`), en modo compatibilidad PostgreSQL. No necesita Docker.

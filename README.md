@@ -15,7 +15,7 @@ Todos los totales se calculan con SQL sobre la base.
 
 ## Requisitos
 
-- Java 21 o más nuevo.
+- Java 25 o más nuevo.
 - Maven 3.9 o más nuevo.
 - Un bot de Telegram creado con [@BotFather](https://t.me/BotFather).
 - Una API key de Anthropic.
