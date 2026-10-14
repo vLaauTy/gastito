@@ -64,7 +64,7 @@ class ProcesadorMensajesTest {
     void setUp() {
         FormatoMensajes formato = new FormatoMensajes(RELOJ);
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
-                new Tarjetas(formato), formato, RELOJ);
+                new Tarjetas(formato), formato, new GraficoMes(formato), RELOJ);
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));
     }
 
@@ -412,10 +412,49 @@ class ProcesadorMensajesTest {
     }
 
     @Test
-    void comandoMes() {
+    void comandoMesConBarras() {
         when(movimientos.mesActual()).thenReturn(new MovimientoService.ResumenMes(YearMonth.of(2026, 10), List.of(
-                new TotalPorCategoria("Supermercado", new BigDecimal("30000"))), new BigDecimal("30000")));
+                new TotalPorCategoria("Supermercado", "🛒", new BigDecimal("30000")),
+                new TotalPorCategoria("Kiosco", "🍬", new BigDecimal("5200.50"))), new BigDecimal("35200.50")));
 
-        assertThat(texto("/mes")).contains("Octubre 2026").contains("$30.000");
+        assertThat(texto("/mes")).isEqualTo("""
+                📅 <b>Octubre 2026</b>
+                Total: <b>$35.200,50</b>
+
+                <pre>🛒 Supermercado     $30.000 ▇▇▇▇▇▇▇▇▇▇▇▇
+                🍬 Kiosco         $5.200,50 ▇▇</pre>""");
+    }
+
+    @Test
+    void mesSinGastos() {
+        when(movimientos.mesActual()).thenReturn(new MovimientoService.ResumenMes(YearMonth.of(2026, 10), List.of(),
+                BigDecimal.ZERO));
+
+        assertThat(texto("/mes")).isEqualTo("Octubre 2026: todavía no hay gastos guardados.");
+    }
+
+    // --- Menú fijo ---
+
+    @Test
+    void losBotonesDelMenuSonComandosYLasRespuestasLlevanElMenu() {
+        when(movimientos.hoy()).thenReturn(new MovimientoService.ResumenDia(List.of(), BigDecimal.ZERO));
+        when(usoIa.resumenMesActual()).thenReturn(new ResumenUsoIa(0, 0, 0, BigDecimal.ZERO));
+
+        Accion.Enviar hoy = (Accion.Enviar) procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "📊 Hoy").get(0);
+        assertThat(hoy.html()).isEqualTo("Hoy no registraste gastos.");
+        assertThat(hoy.conMenu()).isTrue();
+
+        assertThat(texto("💸 Costos IA")).contains("todavía no se usó la IA");
+        assertThat(texto("❓ Ayuda")).isEqualTo(ProcesadorMensajes.AYUDA);
+        assertThat(((Accion.Enviar) procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "/start").get(0)).conMenu())
+                .isTrue();
+        verifyNoInteractions(interpretador);
+    }
+
+    @Test
+    void lasTarjetasNoLlevanElMenuSinoSusBotones() {
+        Accion.Enviar tarjeta = mandarGasto("kiosco 1500", conCategoria("1500", KIOSCO), Confianza.ALTA, null);
+        assertThat(tarjeta.conMenu()).isFalse();
+        assertThat(tarjeta.teclado().isVacio()).isFalse();
     }
 }

@@ -149,6 +149,8 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
                 .parseMode(ParseMode.HTML);
         if (!e.teclado().isVacio()) {
             mensaje.replyMarkup(inline(e.teclado()));
+        } else if (e.conMenu()) {
+            mensaje.replyMarkup(MenuFijo.teclado());
         }
         try {
             Message enviado = telegram.execute(mensaje.build());

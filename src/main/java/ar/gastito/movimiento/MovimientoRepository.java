@@ -56,12 +56,12 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
     BigDecimal totalGastos(@Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta);
 
     @Query("""
-            select new ar.gastito.movimiento.TotalPorCategoria(c.nombre, sum(m.monto))
+            select new ar.gastito.movimiento.TotalPorCategoria(c.nombre, c.emoji, sum(m.monto))
             from Movimiento m join m.categoria c
             where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
               and m.tipo = ar.gastito.movimiento.TipoMovimiento.GASTO
               and m.fechaHora >= :desde and m.fechaHora < :hasta
-            group by c.nombre
+            group by c.nombre, c.emoji
             order by sum(m.monto) desc""")
     List<TotalPorCategoria> totalesPorCategoria(@Param("desde") LocalDateTime desde,
             @Param("hasta") LocalDateTime hasta);

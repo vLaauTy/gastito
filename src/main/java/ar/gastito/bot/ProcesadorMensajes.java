@@ -31,7 +31,6 @@ import ar.gastito.movimiento.MovimientoIncompletoException;
 import ar.gastito.movimiento.MovimientoNoPendienteException;
 import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Origen;
-import ar.gastito.movimiento.TotalPorCategoria;
 
 /**
  * La conversación con el usuario, sin depender de la API de Telegram: recibe textos y botones y devuelve
@@ -78,6 +77,7 @@ public class ProcesadorMensajes {
     private final ResolvedorFechas fechas;
     private final Tarjetas tarjetas;
     private final FormatoMensajes formato;
+    private final GraficoMes grafico;
     private final Clock clock;
 
     /** Por chat: el campo de qué tarjeta espera que el usuario escriba el valor nuevo. */
@@ -89,7 +89,8 @@ public class ProcesadorMensajes {
 
     public ProcesadorMensajes(InterpretadorService interpretador, MovimientoService movimientos,
             CatalogoService catalogos, RegistroUsoIa usoIa, ResolvedorFechas fechas, Tarjetas tarjetas,
-            FormatoMensajes formato, Clock clock) {
+            FormatoMensajes formato, GraficoMes grafico, Clock clock) {
+        this.grafico = grafico;
         this.interpretador = interpretador;
         this.movimientos = movimientos;
         this.catalogos = catalogos;
@@ -328,23 +329,28 @@ public class ProcesadorMensajes {
 
     // --- Comandos ---
 
-    /** "/hoy@gastito_bot extra" → "/hoy". Null si no es un comando. */
+    /** "/hoy@gastito_bot extra" → "/hoy"; un botón del menú fijo → su comando. Null si no es un comando. */
     static String comando(String texto) {
+        String delMenu = MenuFijo.comando(texto);
+        if (delMenu != null) {
+            return delMenu;
+        }
         if (!texto.startsWith("/")) {
             return null;
         }
         return texto.split("\\s+")[0].split("@")[0].toLowerCase();
     }
 
+    /** Las respuestas a comandos van con el menú fijo, así queda siempre visible. */
     private Accion responderComando(String comando) {
-        return switch (comando) {
-            case "/start" -> Accion.Enviar.texto(BIENVENIDA);
-            case "/ayuda", "/help" -> Accion.Enviar.texto(AYUDA);
-            case "/hoy" -> Accion.Enviar.texto(hoy());
-            case "/mes" -> Accion.Enviar.texto(mes());
-            case "/costos" -> Accion.Enviar.texto(costos());
-            default -> Accion.Enviar.texto("No conozco ese comando. Mirá /ayuda");
-        };
+        return Accion.Enviar.conMenu(switch (comando) {
+            case "/start" -> BIENVENIDA;
+            case "/ayuda", "/help" -> AYUDA;
+            case "/hoy" -> hoy();
+            case "/mes" -> mes();
+            case "/costos" -> costos();
+            default -> "No conozco ese comando. Mirá /ayuda";
+        });
     }
 
     private String hoy() {
@@ -365,11 +371,8 @@ public class ProcesadorMensajes {
         if (mes.porCategoria().isEmpty()) {
             return titulo + ": todavía no hay gastos guardados.";
         }
-        StringBuilder sb = new StringBuilder("<b>").append(titulo).append("</b>\n");
-        for (TotalPorCategoria t : mes.porCategoria()) {
-            sb.append("• ").append(html(t.categoria())).append(": ").append(formato.pesos(t.total())).append('\n');
-        }
-        return sb.append("\nTotal: <b>").append(formato.pesos(mes.total())).append("</b>").toString();
+        return "📅 <b>" + titulo + "</b>\nTotal: <b>" + formato.pesos(mes.total()) + "</b>\n\n"
+                + grafico.barras(mes.porCategoria());
     }
 
     private String costos() {
