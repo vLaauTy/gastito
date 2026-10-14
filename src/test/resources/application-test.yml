@@ -1,0 +1,17 @@
+# Perfil de tests: H2 en memoria, sin Telegram ni llamadas reales a la IA.
+spring:
+  datasource:
+    url: jdbc:h2:mem:gastito-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+
+telegrambots:
+  enabled: false
+
+gastito:
+  telegram:
+    token: test-token
+    username: gastito_test_bot
+    allowed-user-id: 42
+  ia:
+    api-key: test-key
