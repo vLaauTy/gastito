@@ -14,7 +14,8 @@ spring:
     locations: classpath:db/migration
 
 server:
-  port: 8080
+  # 8090 y no 8080, que en esta PC lo usa otro servicio. Se cambia con SERVER_PORT en el .env.
+  port: ${SERVER_PORT:8090}
 
 telegrambots:
   # En false no arranca el long polling (se usa en los tests).
