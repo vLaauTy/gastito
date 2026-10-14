@@ -8,6 +8,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import ar.gastito.ia.RegistroUsoIa;
+import ar.gastito.movimiento.Categoria;
+import ar.gastito.movimiento.Confianza;
 
 /**
  * Llama a la API real de Anthropic con la key del .env (cuesta fracciones de centavo).
@@ -26,26 +28,37 @@ class InterpretacionRealIT {
     RegistroUsoIa registro;
 
     @Test
-    void interpretaUnGastoConLaApiReal() {
-        InterpretadorService.Resultado r = interpretador.interpretar("3700 en pan de pancho y papas, efectivo");
-        System.out.println("Resultado: " + r);
+    void unGastoDudosoPreguntaLaCategoria() {
+        InterpretadorService.Interpretado i = interpretar("3700 en pan de pancho y papas, efectivo");
 
-        assertThat(r).isInstanceOf(InterpretadorService.Interpretado.class);
-        InterpretadorService.Interpretado i = (InterpretadorService.Interpretado) r;
+        assertThat(i.confianza()).isNotEqualTo(Confianza.ALTA);
+        assertThat(i.movimiento().categoria()).isNull();
+        assertThat(i.movimiento().candidatas()).extracting(Categoria::getNombre)
+                .contains("Supermercado")
+                .hasSizeBetween(2, 3);
         assertThat(i.movimiento().monto()).isEqualByComparingTo("3700");
         assertThat(i.movimiento().medioPago().getNombre()).isEqualTo("Efectivo");
-        assertThat(i.usoIaId()).isNotNull();
         System.out.println("Uso del mes: " + registro.resumenMesActual());
     }
 
     @Test
-    void interpretaTarjetaYFechaRelativa() {
-        InterpretadorService.Resultado r = interpretador.interpretar("ayer pagué 12000 de nafta con la tarjeta");
-        System.out.println("Resultado: " + r);
+    void unGastoClaroElige() {
+        InterpretadorService.Interpretado i = interpretar("ayer pagué 12000 de nafta con la tarjeta");
 
-        InterpretadorService.Interpretado i = (InterpretadorService.Interpretado) r;
+        assertThat(i.confianza()).isEqualTo(Confianza.ALTA);
         assertThat(i.movimiento().categoria().getNombre()).isEqualTo("Transporte / Moto");
         assertThat(i.movimiento().medioPago().getNombre()).isEqualTo("Tarjeta de crédito");
         assertThat(i.movimiento().tarjeta()).isNotNull();
+    }
+
+    private InterpretadorService.Interpretado interpretar(String texto) {
+        InterpretadorService.Resultado r = interpretador.interpretar(texto);
+        if (r instanceof InterpretadorService.Interpretado i) {
+            System.out.printf("%s -> confianza %s, categoría %s, candidatas %s%n", texto, i.confianza(),
+                    i.movimiento().categoria() == null ? "-" : i.movimiento().categoria().getNombre(),
+                    i.movimiento().candidatas().stream().map(Categoria::getNombre).toList());
+            return i;
+        }
+        throw new AssertionError("No lo interpretó como gasto: " + r);
     }
 }

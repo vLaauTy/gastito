@@ -86,11 +86,12 @@ public class FormatoMensajes {
     String linea(Categoria categoria, BigDecimal monto, String descripcion, MedioPago medio, Cuenta cuenta,
             LocalDateTime fechaHora) {
         List<String> partes = new ArrayList<>();
-        partes.add(categoria.getNombre());
+        String nombreCategoria = categoria == null ? "¿Qué categoría?" : categoria.getNombre();
+        partes.add(nombreCategoria);
         if (monto != null) {
             partes.add(pesos(monto));
         }
-        if (descripcion != null && !descripcion.isBlank() && !descripcion.equalsIgnoreCase(categoria.getNombre())) {
+        if (descripcion != null && !descripcion.isBlank() && !descripcion.equalsIgnoreCase(nombreCategoria)) {
             partes.add(descripcion);
         }
         partes.add(medio(medio, cuenta));

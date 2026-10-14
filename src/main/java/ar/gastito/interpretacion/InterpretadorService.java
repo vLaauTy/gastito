@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -14,13 +15,17 @@ import org.springframework.stereotype.Service;
 import ar.gastito.ia.ClienteIa;
 import ar.gastito.ia.PropositoIa;
 import ar.gastito.ia.Prompts;
+import ar.gastito.movimiento.Categoria;
+import ar.gastito.movimiento.Confianza;
 import ar.gastito.movimiento.ConPalabrasClave;
 import ar.gastito.movimiento.MedioPago;
+import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
+import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Tarjeta;
 
 /**
- * Interpreta un mensaje de texto en dos niveles: primero el parser simple y, si no alcanza, la IA.
+ * Interpreta un mensaje de texto: primero el parser simple y, si no alcanza, la IA.
  */
 @Service
 public class InterpretadorService {
@@ -32,15 +37,17 @@ public class InterpretadorService {
     private final CatalogoService catalogos;
     private final ParserSimple parser;
     private final ValidadorInterpretacion validador;
+    private final MovimientoService movimientos;
     private final ClienteIa ia;
     private final Prompts prompts;
     private final Clock clock;
 
     public InterpretadorService(CatalogoService catalogos, ParserSimple parser, ValidadorInterpretacion validador,
-            ClienteIa ia, Prompts prompts, Clock clock) {
+            MovimientoService movimientos, ClienteIa ia, Prompts prompts, Clock clock) {
         this.catalogos = catalogos;
         this.parser = parser;
         this.validador = validador;
+        this.movimientos = movimientos;
         this.ia = ia;
         this.prompts = prompts;
         this.clock = clock;
@@ -49,11 +56,13 @@ public class InterpretadorService {
     public sealed interface Resultado {
     }
 
-    /** @param usoIaId registro en uso_ia, o null si se resolvió sin IA */
-    public record Interpretado(MovimientoInterpretado movimiento, Long usoIaId) implements Resultado {
-    }
-
-    public record FaltaMonto(MovimientoInterpretado sinMonto, Long usoIaId) implements Resultado {
+    /**
+     * El movimiento puede venir sin monto o sin categoría elegida (con candidatas): se completa en la tarjeta.
+     *
+     * @param usoIaId registro en uso_ia, o null si se resolvió sin IA
+     */
+    public record Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId)
+            implements Resultado {
     }
 
     public record NoEsGasto() implements Resultado {
@@ -69,20 +78,21 @@ public class InterpretadorService {
             ParserSimple.Resultado r = simple.get();
             return new Interpretado(MovimientoInterpretado.conCategoria(r.monto(), r.descripcion(), r.categoria(),
                     r.medioPago(), r.medioPago() != null && r.medioPago().esTarjetaDeCredito() ? null : r.cuenta(),
-                    tarjeta(r.medioPago(), catalogo), ahora), null);
+                    tarjeta(r.medioPago(), catalogo), ahora), Confianza.ALTA, null);
         }
 
         String instrucciones = prompts.cargar(PROMPT, Map.of(
-                "categorias", lista(catalogo.categorias()),
+                "categorias", categorias(catalogo.categorias()),
                 "mediosPago", lista(catalogo.mediosPago()),
                 "cuentas", lista(catalogo.cuentas()),
+                "ejemplos", ejemplos(movimientos.ultimasConfirmaciones()),
                 "hoy", FORMATO_HOY.format(ahora)));
         ClienteIa.Respuesta<InterpretacionIa> respuesta =
                 ia.extraer(instrucciones, texto, InterpretacionIa.class, PropositoIa.TEXTO);
 
         return switch (validador.validar(respuesta.valor(), catalogo, ahora)) {
-            case ValidadorInterpretacion.Valida v -> new Interpretado(v.movimiento(), respuesta.usoIaId());
-            case ValidadorInterpretacion.FaltaMonto f -> new FaltaMonto(f.sinMonto(), respuesta.usoIaId());
+            case ValidadorInterpretacion.Valida v -> new Interpretado(v.movimiento(), v.confianza(),
+                    respuesta.usoIaId());
             case ValidadorInterpretacion.NoEsGasto n -> new NoEsGasto();
         };
     }
@@ -91,7 +101,26 @@ public class InterpretadorService {
         return medio != null && medio.esTarjetaDeCredito() ? catalogo.tarjetaCredito().orElse(null) : null;
     }
 
-    private static String lista(java.util.List<? extends ConPalabrasClave> opciones) {
+    /** "- Kiosco: golosinas, bebidas…". */
+    static String categorias(List<Categoria> categorias) {
+        return categorias.stream()
+                .map(c -> c.getDescripcion() == null || c.getDescripcion().isBlank()
+                        ? "- " + c.getNombre()
+                        : "- " + c.getNombre() + ": " + c.getDescripcion())
+                .collect(Collectors.joining("\n"));
+    }
+
+    /** "- "Pan de pancho y papas" → Supermercado". */
+    static String ejemplos(List<Movimiento> confirmados) {
+        if (confirmados.isEmpty()) {
+            return "(todavía no hay)";
+        }
+        return confirmados.stream()
+                .map(m -> "- \"" + m.getDescripcion() + "\" → " + m.getCategoria().getNombre())
+                .collect(Collectors.joining("\n"));
+    }
+
+    private static String lista(List<? extends ConPalabrasClave> opciones) {
         return opciones.stream().map(o -> "- " + o.getNombre()).collect(Collectors.joining("\n"));
     }
 }

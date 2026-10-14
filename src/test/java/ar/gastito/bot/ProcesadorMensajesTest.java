@@ -27,6 +27,7 @@ import ar.gastito.ia.RegistroUsoIa;
 import ar.gastito.ia.ResumenUsoIa;
 import ar.gastito.interpretacion.InterpretadorService;
 import ar.gastito.movimiento.Categoria;
+import ar.gastito.movimiento.Confianza;
 import ar.gastito.movimiento.MedioPago;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
@@ -63,7 +64,7 @@ class ProcesadorMensajesTest {
     @Test
     void muestraLoQueEntendioConLosTresBotones() {
         when(interpretador.interpretar("3700 en pan de pancho y papas, efectivo"))
-                .thenReturn(new InterpretadorService.Interpretado(panYPapas, 7L));
+                .thenReturn(new InterpretadorService.Interpretado(panYPapas, Confianza.ALTA, 7L));
 
         Respuesta r = procesador.procesarTexto(CHAT, "3700 en pan de pancho y papas, efectivo");
 
@@ -78,7 +79,7 @@ class ProcesadorMensajesTest {
 
     @Test
     void sinIaNoAsociaUso() {
-        when(interpretador.interpretar("kiosco 1500")).thenReturn(new InterpretadorService.Interpretado(panYPapas, null));
+        when(interpretador.interpretar("kiosco 1500")).thenReturn(new InterpretadorService.Interpretado(panYPapas, Confianza.ALTA, null));
 
         procesador.procesarTexto(CHAT, "kiosco 1500");
 
@@ -89,7 +90,7 @@ class ProcesadorMensajesTest {
     void siFaltaElMontoLoPreguntaYCompletaConElSiguienteMensaje() {
         MovimientoInterpretado sinMonto = panYPapas.conMonto(null);
         when(interpretador.interpretar("pan y papas en efectivo"))
-                .thenReturn(new InterpretadorService.FaltaMonto(sinMonto, 8L));
+                .thenReturn(new InterpretadorService.Interpretado(sinMonto, Confianza.ALTA, 8L));
 
         Respuesta pregunta = procesador.procesarTexto(CHAT, "pan y papas en efectivo");
         assertThat(pregunta.texto()).startsWith("¿Cuánto fue?");
@@ -109,8 +110,8 @@ class ProcesadorMensajesTest {
     @Test
     void siDespuesDePreguntarElMontoMandaOtraCosaSeInterpretaComoNuevo() {
         when(interpretador.interpretar("pan y papas"))
-                .thenReturn(new InterpretadorService.FaltaMonto(panYPapas.conMonto(null), 8L));
-        when(interpretador.interpretar("kiosco 1500")).thenReturn(new InterpretadorService.Interpretado(panYPapas, null));
+                .thenReturn(new InterpretadorService.Interpretado(panYPapas.conMonto(null), Confianza.ALTA, 8L));
+        when(interpretador.interpretar("kiosco 1500")).thenReturn(new InterpretadorService.Interpretado(panYPapas, Confianza.ALTA, null));
 
         procesador.procesarTexto(CHAT, "pan y papas");
         procesador.procesarTexto(CHAT, "kiosco 1500");

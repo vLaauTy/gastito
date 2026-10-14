@@ -10,12 +10,12 @@ import ar.gastito.movimiento.MedioPago;
 /** Catálogo como el del seed de V1, para tests sin base. */
 final class CatalogoDePrueba {
 
-    static final Categoria KIOSCO = new Categoria("Kiosco", "kiosco,kiosko,quiosco,almacen");
-    static final Categoria SUPER = new Categoria("Supermercado", "super,supermercado,chino,dia");
-    static final Categoria TRANSPORTE = new Categoria("Transporte / Moto", "nafta,combustible,moto,transporte");
-    static final Categoria COMIDA = new Categoria("Comida afuera / delivery", "delivery,pedidosya,rappi,pizza");
-    static final Categoria SALUD = new Categoria("Salud / farmacia", "farmacia,salud,medico,remedios");
-    static final Categoria OTROS = new Categoria("Otros", "otros,otro,varios");
+    static final Categoria KIOSCO = new Categoria(1L, "Kiosco", "kiosco,kiosko,quiosco,almacen", "Golosinas, bebidas, snacks, compras chicas al paso.", "🍬");
+    static final Categoria SUPER = new Categoria(2L, "Supermercado", "super,supermercado,chino,dia", "Comida y productos de almacén para la casa.", "🛒");
+    static final Categoria TRANSPORTE = new Categoria(7L, "Transporte / Moto", "nafta,combustible,moto,transporte", "Nafta, colectivo, SUBE, Uber.", "🏍️");
+    static final Categoria COMIDA = new Categoria(4L, "Comida afuera / delivery", "delivery,pedidosya,rappi,pizza", "Comida lista en restaurantes o pedida por app.", "🍔");
+    static final Categoria SALUD = new Categoria(10L, "Salud / farmacia", "farmacia,salud,medico,remedios", "Farmacia, médicos, análisis.", "💊");
+    static final Categoria OTROS = new Categoria(13L, "Otros", "otros,otro,varios", "Lo que no encaja en ninguna otra categoría.", "📦");
 
     static final MedioPago EFECTIVO = new MedioPago("Efectivo", "efectivo,cash");
     static final MedioPago DEBITO = new MedioPago("Débito", "debito");

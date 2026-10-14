@@ -117,12 +117,12 @@ public class ProcesadorMensajes {
         }
 
         return switch (resultado) {
-            case InterpretadorService.Interpretado i -> proponer(i.movimiento(), i.usoIaId(), limpio);
-            case InterpretadorService.FaltaMonto f -> {
-                esperandoMonto.put(chatId, new EsperaMonto(f.sinMonto(), f.usoIaId(), limpio));
-                yield Respuesta.texto("¿Cuánto fue?\nEntendí: " + formato.linea(f.sinMonto())
+            case InterpretadorService.Interpretado i when i.movimiento().monto() == null -> {
+                esperandoMonto.put(chatId, new EsperaMonto(i.movimiento(), i.usoIaId(), limpio));
+                yield Respuesta.texto("¿Cuánto fue?\nEntendí: " + formato.linea(i.movimiento())
                         + "\nMandame solo el monto, por ejemplo: 3700");
             }
+            case InterpretadorService.Interpretado i -> proponer(i.movimiento(), i.usoIaId(), limpio);
             case InterpretadorService.NoEsGasto n -> Respuesta.texto("""
                     No encontré un gasto en el mensaje 🤔
                     Probá con algo como "kiosco 1500" o mirá /ayuda""");

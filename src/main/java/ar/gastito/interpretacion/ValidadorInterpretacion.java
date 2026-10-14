@@ -3,12 +3,14 @@ package ar.gastito.interpretacion;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Component;
 
 import ar.gastito.movimiento.Categoria;
+import ar.gastito.movimiento.Confianza;
 import ar.gastito.movimiento.ConPalabrasClave;
 import ar.gastito.movimiento.Cuenta;
 import ar.gastito.movimiento.MedioPago;
@@ -18,16 +20,19 @@ import ar.gastito.movimiento.Tarjeta;
 /**
  * Controla la respuesta de la IA contra la base antes de mostrarla:
  * <ul>
- * <li>Categoría que no existe: Otros.</li>
+ * <li>Candidatas: se descartan las que no existen y las repetidas, hasta {@value #MAXIMO_CANDIDATAS}.
+ * Si no queda ninguna, Otros con confianza baja.</li>
+ * <li>Solo con confianza alta (y si la primera candidata existe) la categoría queda elegida; si no, se pregunta.</li>
  * <li>Medio de pago o cuenta que no existen: vacío.</li>
  * <li>Pago con tarjeta de crédito: se asocia la tarjeta y no la cuenta (la cuenta paga el resumen).</li>
- * <li>Monto ausente, inválido o no positivo: hay que preguntarlo.</li>
+ * <li>Monto ausente, inválido o no positivo: queda vacío y se pide en la tarjeta.</li>
  * </ul>
  */
 @Component
 public class ValidadorInterpretacion {
 
     static final int LARGO_MAXIMO_DESCRIPCION = 255;
+    static final int MAXIMO_CANDIDATAS = 3;
 
     private final ResolvedorFechas fechas;
 
@@ -38,11 +43,8 @@ public class ValidadorInterpretacion {
     public sealed interface Resultado {
     }
 
-    public record Valida(MovimientoInterpretado movimiento) implements Resultado {
-    }
-
-    /** Todo bien salvo el monto: el movimiento viene con monto null. */
-    public record FaltaMonto(MovimientoInterpretado sinMonto) implements Resultado {
+    /** El movimiento puede venir sin monto o sin categoría elegida: se completa en la tarjeta. */
+    public record Valida(MovimientoInterpretado movimiento, Confianza confianza) implements Resultado {
     }
 
     public record NoEsGasto() implements Resultado {
@@ -52,7 +54,24 @@ public class ValidadorInterpretacion {
         if (ia == null || !ia.esGasto()) {
             return new NoEsGasto();
         }
-        Categoria categoria = buscar(ia.categoria(), catalogo.categorias()).orElseGet(catalogo::otros);
+        List<Categoria> candidatas = new ArrayList<>();
+        boolean primeraExiste = false;
+        List<String> nombres = ia.categorias() == null ? List.of() : ia.categorias();
+        for (int i = 0; i < nombres.size() && candidatas.size() < MAXIMO_CANDIDATAS; i++) {
+            Optional<Categoria> c = buscar(nombres.get(i), catalogo.categorias());
+            if (i == 0) {
+                primeraExiste = c.isPresent();
+            }
+            c.filter(categoria -> !candidatas.contains(categoria)).ifPresent(candidatas::add);
+        }
+        Confianza confianza = confianza(ia.confianza());
+        if (candidatas.isEmpty()) {
+            candidatas.add(catalogo.otros());
+            confianza = Confianza.BAJA;
+        } else if (confianza == Confianza.ALTA && !primeraExiste) {
+            confianza = Confianza.BAJA;
+        }
+
         MedioPago medio = buscar(ia.medioPago(), catalogo.mediosPago()).orElse(null);
         Cuenta cuenta = buscar(ia.cuenta(), catalogo.cuentas()).orElse(null);
         Tarjeta tarjeta = null;
@@ -60,12 +79,26 @@ public class ValidadorInterpretacion {
             tarjeta = catalogo.tarjetaCredito().orElse(null);
             cuenta = null;
         }
-        String descripcion = descripcion(ia.descripcion(), categoria);
+        String descripcion = descripcion(ia.descripcion(), candidatas.get(0));
         LocalDateTime fechaHora = fechas.resolver(ia.fecha(), ia.hora(), ahora);
+        BigDecimal monto = monto(ia.monto()).orElse(null);
 
-        MovimientoInterpretado movimiento = MovimientoInterpretado.conCategoria(monto(ia.monto()).orElse(null), descripcion,
-                categoria, medio, cuenta, tarjeta, fechaHora);
-        return movimiento.monto() == null ? new FaltaMonto(movimiento) : new Valida(movimiento);
+        MovimientoInterpretado movimiento = confianza == Confianza.ALTA
+                ? MovimientoInterpretado.conCategoria(monto, descripcion, candidatas.get(0), medio, cuenta, tarjeta,
+                        fechaHora)
+                : new MovimientoInterpretado(monto, descripcion, null, candidatas, medio, cuenta, tarjeta, fechaHora);
+        return new Valida(movimiento, confianza);
+    }
+
+    static Confianza confianza(String texto) {
+        if (texto == null) {
+            return Confianza.BAJA;
+        }
+        return switch (Textos.normalizar(texto)) {
+            case "alta" -> Confianza.ALTA;
+            case "media" -> Confianza.MEDIA;
+            default -> Confianza.BAJA;
+        };
     }
 
     static Optional<BigDecimal> monto(String texto) {

@@ -1,5 +1,7 @@
 package ar.gastito.interpretacion;
 
+import java.util.List;
+
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
 /**
@@ -19,8 +21,11 @@ public record InterpretacionIa(
                 + "Ejemplo: Pan de pancho y papas")
         String descripcion,
 
-        @JsonPropertyDescription("Exactamente uno de los nombres de la lista de categorías")
-        String categoria,
+        @JsonPropertyDescription("Entre 1 y 3 nombres de la lista de categorías, de la más probable a la menos probable")
+        List<String> categorias,
+
+        @JsonPropertyDescription("Qué tan segura es la primera categoría: alta, media o baja")
+        String confianza,
 
         @JsonPropertyDescription("Exactamente uno de los nombres de la lista de medios de pago, o vacío si no se menciona")
         String medioPago,
