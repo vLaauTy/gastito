@@ -3,8 +3,15 @@
 Bot de Telegram personal para registrar gastos. Le escribís algo como `kiosco 1500` o
 `3700 en pan de pancho y papas, efectivo`, te muestra lo que entendió y lo guardás con un botón.
 
-Los mensajes obvios (`kiosco 1500`) se interpretan sin IA. El resto lo interpreta Claude Haiku. Todos los
-totales se calculan con SQL sobre la base.
+Cómo se interpreta un mensaje, de lo más barato a lo más caro:
+
+1. **Parser simple, sin IA:** `kiosco 1500`, `1500 super débito`.
+2. **Historial:** si ya guardaste gastos con una descripción igual o muy parecida y siempre en la misma
+   categoría, se usa esa sin llamar a la IA.
+3. **Claude Haiku:** devuelve hasta 3 categorías posibles y qué tan seguro está. Si no está seguro, el bot te
+   pregunta con botones.
+
+Todos los totales se calculan con SQL sobre la base.
 
 ## Requisitos
 
@@ -60,15 +67,32 @@ java -jar target/gastito-0.1.0-SNAPSHOT.jar
 
 Corré el jar desde la raíz del proyecto, porque ahí es donde busca el `.env` y la carpeta `data/`.
 
-## Comandos del bot
+## Usar el bot
 
-| Comando   | Qué hace                                    |
-|-----------|---------------------------------------------|
-| `/start`  | Saludo y ejemplos                           |
-| `/ayuda`  | Cómo cargar gastos                          |
-| `/hoy`    | Gastos de hoy y el total                    |
-| `/mes`    | Total del mes por categoría                 |
-| `/costos` | Lo gastado en IA este mes, en dólares       |
+Cada gasto es **una tarjeta** que se edita en el mismo mensaje:
+
+- Si la categoría es clara, la tarjeta viene con **✅ Guardar**, **✏️ Editar** y **❌ Cancelar**.
+- Si es dudosa, muestra **¿Qué categoría?** con un botón por cada candidata y **Otra…** (todas las
+  categorías). Guardar aparece cuando hay categoría y monto.
+- **✏️ Editar** abre un botón por campo. Categoría y medio de pago se eligen con botones. Monto, fecha y
+  descripción se escriben: la tarjeta se actualiza y el mensaje con el valor se borra, así el chat queda limpio.
+- Al guardar, la tarjeta pasa a **✅ Guardado** con el total del mes en esa categoría.
+
+Lo que guardás le enseña al bot: la próxima vez que cargues algo parecido usa la misma categoría, y tus últimas
+20 confirmaciones van como ejemplos en el prompt de la IA.
+
+Abajo del chat queda un menú fijo con estos comandos, que también están en el botón Menú de Telegram:
+
+| Botón          | Comando   | Qué hace                                         |
+|----------------|-----------|--------------------------------------------------|
+|                | `/start`  | Saludo, ejemplos y el menú                       |
+| 📊 Hoy         | `/hoy`    | Gastos de hoy y el total                         |
+| 📅 Mes         | `/mes`    | Total del mes y barras por categoría             |
+| 💸 Costos IA   | `/costos` | Lo gastado en IA este mes, en dólares            |
+| ❓ Ayuda       | `/ayuda`  | Cómo cargar gastos                               |
+
+Las categorías, sus descripciones (las que lee la IA), sus emojis y las palabras clave del parser simple están en
+la tabla `categoria` y se pueden cambiar en la base sin tocar código.
 
 ## Pasar a PostgreSQL (perfil `postgres`)
 
