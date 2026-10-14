@@ -18,6 +18,7 @@ import ar.gastito.ia.Prompts;
 import ar.gastito.movimiento.Categoria;
 import ar.gastito.movimiento.Confianza;
 import ar.gastito.movimiento.ConPalabrasClave;
+import ar.gastito.movimiento.Cuenta;
 import ar.gastito.movimiento.MedioPago;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
@@ -25,7 +26,12 @@ import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Tarjeta;
 
 /**
- * Interpreta un mensaje de texto: primero el parser simple y, si no alcanza, la IA.
+ * Interpreta un mensaje de texto, de lo más barato a lo más caro:
+ * <ol>
+ * <li>Parser simple ("kiosco 1500").</li>
+ * <li>Historial: el mensaje describe algo que el usuario ya confirmó siempre en la misma categoría.</li>
+ * <li>IA, y después el historial corrige la categoría si la descripción ya es conocida.</li>
+ * </ol>
  */
 @Service
 public class InterpretadorService {
@@ -37,16 +43,21 @@ public class InterpretadorService {
     private final CatalogoService catalogos;
     private final ParserSimple parser;
     private final ValidadorInterpretacion validador;
+    private final HistorialCategorias historial;
+    private final ResolvedorFechas fechas;
     private final MovimientoService movimientos;
     private final ClienteIa ia;
     private final Prompts prompts;
     private final Clock clock;
 
     public InterpretadorService(CatalogoService catalogos, ParserSimple parser, ValidadorInterpretacion validador,
-            MovimientoService movimientos, ClienteIa ia, Prompts prompts, Clock clock) {
+            HistorialCategorias historial, ResolvedorFechas fechas, MovimientoService movimientos, ClienteIa ia,
+            Prompts prompts, Clock clock) {
         this.catalogos = catalogos;
         this.parser = parser;
         this.validador = validador;
+        this.historial = historial;
+        this.fechas = fechas;
         this.movimientos = movimientos;
         this.ia = ia;
         this.prompts = prompts;
@@ -73,14 +84,29 @@ public class InterpretadorService {
         Catalogo catalogo = catalogos.cargar();
         LocalDateTime ahora = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MINUTES);
 
+        // 1. Parser simple: "kiosco 1500".
         Optional<ParserSimple.Resultado> simple = parser.parsear(texto, catalogo);
         if (simple.isPresent()) {
             ParserSimple.Resultado r = simple.get();
             return new Interpretado(MovimientoInterpretado.conCategoria(r.monto(), r.descripcion(), r.categoria(),
-                    r.medioPago(), r.medioPago() != null && r.medioPago().esTarjetaDeCredito() ? null : r.cuenta(),
-                    tarjeta(r.medioPago(), catalogo), ahora), Confianza.ALTA, null);
+                    r.medioPago(), cuenta(r.medioPago(), r.cuenta()), tarjeta(r.medioPago(), catalogo), ahora),
+                    Confianza.ALTA, null);
         }
 
+        // 2. Historial: el resto del mensaje coincide con gastos que el usuario ya confirmó en una sola categoría.
+        Optional<ParserSimple.Separado> separado = parser.separar(texto, catalogo);
+        if (separado.isPresent()) {
+            ParserSimple.Separado s = separado.get();
+            Optional<HistorialCategorias.Aprendido> aprendido = historial.buscar(s.resto(), catalogo);
+            if (aprendido.isPresent()) {
+                return new Interpretado(MovimientoInterpretado.conCategoria(s.monto(), aprendido.get().descripcion(),
+                        aprendido.get().categoria(), s.medioPago(), cuenta(s.medioPago(), s.cuenta()),
+                        tarjeta(s.medioPago(), catalogo), fechas.resolver(s.fecha(), "", ahora)),
+                        Confianza.ALTA, null);
+            }
+        }
+
+        // 3. IA, con las descripciones de las categorías y las últimas confirmaciones como ejemplos.
         String instrucciones = prompts.cargar(PROMPT, Map.of(
                 "categorias", categorias(catalogo.categorias()),
                 "mediosPago", lista(catalogo.mediosPago()),
@@ -91,10 +117,21 @@ public class InterpretadorService {
                 ia.extraer(instrucciones, texto, InterpretacionIa.class, PropositoIa.TEXTO);
 
         return switch (validador.validar(respuesta.valor(), catalogo, ahora)) {
-            case ValidadorInterpretacion.Valida v -> new Interpretado(v.movimiento(), v.confianza(),
-                    respuesta.usoIaId());
+            case ValidadorInterpretacion.Valida v -> {
+                // 4. Lo que el usuario ya decidió para esa descripción manda sobre lo que dijo la IA.
+                Optional<HistorialCategorias.Aprendido> aprendido =
+                        historial.buscar(v.movimiento().descripcion(), catalogo);
+                yield aprendido.isPresent()
+                        ? new Interpretado(v.movimiento().conCategoriaElegida(aprendido.get().categoria()),
+                                Confianza.ALTA, respuesta.usoIaId())
+                        : new Interpretado(v.movimiento(), v.confianza(), respuesta.usoIaId());
+            }
             case ValidadorInterpretacion.NoEsGasto n -> new NoEsGasto();
         };
+    }
+
+    private static Cuenta cuenta(MedioPago medio, Cuenta cuenta) {
+        return medio != null && medio.esTarjetaDeCredito() ? null : cuenta;
     }
 
     private static Tarjeta tarjeta(MedioPago medio, Catalogo catalogo) {

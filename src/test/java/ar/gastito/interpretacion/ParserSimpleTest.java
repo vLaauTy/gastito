@@ -81,6 +81,36 @@ class ParserSimpleTest {
         assertThat(parsear(texto)).isEmpty();
     }
 
+    // --- separar: para buscar el resto en el historial ---
+
+    @Test
+    void separaMontoMedioYResto() {
+        ParserSimple.Separado s = parser.separar("3700 en pan de pancho y papas, efectivo", catalogo).orElseThrow();
+
+        assertThat(s.monto()).isEqualByComparingTo("3700");
+        assertThat(s.medioPago()).isSameAs(EFECTIVO);
+        assertThat(s.cuenta()).isNull();
+        assertThat(s.fecha()).isEmpty();
+        assertThat(s.resto()).isEqualTo("en pan de pancho y papas");
+    }
+
+    @Test
+    void separaCuentaYFechaSimple() {
+        ParserSimple.Separado s = parser.separar("ayer pan y leche 2.500 qr mp", catalogo).orElseThrow();
+
+        assertThat(s.monto()).isEqualByComparingTo("2500");
+        assertThat(s.medioPago()).isSameAs(QR);
+        assertThat(s.cuenta()).isSameAs(MERCADO_PAGO);
+        assertThat(s.fecha()).isEqualTo("ayer");
+        assertThat(s.resto()).isEqualTo("pan y leche");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"pan de pancho", "1500", "1500 efectivo", "1500 2000 pan", "", "  "})
+    void sinMontoUnicoOSinRestoNoSepara(String texto) {
+        assertThat(parser.separar(texto, catalogo)).isEmpty();
+    }
+
     @Test
     void nullNoSeResuelve() {
         assertThat(parser.parsear(null, catalogo)).isEmpty();

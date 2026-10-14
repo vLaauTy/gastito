@@ -30,7 +30,9 @@ import ar.gastito.ia.PropositoIa;
 import ar.gastito.ia.Prompts;
 import ar.gastito.movimiento.Categoria;
 import ar.gastito.movimiento.Confianza;
+import ar.gastito.movimiento.DescripcionConfirmada;
 import ar.gastito.movimiento.Movimiento;
+import ar.gastito.movimiento.MovimientoRepository;
 import ar.gastito.movimiento.MovimientoInterpretado;
 import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Origen;
@@ -43,6 +45,7 @@ class InterpretadorServiceTest {
 
     private final CatalogoService catalogos = mock(CatalogoService.class);
     private final MovimientoService movimientos = mock(MovimientoService.class);
+    private final MovimientoRepository repositorio = mock(MovimientoRepository.class);
     private final ClienteIa ia = mock(ClienteIa.class);
     private final Tarjeta tarjeta = mock(Tarjeta.class);
     private InterpretadorService interpretador;
@@ -53,9 +56,76 @@ class InterpretadorServiceTest {
         when(catalogos.cargar()).thenReturn(new Catalogo(base.categorias(), base.mediosPago(), base.cuentas(),
                 Optional.of(tarjeta)));
         when(movimientos.ultimasConfirmaciones()).thenReturn(List.of());
+        when(repositorio.descripcionesConfirmadas()).thenReturn(List.of());
         Clock clock = Clock.fixed(AHORA.withSecond(17).atZone(ARGENTINA).toInstant(), ARGENTINA);
         interpretador = new InterpretadorService(catalogos, new ParserSimple(),
-                new ValidadorInterpretacion(new ResolvedorFechas()), movimientos, ia, new Prompts(), clock);
+                new ValidadorInterpretacion(new ResolvedorFechas()), new HistorialCategorias(repositorio),
+                new ResolvedorFechas(), movimientos, ia, new Prompts(), clock);
+    }
+
+    private void yaConfirmo(DescripcionConfirmada... confirmados) {
+        when(repositorio.descripcionesConfirmadas()).thenReturn(List.of(confirmados));
+    }
+
+    // --- Aprendizaje desde el historial ---
+
+    @Test
+    void siYaLoConfirmoEnUnaCategoriaNoLlamaALaIa() {
+        yaConfirmo(new DescripcionConfirmada("Pan de pancho y papas", SUPER.getId()));
+
+        InterpretadorService.Interpretado i = (InterpretadorService.Interpretado) interpretador.interpretar(
+                "3700 en pan de pancho y papas, efectivo");
+
+        assertThat(i.confianza()).isEqualTo(Confianza.ALTA);
+        assertThat(i.movimiento().categoria()).isSameAs(SUPER);
+        assertThat(i.movimiento().descripcion()).isEqualTo("Pan de pancho y papas");
+        assertThat(i.movimiento().monto()).isEqualByComparingTo("3700");
+        assertThat(i.movimiento().medioPago()).isSameAs(EFECTIVO);
+        assertThat(i.movimiento().fechaHora()).isEqualTo(AHORA);
+        assertThat(i.usoIaId()).isNull();
+        verifyNoInteractions(ia);
+    }
+
+    @Test
+    void elHistorialTambienResuelveAyer() {
+        yaConfirmo(new DescripcionConfirmada("Pan de pancho y papas", SUPER.getId()));
+
+        InterpretadorService.Interpretado i = (InterpretadorService.Interpretado) interpretador.interpretar(
+                "ayer 3700 pan de pancho y papas");
+
+        assertThat(i.movimiento().fechaHora()).isEqualTo(LocalDateTime.of(2026, 10, 12, 12, 0));
+        verifyNoInteractions(ia);
+    }
+
+    @Test
+    void despuesDeLaIaElHistorialCorrigeLaCategoria() {
+        yaConfirmo(new DescripcionConfirmada("Pan de pancho y papas", SUPER.getId()));
+        iaResponde(new InterpretacionIa(true, "3700", "Pan de pancho y papas", List.of("Kiosco", "Supermercado"),
+                "media", "", "", "", ""), 7L);
+
+        // "unos" y "compré" no los saca el separador, pero la IA devuelve la descripción limpia.
+        InterpretadorService.Interpretado i = (InterpretadorService.Interpretado) interpretador.interpretar(
+                "compré unos panes de pancho con papas por 3700");
+
+        assertThat(i.confianza()).isEqualTo(Confianza.ALTA);
+        assertThat(i.movimiento().categoria()).isSameAs(SUPER);
+        assertThat(i.movimiento().candidatas()).isEmpty();
+        assertThat(i.usoIaId()).isEqualTo(7L);
+    }
+
+    @Test
+    void siElHistorialNoEsUnanimeSePregunta() {
+        yaConfirmo(new DescripcionConfirmada("Pan de pancho y papas", SUPER.getId()),
+                new DescripcionConfirmada("Pan de pancho y papas", KIOSCO.getId()));
+        iaResponde(new InterpretacionIa(true, "3700", "Pan de pancho y papas", List.of("Supermercado", "Kiosco"),
+                "media", "", "", "", ""), 7L);
+
+        InterpretadorService.Interpretado i = (InterpretadorService.Interpretado) interpretador.interpretar(
+                "3700 en pan de pancho y papas");
+
+        assertThat(i.confianza()).isEqualTo(Confianza.MEDIA);
+        assertThat(i.movimiento().categoria()).isNull();
+        assertThat(i.movimiento().candidatas()).containsExactly(SUPER, KIOSCO);
     }
 
     private void iaResponde(InterpretacionIa respuesta, long usoIaId) {
