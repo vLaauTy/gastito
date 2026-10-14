@@ -20,6 +20,11 @@ public class Categoria implements ConPalabrasClave {
 
     private String palabrasClave;
 
+    /** Qué entra en esta categoría. Se le pasa a la IA. */
+    private String descripcion;
+
+    private String emoji;
+
     private boolean activa = true;
 
     protected Categoria() {
@@ -30,8 +35,28 @@ public class Categoria implements ConPalabrasClave {
         this.palabrasClave = palabrasClave;
     }
 
+    public Categoria(Long id, String nombre, String palabrasClave, String descripcion, String emoji) {
+        this(nombre, palabrasClave);
+        this.id = id;
+        this.descripcion = descripcion;
+        this.emoji = emoji;
+    }
+
     public Long getId() {
         return id;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public String getEmoji() {
+        return emoji;
+    }
+
+    /** "🍬 Kiosco", o solo el nombre si no tiene emoji. */
+    public String getNombreConEmoji() {
+        return emoji == null || emoji.isBlank() ? nombre : emoji + " " + nombre;
     }
 
     @Override

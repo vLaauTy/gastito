@@ -60,6 +60,52 @@ class MigracionTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void todasLasCategoriasTienenEmojiYDescripcion() {
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM categoria WHERE emoji IS NULL OR descripcion IS NULL", Integer.class))
+                .isZero();
+        assertThat(jdbc.queryForObject("SELECT emoji FROM categoria WHERE nombre = 'Kiosco'", String.class))
+                .isEqualTo("🍬");
+    }
+
+    @Test
+    void unPendientePuedeNoTenerMontoNiCategoria() {
+        jdbc.update("""
+                INSERT INTO movimiento (fecha_hora, monto, tipo, origen, estado, creado_en)
+                VALUES (CURRENT_TIMESTAMP, NULL, 'GASTO', 'TEXTO', 'PENDIENTE', CURRENT_TIMESTAMP)""");
+    }
+
+    @Test
+    void unGastoConfirmadoNecesitaMontoYCategoria() {
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO movimiento (fecha_hora, monto, tipo, categoria_id, origen, estado, creado_en)
+                VALUES (CURRENT_TIMESTAMP, NULL, 'GASTO', 1, 'TEXTO', 'CONFIRMADO', CURRENT_TIMESTAMP)"""))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO movimiento (fecha_hora, monto, tipo, categoria_id, origen, estado, creado_en)
+                VALUES (CURRENT_TIMESTAMP, 100, 'GASTO', NULL, 'TEXTO', 'CONFIRMADO', CURRENT_TIMESTAMP)"""))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void guardaCandidatasEnOrden() {
+        jdbc.update("""
+                INSERT INTO movimiento (id, fecha_hora, monto, tipo, origen, estado, creado_en)
+                VALUES (1000, CURRENT_TIMESTAMP, 3700, 'GASTO', 'TEXTO', 'PENDIENTE', CURRENT_TIMESTAMP)""");
+        jdbc.update("""
+                INSERT INTO movimiento_categoria_candidata (movimiento_id, orden, categoria_id)
+                SELECT 1000, 0, id FROM categoria WHERE nombre = 'Supermercado'""");
+        jdbc.update("""
+                INSERT INTO movimiento_categoria_candidata (movimiento_id, orden, categoria_id)
+                SELECT 1000, 1, id FROM categoria WHERE nombre = 'Kiosco'""");
+
+        assertThat(jdbc.queryForList("""
+                SELECT c.nombre FROM movimiento_categoria_candidata mc JOIN categoria c ON c.id = mc.categoria_id
+                WHERE mc.movimiento_id = 1000 ORDER BY mc.orden""", String.class))
+                .containsExactly("Supermercado", "Kiosco");
+    }
+
     private int contar(String tabla) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM " + tabla, Integer.class);
     }
