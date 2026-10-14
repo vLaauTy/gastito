@@ -67,7 +67,7 @@ public class InterpretadorService {
         Optional<ParserSimple.Resultado> simple = parser.parsear(texto, catalogo);
         if (simple.isPresent()) {
             ParserSimple.Resultado r = simple.get();
-            return new Interpretado(new MovimientoInterpretado(r.monto(), r.descripcion(), r.categoria(),
+            return new Interpretado(MovimientoInterpretado.conCategoria(r.monto(), r.descripcion(), r.categoria(),
                     r.medioPago(), r.medioPago() != null && r.medioPago().esTarjetaDeCredito() ? null : r.cuenta(),
                     tarjeta(r.medioPago(), catalogo), ahora), null);
         }

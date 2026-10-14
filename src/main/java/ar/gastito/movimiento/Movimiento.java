@@ -2,6 +2,9 @@ package ar.gastito.movimiento;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -11,7 +14,10 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 
 @Entity
@@ -69,6 +75,14 @@ public class Movimiento {
     /** Cuándo se registró en el sistema. */
     private LocalDateTime creadoEn;
 
+    /** Categorías posibles, en orden, mientras el usuario no eligió una. */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "movimiento_categoria_candidata",
+            joinColumns = @JoinColumn(name = "movimiento_id"),
+            inverseJoinColumns = @JoinColumn(name = "categoria_id"))
+    @OrderColumn(name = "orden")
+    private List<Categoria> candidatas = new ArrayList<>();
+
     protected Movimiento() {
     }
 
@@ -87,11 +101,66 @@ public class Movimiento {
         m.estado = EstadoMovimiento.PENDIENTE;
         m.textoOriginal = textoOriginal;
         m.creadoEn = ahora;
+        if (m.categoria == null) {
+            m.candidatas.addAll(interpretado.candidatas());
+        }
         return m;
     }
 
+    /** Tiene monto y categoría: se puede guardar. */
+    public boolean isCompleto() {
+        return monto != null && categoria != null;
+    }
+
     public void confirmar() {
+        if (!isCompleto()) {
+            throw new MovimientoIncompletoException(id);
+        }
         cambiarEstadoDesdePendiente(EstadoMovimiento.CONFIRMADO);
+    }
+
+    public void elegirCategoria(Categoria elegida) {
+        verificarPendiente();
+        this.categoria = elegida;
+    }
+
+    public void cambiarMonto(BigDecimal nuevo) {
+        verificarPendiente();
+        if (nuevo == null || nuevo.signum() <= 0) {
+            throw new IllegalArgumentException("El monto tiene que ser mayor a cero");
+        }
+        this.monto = nuevo;
+    }
+
+    public void cambiarDescripcion(String nueva) {
+        verificarPendiente();
+        this.descripcion = nueva;
+    }
+
+    public void cambiarFechaHora(LocalDateTime nueva) {
+        verificarPendiente();
+        this.fechaHora = nueva;
+    }
+
+    /**
+     * Con tarjeta de crédito se asocia la tarjeta y se saca la cuenta (la cuenta es la que paga el resumen).
+     * Con otro medio, se saca la tarjeta.
+     */
+    public void cambiarMedioPago(MedioPago nuevo, Tarjeta tarjetaCredito) {
+        verificarPendiente();
+        this.medioPago = nuevo;
+        if (nuevo != null && nuevo.esTarjetaDeCredito()) {
+            this.tarjeta = tarjetaCredito;
+            this.cuenta = null;
+        } else {
+            this.tarjeta = null;
+        }
+    }
+
+    private void verificarPendiente() {
+        if (estado != EstadoMovimiento.PENDIENTE) {
+            throw new IllegalStateException("El movimiento " + id + " ya está " + estado + ": no se puede editar");
+        }
     }
 
     public void cancelar() {
@@ -175,5 +244,9 @@ public class Movimiento {
 
     public LocalDateTime getCreadoEn() {
         return creadoEn;
+    }
+
+    public List<Categoria> getCandidatas() {
+        return Collections.unmodifiableList(candidatas);
     }
 }

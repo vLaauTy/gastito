@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +41,9 @@ class MovimientoServiceTest {
 
     @Autowired
     CategoriaRepository categorias;
+
+    @Autowired
+    MedioPagoRepository medios;
 
     @Test
     void alConfirmarDevuelveElTotalDelMesEnLaCategoria() {
@@ -111,13 +115,92 @@ class MovimientoServiceTest {
         assertThat(service.mesActual().porCategoria()).isEmpty();
     }
 
+    @Test
+    void unGastoDudosoGuardaSusCandidatasEnOrdenYNoSePuedeGuardarSinCategoria() {
+        Movimiento m = service.crearPendiente(new MovimientoInterpretado(new BigDecimal("3700"), "Pan de pancho",
+                null, List.of(categoria("Supermercado"), categoria("Kiosco")), null, null, null, AHORA),
+                Origen.TEXTO, "test");
+
+        Movimiento leido = service.buscar(m.getId());
+        assertThat(leido.getCategoria()).isNull();
+        assertThat(leido.getCandidatas()).extracting(Categoria::getNombre).containsExactly("Supermercado", "Kiosco");
+        assertThat(leido.isCompleto()).isFalse();
+        assertThatThrownBy(() -> service.confirmar(m.getId())).isInstanceOf(MovimientoIncompletoException.class);
+
+        Movimiento conCategoria = service.elegirCategoria(m.getId(), categoria("Supermercado").getId());
+        assertThat(conCategoria.isCompleto()).isTrue();
+        assertThat(service.confirmar(m.getId()).totalMesCategoria()).isEqualByComparingTo("3700");
+    }
+
+    @Test
+    void unGastoSinMontoSeCompletaEditando() {
+        Movimiento m = service.crearPendiente(MovimientoInterpretado.conCategoria(null, "Pan", categoria("Kiosco"),
+                null, null, null, AHORA), Origen.TEXTO, "test");
+        assertThatThrownBy(() -> service.confirmar(m.getId())).isInstanceOf(MovimientoIncompletoException.class);
+
+        service.cambiarMonto(m.getId(), new BigDecimal("3700"));
+
+        assertThat(service.confirmar(m.getId()).movimiento().getMonto()).isEqualByComparingTo("3700");
+    }
+
+    @Test
+    void editarCampos() {
+        Movimiento m = pendiente(categoria("Kiosco"), "1500", AHORA);
+
+        service.cambiarDescripcion(m.getId(), "Alfajores");
+        service.cambiarFechaHora(m.getId(), AHORA.minusDays(1));
+        service.elegirCategoria(m.getId(), categoria("Supermercado").getId());
+        Movimiento editado = service.cambiarMonto(m.getId(), new BigDecimal("1800"));
+
+        assertThat(editado.getDescripcion()).isEqualTo("Alfajores");
+        assertThat(editado.getFechaHora()).isEqualTo(AHORA.minusDays(1));
+        assertThat(editado.getCategoria().getNombre()).isEqualTo("Supermercado");
+        assertThat(editado.getMonto()).isEqualByComparingTo("1800");
+        assertThatThrownBy(() -> service.cambiarMonto(m.getId(), BigDecimal.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void cambiarAMedioTarjetaAsociaLaTarjetaYSacaLaCuenta() {
+        Movimiento m = pendiente(categoria("Kiosco"), "1500", AHORA);
+        Long credito = medios.findByActivoTrueOrderById().stream()
+                .filter(MedioPago::esTarjetaDeCredito).findFirst().orElseThrow().getId();
+        Long efectivo = medios.findByActivoTrueOrderById().get(0).getId();
+
+        Movimiento conTarjeta = service.cambiarMedioPago(m.getId(), credito);
+        assertThat(conTarjeta.getTarjeta().getNombre()).isEqualTo("MasterCard Gold");
+
+        Movimiento conEfectivo = service.cambiarMedioPago(m.getId(), efectivo);
+        assertThat(conEfectivo.getMedioPago().getNombre()).isEqualTo("Efectivo");
+        assertThat(conEfectivo.getTarjeta()).isNull();
+
+        assertThat(service.cambiarMedioPago(m.getId(), null).getMedioPago()).isNull();
+    }
+
+    @Test
+    void noSeEditaUnGastoYaGuardado() {
+        Movimiento m = confirmado(categoria("Kiosco"), "1500", AHORA);
+        assertThatThrownBy(() -> service.cambiarMonto(m.getId(), BigDecimal.TEN))
+                .isInstanceOf(MovimientoNoPendienteException.class);
+    }
+
+    @Test
+    void ultimasConfirmacionesDeLaMasNueva() {
+        confirmado(categoria("Kiosco"), "1", AHORA);
+        Movimiento ultimo = confirmado(categoria("Ropa"), "2", AHORA);
+        pendiente(categoria("Salidas"), "3", AHORA);
+
+        assertThat(service.ultimasConfirmaciones()).extracting(Movimiento::getId)
+                .startsWith(ultimo.getId()).hasSize(2);
+    }
+
     private Categoria categoria(String nombre) {
         return categorias.findByNombre(nombre).orElseThrow();
     }
 
     private Movimiento pendiente(Categoria categoria, String monto, LocalDateTime fecha) {
-        MovimientoInterpretado interpretado = new MovimientoInterpretado(new BigDecimal(monto), "test", categoria,
-                null, null, null, fecha);
+        MovimientoInterpretado interpretado = MovimientoInterpretado.conCategoria(new BigDecimal(monto), "test",
+                categoria, null, null, null, fecha);
         return service.crearPendiente(interpretado, Origen.TEXTO, "test");
     }
 

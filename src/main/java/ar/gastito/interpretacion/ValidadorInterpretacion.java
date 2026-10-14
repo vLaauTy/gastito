@@ -63,7 +63,7 @@ public class ValidadorInterpretacion {
         String descripcion = descripcion(ia.descripcion(), categoria);
         LocalDateTime fechaHora = fechas.resolver(ia.fecha(), ia.hora(), ahora);
 
-        MovimientoInterpretado movimiento = new MovimientoInterpretado(monto(ia.monto()).orElse(null), descripcion,
+        MovimientoInterpretado movimiento = MovimientoInterpretado.conCategoria(monto(ia.monto()).orElse(null), descripcion,
                 categoria, medio, cuenta, tarjeta, fechaHora);
         return movimiento.monto() == null ? new FaltaMonto(movimiento) : new Valida(movimiento);
     }

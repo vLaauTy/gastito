@@ -8,17 +8,28 @@ import java.time.YearMonth;
 import java.util.List;
 import java.util.NoSuchElementException;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class MovimientoService {
 
+    /** Cuántas confirmaciones recientes se le pasan a la IA como ejemplos. */
+    public static final int EJEMPLOS_PARA_LA_IA = 20;
+
     private final MovimientoRepository movimientos;
+    private final CategoriaRepository categorias;
+    private final MedioPagoRepository medios;
+    private final TarjetaRepository tarjetas;
     private final Clock clock;
 
-    public MovimientoService(MovimientoRepository movimientos, Clock clock) {
+    public MovimientoService(MovimientoRepository movimientos, CategoriaRepository categorias,
+            MedioPagoRepository medios, TarjetaRepository tarjetas, Clock clock) {
         this.movimientos = movimientos;
+        this.categorias = categorias;
+        this.medios = medios;
+        this.tarjetas = tarjetas;
         this.clock = clock;
     }
 
@@ -52,6 +63,50 @@ public class MovimientoService {
         Movimiento m = buscarPendiente(id);
         m.cancelar();
         return m;
+    }
+
+    @Transactional
+    public Movimiento elegirCategoria(Long id, Long categoriaId) {
+        Movimiento m = buscarPendiente(id);
+        m.elegirCategoria(categorias.findById(categoriaId)
+                .orElseThrow(() -> new NoSuchElementException("No existe la categoría " + categoriaId)));
+        return m;
+    }
+
+    @Transactional
+    public Movimiento cambiarMonto(Long id, BigDecimal monto) {
+        Movimiento m = buscarPendiente(id);
+        m.cambiarMonto(monto);
+        return m;
+    }
+
+    @Transactional
+    public Movimiento cambiarDescripcion(Long id, String descripcion) {
+        Movimiento m = buscarPendiente(id);
+        m.cambiarDescripcion(descripcion);
+        return m;
+    }
+
+    @Transactional
+    public Movimiento cambiarFechaHora(Long id, LocalDateTime fechaHora) {
+        Movimiento m = buscarPendiente(id);
+        m.cambiarFechaHora(fechaHora);
+        return m;
+    }
+
+    /** @param medioPagoId null para dejarlo sin medio de pago */
+    @Transactional
+    public Movimiento cambiarMedioPago(Long id, Long medioPagoId) {
+        Movimiento m = buscarPendiente(id);
+        MedioPago medio = medioPagoId == null ? null : medios.findById(medioPagoId)
+                .orElseThrow(() -> new NoSuchElementException("No existe el medio de pago " + medioPagoId));
+        m.cambiarMedioPago(medio, tarjetas.findFirstByActivaTrueOrderById().orElse(null));
+        return m;
+    }
+
+    @Transactional(readOnly = true)
+    public List<Movimiento> ultimasConfirmaciones() {
+        return movimientos.ultimosConfirmados(PageRequest.of(0, EJEMPLOS_PARA_LA_IA));
     }
 
     @Transactional(readOnly = true)

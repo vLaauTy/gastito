@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -16,8 +17,27 @@ import org.springframework.data.repository.query.Param;
  */
 public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
 
-    @EntityGraph(attributePaths = {"categoria", "medioPago", "cuenta", "tarjeta"})
+    @EntityGraph(attributePaths = {"categoria", "medioPago", "cuenta", "tarjeta", "candidatas"})
     Optional<Movimiento> findConDetalleById(Long id);
+
+    /** Últimos gastos confirmados, del más nuevo al más viejo (ejemplos para la IA). */
+    @EntityGraph(attributePaths = {"categoria"})
+    @Query("""
+            select m from Movimiento m
+            where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
+              and m.tipo = ar.gastito.movimiento.TipoMovimiento.GASTO
+              and m.descripcion is not null
+            order by m.creadoEn desc, m.id desc""")
+    List<Movimiento> ultimosConfirmados(Pageable pagina);
+
+    /** Cada descripción confirmada con la categoría que le dio el usuario (sin repetidos). */
+    @Query("""
+            select distinct new ar.gastito.movimiento.DescripcionConfirmada(m.descripcion, m.categoria.id)
+            from Movimiento m
+            where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
+              and m.tipo = ar.gastito.movimiento.TipoMovimiento.GASTO
+              and m.descripcion is not null and m.categoria is not null""")
+    List<DescripcionConfirmada> descripcionesConfirmadas();
 
     @Query("""
             select coalesce(sum(m.monto), 0) from Movimiento m

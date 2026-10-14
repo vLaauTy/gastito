@@ -48,7 +48,7 @@ class ProcesadorMensajesTest {
 
     private final Categoria kiosco = new Categoria("Kiosco", "kiosco");
     private final MedioPago efectivo = new MedioPago("Efectivo", "efectivo");
-    private final MovimientoInterpretado panYPapas = new MovimientoInterpretado(new BigDecimal("3700"),
+    private final MovimientoInterpretado panYPapas = MovimientoInterpretado.conCategoria(new BigDecimal("3700"),
             "Pan de pancho y papas", kiosco, efectivo, null, null, AHORA);
 
     @BeforeEach

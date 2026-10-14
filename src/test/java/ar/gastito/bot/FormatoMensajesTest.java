@@ -71,7 +71,7 @@ class FormatoMensajesTest {
 
     @Test
     void lineaComoEnElEjemplo() {
-        MovimientoInterpretado m = new MovimientoInterpretado(new BigDecimal("3700"), "Pan de pancho y papas", kiosco,
+        MovimientoInterpretado m = MovimientoInterpretado.conCategoria(new BigDecimal("3700"), "Pan de pancho y papas", kiosco,
                 new MedioPago("Efectivo", null), null, null, AHORA);
 
         assertThat(formato.linea(m)).isEqualTo("Kiosco – $3.700 – Pan de pancho y papas – Efectivo – Hoy 16:42");
@@ -79,7 +79,7 @@ class FormatoMensajesTest {
 
     @Test
     void lineaSinMedioYConDescripcionIgualALaCategoria() {
-        MovimientoInterpretado m = new MovimientoInterpretado(new BigDecimal("1500"), "Kiosco", kiosco, null, null,
+        MovimientoInterpretado m = MovimientoInterpretado.conCategoria(new BigDecimal("1500"), "Kiosco", kiosco, null, null,
                 null, AHORA);
 
         assertThat(formato.linea(m)).isEqualTo("Kiosco – $1.500 – Sin medio de pago – Hoy 16:42");
@@ -87,7 +87,7 @@ class FormatoMensajesTest {
 
     @Test
     void lineaConCuentaYSinMonto() {
-        MovimientoInterpretado m = new MovimientoInterpretado(null, "Pan", kiosco, new MedioPago("QR", null),
+        MovimientoInterpretado m = MovimientoInterpretado.conCategoria(null, "Pan", kiosco, new MedioPago("QR", null),
                 new Cuenta("Mercado Pago", null), null, AHORA);
 
         assertThat(formato.linea(m)).isEqualTo("Kiosco – Pan – QR (Mercado Pago) – Hoy 16:42");
