@@ -52,7 +52,9 @@ spring:
   config:
     activate:
       on-profile: postgres
+  # Conexión desde el .env (DB_URL, DB_USER, DB_PASSWORD). Sin valores por defecto: si falta alguna,
+  # la aplicación no arranca, y la contraseña nunca queda escrita en el repo.
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:gastito}
-    username: ${POSTGRES_USER:gastito}
-    password: ${POSTGRES_PASSWORD:gastito}
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}

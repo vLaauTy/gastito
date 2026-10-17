@@ -96,17 +96,20 @@ la tabla `categoria` y se pueden cambiar en la base sin tocar código.
 
 ## Pasar a PostgreSQL (perfil `postgres`)
 
-Cuando tengas Docker funcionando:
+1. Tené un PostgreSQL accesible (por ejemplo en Docker dentro de una VM, publicado en `localhost:5432`) y
+   agregá la conexión al `.env`:
 
-1. Levantá la base:
-
-   ```bash
-   docker compose up -d
+   ```properties
+   DB_URL=jdbc:postgresql://localhost:5432/gastito
+   DB_USER=gastito
+   DB_PASSWORD=...
    ```
 
-   Crea la base `gastito` con usuario y contraseña `gastito` en `localhost:5432`. Para cambiarlos, agregá
-   `POSTGRES_DB`, `POSTGRES_USER` y `POSTGRES_PASSWORD` al `.env` (los leen tanto Docker Compose como la
-   aplicación). También están `POSTGRES_HOST` y `POSTGRES_PORT`.
+   La aplicación no tiene valores por defecto para estas tres: si falta alguna, no arranca. La contraseña
+   vive solo en el `.env`.
+
+   Si preferís levantar la base con el `docker-compose.yml` del repo (`docker compose up -d`), usa las mismas
+   `DB_USER` y `DB_PASSWORD` del `.env`.
 
 2. Corré la aplicación con el perfil `postgres`:
 

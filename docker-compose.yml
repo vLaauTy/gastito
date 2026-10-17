@@ -4,9 +4,9 @@ services:
     image: postgres:17
     container_name: gastito-postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-gastito}
-      POSTGRES_USER: ${POSTGRES_USER:-gastito}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gastito}
+      POSTGRES_DB: gastito
+      POSTGRES_USER: ${DB_USER:-gastito}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Falta DB_PASSWORD en el .env}
       TZ: America/Argentina/Buenos_Aires
     ports:
       - "5432:5432"
