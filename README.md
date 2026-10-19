@@ -45,6 +45,27 @@ Otros ajustes, en `src/main/resources/application.yml`:
 Las instrucciones que se le mandan a la IA están en `src/main/resources/prompts/` y se pueden ajustar sin
 tocar código.
 
+## Arrancar el bot (lo más fácil)
+
+Doble clic en **`iniciar.bat`**, en la raíz del proyecto. Arranca con el perfil `postgres` y antes revisa:
+
+1. Que estén Java y Maven.
+2. Que el `.env` tenga todas las variables (no muestra los valores).
+3. Que no haya otro Gastito prendido. Si hay uno, pregunta si lo apaga: dos a la vez se pisan en Telegram.
+4. Que PostgreSQL responda. Si la VM todavía está arrancando, espera hasta 3 minutos.
+5. Que el jar esté al día. Compila solo la primera vez y cuando cambió el código (sin correr los tests).
+
+Cuando en la ventana aparece `Bot de Telegram conectado y escuchando mensajes`, ya se puede usar. **Para
+apagarlo, cerrá la ventana.** Si algo falla, la ventana queda abierta con el motivo.
+
+Para arrancar con H2 en lugar de PostgreSQL, desde una terminal en la raíz del proyecto:
+
+```bash
+iniciar.bat dev
+```
+
+Las secciones de abajo explican cómo arrancarlo a mano con Maven o con el jar.
+
 ## Correr en perfil `dev` (H2, sin Docker)
 
 ```bash
@@ -111,7 +132,7 @@ la tabla `categoria` y se pueden cambiar en la base sin tocar código.
    Si preferís levantar la base con el `docker-compose.yml` del repo (`docker compose up -d`), usa las mismas
    `DB_USER` y `DB_PASSWORD` del `.env`.
 
-2. Corré la aplicación con el perfil `postgres`:
+2. Corré la aplicación con el perfil `postgres`: doble clic en `iniciar.bat`, o a mano:
 
    ```bash
    mvn spring-boot:run -Dspring-boot.run.profiles=postgres
