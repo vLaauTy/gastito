@@ -11,7 +11,7 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "tarjeta")
-public class Tarjeta {
+public class TarjetaCredito {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,7 +28,7 @@ public class Tarjeta {
 
     private boolean activa = true;
 
-    protected Tarjeta() {
+    protected TarjetaCredito() {
     }
 
     public Long getId() {

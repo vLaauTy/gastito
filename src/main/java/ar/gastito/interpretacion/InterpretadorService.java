@@ -23,7 +23,7 @@ import ar.gastito.movimiento.MedioPago;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
 import ar.gastito.movimiento.MovimientoService;
-import ar.gastito.movimiento.Tarjeta;
+import ar.gastito.movimiento.TarjetaCredito;
 
 /**
  * Interpreta un mensaje de texto, de lo más barato a lo más caro:
@@ -134,7 +134,7 @@ public class InterpretadorService {
         return medio != null && medio.esTarjetaDeCredito() ? null : cuenta;
     }
 
-    private static Tarjeta tarjeta(MedioPago medio, Catalogo catalogo) {
+    private static TarjetaCredito tarjeta(MedioPago medio, Catalogo catalogo) {
         return medio != null && medio.esTarjetaDeCredito() ? catalogo.tarjetaCredito().orElse(null) : null;
     }
 

@@ -18,7 +18,7 @@ public record MovimientoInterpretado(
         List<Categoria> candidatas,
         MedioPago medioPago,
         Cuenta cuenta,
-        Tarjeta tarjeta,
+        TarjetaCredito tarjeta,
         LocalDateTime fechaHora) {
 
     public MovimientoInterpretado {
@@ -27,7 +27,7 @@ public record MovimientoInterpretado(
 
     /** Con la categoría ya elegida (confianza alta). */
     public static MovimientoInterpretado conCategoria(BigDecimal monto, String descripcion, Categoria categoria,
-            MedioPago medioPago, Cuenta cuenta, Tarjeta tarjeta, LocalDateTime fechaHora) {
+            MedioPago medioPago, Cuenta cuenta, TarjetaCredito tarjeta, LocalDateTime fechaHora) {
         return new MovimientoInterpretado(monto, descripcion, categoria, List.of(), medioPago, cuenta, tarjeta,
                 fechaHora);
     }

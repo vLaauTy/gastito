@@ -36,7 +36,7 @@ import ar.gastito.movimiento.MovimientoRepository;
 import ar.gastito.movimiento.MovimientoInterpretado;
 import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Origen;
-import ar.gastito.movimiento.Tarjeta;
+import ar.gastito.movimiento.TarjetaCredito;
 
 class InterpretadorServiceTest {
 
@@ -47,7 +47,7 @@ class InterpretadorServiceTest {
     private final MovimientoService movimientos = mock(MovimientoService.class);
     private final MovimientoRepository repositorio = mock(MovimientoRepository.class);
     private final ClienteIa ia = mock(ClienteIa.class);
-    private final Tarjeta tarjeta = mock(Tarjeta.class);
+    private final TarjetaCredito tarjeta = mock(TarjetaCredito.class);
     private InterpretadorService interpretador;
 
     @BeforeEach

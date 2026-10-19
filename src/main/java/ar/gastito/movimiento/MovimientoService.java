@@ -21,11 +21,11 @@ public class MovimientoService {
     private final MovimientoRepository movimientos;
     private final CategoriaRepository categorias;
     private final MedioPagoRepository medios;
-    private final TarjetaRepository tarjetas;
+    private final TarjetaCreditoRepository tarjetas;
     private final Clock clock;
 
     public MovimientoService(MovimientoRepository movimientos, CategoriaRepository categorias,
-            MedioPagoRepository medios, TarjetaRepository tarjetas, Clock clock) {
+            MedioPagoRepository medios, TarjetaCreditoRepository tarjetas, Clock clock) {
         this.movimientos = movimientos;
         this.categorias = categorias;
         this.medios = medios;

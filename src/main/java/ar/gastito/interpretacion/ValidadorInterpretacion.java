@@ -15,7 +15,7 @@ import ar.gastito.movimiento.ConPalabrasClave;
 import ar.gastito.movimiento.Cuenta;
 import ar.gastito.movimiento.MedioPago;
 import ar.gastito.movimiento.MovimientoInterpretado;
-import ar.gastito.movimiento.Tarjeta;
+import ar.gastito.movimiento.TarjetaCredito;
 
 /**
  * Controla la respuesta de la IA contra la base antes de mostrarla:
@@ -74,7 +74,7 @@ public class ValidadorInterpretacion {
 
         MedioPago medio = buscar(ia.medioPago(), catalogo.mediosPago()).orElse(null);
         Cuenta cuenta = buscar(ia.cuenta(), catalogo.cuentas()).orElse(null);
-        Tarjeta tarjeta = null;
+        TarjetaCredito tarjeta = null;
         if (medio != null && medio.esTarjetaDeCredito()) {
             tarjeta = catalogo.tarjetaCredito().orElse(null);
             cuenta = null;

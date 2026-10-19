@@ -27,7 +27,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import ar.gastito.movimiento.Confianza;
 import ar.gastito.movimiento.MovimientoInterpretado;
-import ar.gastito.movimiento.Tarjeta;
+import ar.gastito.movimiento.TarjetaCredito;
 
 class ValidadorInterpretacionTest {
 
@@ -152,7 +152,7 @@ class ValidadorInterpretacionTest {
 
     @Test
     void conTarjetaDeCreditoAsociaLaTarjetaYNoLaCuenta() {
-        Tarjeta tarjeta = mock(Tarjeta.class);
+        TarjetaCredito tarjeta = mock(TarjetaCredito.class);
         Catalogo conTarjeta = new Catalogo(catalogo.categorias(), catalogo.mediosPago(), catalogo.cuentas(),
                 Optional.of(tarjeta));
 

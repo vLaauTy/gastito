@@ -6,7 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ar.gastito.movimiento.CategoriaRepository;
 import ar.gastito.movimiento.CuentaRepository;
 import ar.gastito.movimiento.MedioPagoRepository;
-import ar.gastito.movimiento.TarjetaRepository;
+import ar.gastito.movimiento.TarjetaCreditoRepository;
 
 @Service
 public class CatalogoService {
@@ -14,10 +14,10 @@ public class CatalogoService {
     private final CategoriaRepository categorias;
     private final MedioPagoRepository medios;
     private final CuentaRepository cuentas;
-    private final TarjetaRepository tarjetas;
+    private final TarjetaCreditoRepository tarjetas;
 
     public CatalogoService(CategoriaRepository categorias, MedioPagoRepository medios, CuentaRepository cuentas,
-            TarjetaRepository tarjetas) {
+            TarjetaCreditoRepository tarjetas) {
         this.categorias = categorias;
         this.medios = medios;
         this.cuentas = cuentas;

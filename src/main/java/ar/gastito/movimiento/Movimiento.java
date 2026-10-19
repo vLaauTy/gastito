@@ -56,7 +56,7 @@ public class Movimiento {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tarjeta_id")
-    private Tarjeta tarjeta;
+    private TarjetaCredito tarjeta;
 
     private boolean juntada;
 
@@ -146,7 +146,7 @@ public class Movimiento {
      * Con tarjeta de crédito se asocia la tarjeta y se saca la cuenta (la cuenta es la que paga el resumen).
      * Con otro medio, se saca la tarjeta.
      */
-    public void cambiarMedioPago(MedioPago nuevo, Tarjeta tarjetaCredito) {
+    public void cambiarMedioPago(MedioPago nuevo, TarjetaCredito tarjetaCredito) {
         verificarPendiente();
         this.medioPago = nuevo;
         if (nuevo != null && nuevo.esTarjetaDeCredito()) {
@@ -214,7 +214,7 @@ public class Movimiento {
         return cuenta;
     }
 
-    public Tarjeta getTarjeta() {
+    public TarjetaCredito getTarjeta() {
         return tarjeta;
     }
 
