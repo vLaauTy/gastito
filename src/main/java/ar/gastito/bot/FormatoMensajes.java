@@ -15,9 +15,9 @@ import java.util.Locale;
 
 import org.springframework.stereotype.Component;
 
-import ar.gastito.movimiento.Categoria;
-import ar.gastito.movimiento.Cuenta;
-import ar.gastito.movimiento.MedioPago;
+import ar.gastito.catalogo.Categoria;
+import ar.gastito.catalogo.Cuenta;
+import ar.gastito.catalogo.MedioPago;
 import ar.gastito.movimiento.Movimiento;
 
 /** Cómo se muestran montos, fechas y movimientos en los mensajes del bot. */

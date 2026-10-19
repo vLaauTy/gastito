@@ -12,6 +12,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import ar.gastito.catalogo.CategoriaRepository;
+import ar.gastito.catalogo.MedioPago;
+import ar.gastito.catalogo.MedioPagoRepository;
+import ar.gastito.catalogo.TarjetaCreditoRepository;
+
 @Service
 public class MovimientoService {
 

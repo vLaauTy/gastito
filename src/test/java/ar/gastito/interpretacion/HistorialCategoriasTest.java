@@ -11,6 +11,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import ar.gastito.catalogo.Catalogo;
 import ar.gastito.movimiento.DescripcionConfirmada;
 import ar.gastito.movimiento.MovimientoRepository;
 

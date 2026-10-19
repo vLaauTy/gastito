@@ -25,18 +25,20 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import ar.gastito.catalogo.Catalogo;
+import ar.gastito.catalogo.CatalogoService;
+import ar.gastito.catalogo.Categoria;
+import ar.gastito.catalogo.TarjetaCredito;
 import ar.gastito.ia.ClienteIa;
-import ar.gastito.ia.PropositoIa;
 import ar.gastito.ia.Prompts;
-import ar.gastito.movimiento.Categoria;
+import ar.gastito.ia.PropositoIa;
 import ar.gastito.movimiento.Confianza;
 import ar.gastito.movimiento.DescripcionConfirmada;
 import ar.gastito.movimiento.Movimiento;
-import ar.gastito.movimiento.MovimientoRepository;
 import ar.gastito.movimiento.MovimientoInterpretado;
+import ar.gastito.movimiento.MovimientoRepository;
 import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Origen;
-import ar.gastito.movimiento.TarjetaCredito;
 
 class InterpretadorServiceTest {
 

@@ -3,9 +3,10 @@ package ar.gastito.interpretacion;
 import java.util.List;
 import java.util.Optional;
 
-import ar.gastito.movimiento.Categoria;
-import ar.gastito.movimiento.Cuenta;
-import ar.gastito.movimiento.MedioPago;
+import ar.gastito.catalogo.Catalogo;
+import ar.gastito.catalogo.Categoria;
+import ar.gastito.catalogo.Cuenta;
+import ar.gastito.catalogo.MedioPago;
 
 /** Catálogo como el del seed de V1, para tests sin base. */
 final class CatalogoDePrueba {

@@ -4,6 +4,11 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import ar.gastito.catalogo.Categoria;
+import ar.gastito.catalogo.Cuenta;
+import ar.gastito.catalogo.MedioPago;
+import ar.gastito.catalogo.TarjetaCredito;
+
 /**
  * Lo que se entendió de un mensaje, ya validado contra la base, listo para guardar como pendiente.
  *

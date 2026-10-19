@@ -20,6 +20,11 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 
+import ar.gastito.catalogo.Categoria;
+import ar.gastito.catalogo.Cuenta;
+import ar.gastito.catalogo.MedioPago;
+import ar.gastito.catalogo.TarjetaCredito;
+
 @Entity
 @Table(name = "movimiento")
 public class Movimiento {

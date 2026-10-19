@@ -15,6 +15,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import ar.gastito.catalogo.Catalogo;
+
 class ParserSimpleTest {
 
     private final ParserSimple parser = new ParserSimple();

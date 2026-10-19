@@ -1,4 +1,4 @@
-package ar.gastito.movimiento;
+package ar.gastito.catalogo;
 
 import java.util.List;
 

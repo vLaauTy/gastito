@@ -6,7 +6,8 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import ar.gastito.movimiento.Categoria;
+import ar.gastito.catalogo.Catalogo;
+import ar.gastito.catalogo.Categoria;
 import ar.gastito.movimiento.DescripcionConfirmada;
 import ar.gastito.movimiento.MovimientoRepository;
 

@@ -7,8 +7,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
+import ar.gastito.catalogo.Categoria;
 import ar.gastito.ia.RegistroUsoIa;
-import ar.gastito.movimiento.Categoria;
 import ar.gastito.movimiento.Confianza;
 
 /**

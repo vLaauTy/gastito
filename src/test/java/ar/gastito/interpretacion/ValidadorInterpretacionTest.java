@@ -25,9 +25,10 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import ar.gastito.catalogo.Catalogo;
+import ar.gastito.catalogo.TarjetaCredito;
 import ar.gastito.movimiento.Confianza;
 import ar.gastito.movimiento.MovimientoInterpretado;
-import ar.gastito.movimiento.TarjetaCredito;
 
 class ValidadorInterpretacionTest {
 

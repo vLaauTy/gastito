@@ -1,4 +1,4 @@
-package ar.gastito.movimiento;
+package ar.gastito.catalogo;
 
 /** Algo que el usuario puede nombrar en un mensaje: categoría, medio de pago o cuenta. */
 public interface ConPalabrasClave {

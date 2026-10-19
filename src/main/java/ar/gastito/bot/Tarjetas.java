@@ -9,9 +9,9 @@ import java.util.List;
 
 import org.springframework.stereotype.Component;
 
-import ar.gastito.movimiento.Categoria;
+import ar.gastito.catalogo.Categoria;
+import ar.gastito.catalogo.MedioPago;
 import ar.gastito.movimiento.EstadoMovimiento;
-import ar.gastito.movimiento.MedioPago;
 import ar.gastito.movimiento.Movimiento;
 
 /**

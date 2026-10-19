@@ -32,11 +32,11 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import ar.gastito.catalogo.Catalogo;
+import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.ia.IaNoDisponibleException;
 import ar.gastito.ia.RegistroUsoIa;
 import ar.gastito.ia.ResumenUsoIa;
-import ar.gastito.interpretacion.Catalogo;
-import ar.gastito.interpretacion.CatalogoService;
 import ar.gastito.interpretacion.InterpretadorService;
 import ar.gastito.interpretacion.ResolvedorFechas;
 import ar.gastito.movimiento.Confianza;

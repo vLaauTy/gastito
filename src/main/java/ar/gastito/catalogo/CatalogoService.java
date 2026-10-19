@@ -1,12 +1,7 @@
-package ar.gastito.interpretacion;
+package ar.gastito.catalogo;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import ar.gastito.movimiento.CategoriaRepository;
-import ar.gastito.movimiento.CuentaRepository;
-import ar.gastito.movimiento.MedioPagoRepository;
-import ar.gastito.movimiento.TarjetaCreditoRepository;
 
 @Service
 public class CatalogoService {

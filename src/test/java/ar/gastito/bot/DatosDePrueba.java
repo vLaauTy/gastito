@@ -8,8 +8,8 @@ import java.util.List;
 
 import org.springframework.test.util.ReflectionTestUtils;
 
-import ar.gastito.movimiento.Categoria;
-import ar.gastito.movimiento.MedioPago;
+import ar.gastito.catalogo.Categoria;
+import ar.gastito.catalogo.MedioPago;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
 import ar.gastito.movimiento.Origen;

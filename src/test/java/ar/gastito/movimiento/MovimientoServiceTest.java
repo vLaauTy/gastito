@@ -18,6 +18,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
+import ar.gastito.catalogo.Categoria;
+import ar.gastito.catalogo.CategoriaRepository;
+import ar.gastito.catalogo.MedioPago;
+import ar.gastito.catalogo.MedioPagoRepository;
+
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")

@@ -7,10 +7,11 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Component;
 
-import ar.gastito.movimiento.Categoria;
-import ar.gastito.movimiento.ConPalabrasClave;
-import ar.gastito.movimiento.Cuenta;
-import ar.gastito.movimiento.MedioPago;
+import ar.gastito.catalogo.Catalogo;
+import ar.gastito.catalogo.Categoria;
+import ar.gastito.catalogo.ConPalabrasClave;
+import ar.gastito.catalogo.Cuenta;
+import ar.gastito.catalogo.MedioPago;
 
 /**
  * Interpreta sin IA los mensajes obvios: un monto y una palabra clave de categoría, en cualquier orden

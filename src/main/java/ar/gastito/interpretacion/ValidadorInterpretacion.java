@@ -9,13 +9,14 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Component;
 
-import ar.gastito.movimiento.Categoria;
+import ar.gastito.catalogo.Catalogo;
+import ar.gastito.catalogo.Categoria;
+import ar.gastito.catalogo.ConPalabrasClave;
+import ar.gastito.catalogo.Cuenta;
+import ar.gastito.catalogo.MedioPago;
+import ar.gastito.catalogo.TarjetaCredito;
 import ar.gastito.movimiento.Confianza;
-import ar.gastito.movimiento.ConPalabrasClave;
-import ar.gastito.movimiento.Cuenta;
-import ar.gastito.movimiento.MedioPago;
 import ar.gastito.movimiento.MovimientoInterpretado;
-import ar.gastito.movimiento.TarjetaCredito;
 
 /**
  * Controla la respuesta de la IA contra la base antes de mostrarla:

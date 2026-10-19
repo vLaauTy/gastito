@@ -18,10 +18,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import ar.gastito.bot.Tarjetas.Campo;
+import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.ia.IaNoDisponibleException;
 import ar.gastito.ia.RegistroUsoIa;
 import ar.gastito.ia.ResumenUsoIa;
-import ar.gastito.interpretacion.CatalogoService;
 import ar.gastito.interpretacion.InterpretadorService;
 import ar.gastito.interpretacion.Montos;
 import ar.gastito.interpretacion.ResolvedorFechas;

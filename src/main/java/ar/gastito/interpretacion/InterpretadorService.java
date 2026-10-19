@@ -12,18 +12,20 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
+import ar.gastito.catalogo.Catalogo;
+import ar.gastito.catalogo.CatalogoService;
+import ar.gastito.catalogo.Categoria;
+import ar.gastito.catalogo.ConPalabrasClave;
+import ar.gastito.catalogo.Cuenta;
+import ar.gastito.catalogo.MedioPago;
+import ar.gastito.catalogo.TarjetaCredito;
 import ar.gastito.ia.ClienteIa;
-import ar.gastito.ia.PropositoIa;
 import ar.gastito.ia.Prompts;
-import ar.gastito.movimiento.Categoria;
+import ar.gastito.ia.PropositoIa;
 import ar.gastito.movimiento.Confianza;
-import ar.gastito.movimiento.ConPalabrasClave;
-import ar.gastito.movimiento.Cuenta;
-import ar.gastito.movimiento.MedioPago;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
 import ar.gastito.movimiento.MovimientoService;
-import ar.gastito.movimiento.TarjetaCredito;
 
 /**
  * Interpreta un mensaje de texto, de lo más barato a lo más caro:
