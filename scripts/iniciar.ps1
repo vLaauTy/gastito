@@ -28,12 +28,10 @@ function JarCompilado {
         Where-Object { $_.Name -notmatch 'original|sources|javadoc' } | Select-Object -First 1
 }
 
-# 1. Java y Maven
-Paso "Revisando Java y Maven"
-foreach ($programa in 'java', 'mvn') {
-    if (-not (Get-Command $programa -ErrorAction SilentlyContinue)) { Falla "No encontré '$programa' en el PATH." }
-}
-Ok "Instalados"
+# 1. Java (Maven no hace falta: se usa el wrapper del proyecto, mvnw.cmd)
+Paso "Revisando Java"
+if (-not (Get-Command java -ErrorAction SilentlyContinue)) { Falla "No encontré 'java' en el PATH." }
+Ok "Instalado"
 
 # 2. El .env, sin mostrar los valores
 Paso "Revisando el .env"
@@ -90,7 +88,7 @@ $fuentes = @(Get-Item pom.xml) + @(Get-ChildItem src\main -Recurse -File)
 $ultimoCambio = ($fuentes | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
 if (-not $jar -or $jar.LastWriteTime -lt $ultimoCambio) {
     Paso "Compilando (pasa la primera vez y cuando cambia el código; tarda alrededor de un minuto)"
-    & mvn -q -B -DskipTests package
+    & .\mvnw.cmd -q -B -DskipTests package
     if ($LASTEXITCODE -ne 0) { Falla "La compilación falló. El error está arriba." }
     $jar = JarCompilado
     Ok "Listo"
