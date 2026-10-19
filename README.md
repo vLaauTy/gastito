@@ -16,7 +16,6 @@ Todos los totales se calculan con SQL sobre la base.
 ## Requisitos
 
 - Java 25 o más nuevo.
-- Maven 3.9 o más nuevo.
 - Un bot de Telegram creado con [@BotFather](https://t.me/BotFather).
 - Una API key de Anthropic.
 
@@ -49,7 +48,7 @@ tocar código.
 
 Doble clic en **`iniciar.bat`**, en la raíz del proyecto. Arranca con el perfil `postgres` y antes revisa:
 
-1. Que estén Java y Maven.
+1. Que esté Java (Maven no hace falta: usa el wrapper `mvnw`).
 2. Que el `.env` tenga todas las variables (no muestra los valores).
 3. Que no haya otro Gastito prendido. Si hay uno, pregunta si lo apaga: dos a la vez se pisan en Telegram.
 4. Que PostgreSQL responda. Si la VM todavía está arrancando, espera hasta 3 minutos.
@@ -64,12 +63,12 @@ Para arrancar con H2 en lugar de PostgreSQL, desde una terminal en la raíz del 
 iniciar.bat dev
 ```
 
-Las secciones de abajo explican cómo arrancarlo a mano con Maven o con el jar.
+Las secciones de abajo explican cómo arrancarlo a mano con el Maven Wrapper (`./mvnw`; en Windows sin Git Bash, `mvnw.cmd`) o con el jar. La primera vez descarga Maven solo.
 
 ## Correr en perfil `dev` (H2, sin Docker)
 
 ```bash
-mvn spring-boot:run
+./mvnw spring-boot:run
 ```
 
 `dev` es el perfil por defecto. La base queda en `./data/gastito.mv.db`; Flyway crea las tablas y carga las
@@ -82,7 +81,7 @@ Cuando en el log aparece `Bot de Telegram conectado y escuchando mensajes`, abr�
 Para generar un jar y correrlo sin Maven:
 
 ```bash
-mvn package
+./mvnw package
 java -jar target/gastito-0.1.0-SNAPSHOT.jar
 ```
 
@@ -135,7 +134,7 @@ la tabla `categoria` y se pueden cambiar en la base sin tocar código.
 2. Corré la aplicación con el perfil `postgres`: doble clic en `iniciar.bat`, o a mano:
 
    ```bash
-   mvn spring-boot:run -Dspring-boot.run.profiles=postgres
+   ./mvnw spring-boot:run -Dspring-boot.run.profiles=postgres
    ```
 
    o con el jar:
@@ -149,25 +148,42 @@ Flyway crea las mismas tablas en PostgreSQL. Los datos que cargaste en H2 no se 
 ## Tests
 
 ```bash
-mvn test
+./mvnw test
 ```
 
 Usan H2 en memoria y no se conectan a Telegram ni a Anthropic.
 
 Hay además un test que llama a la API real de Anthropic con la key del `.env`. Sirve para revisar el prompt
-después de cambiarlo y cuesta fracciones de centavo. No corre con `mvn test`; se corre a mano:
+después de cambiarlo y cuesta fracciones de centavo. No corre con `./mvnw test`; se corre a mano:
 
 ```bash
-mvn test -Dtest=InterpretacionRealIT -Dsurefire.failIfNoSpecifiedTests=false
+./mvnw test -Dtest=InterpretacionRealIT -Dsurefire.failIfNoSpecifiedTests=false
 ```
 
 ## Estructura
 
+El código está organizado por funcionalidad, no por capa técnica:
+
 ```
 ar.gastito
-├── bot              Telegram: filtro de usuario, conversación, formato de mensajes
-├── interpretacion   Parser simple, validación de la respuesta de la IA, fechas relativas
+├── bot              Telegram: filtro de usuario, conversación, tarjetas de gasto, formato de mensajes
+├── interpretacion   Parser simple, historial, validación de la respuesta de la IA, fechas relativas
 ├── ia               Cliente de Claude, prompts, registro de tokens y costo (uso_ia)
-├── movimiento       Entidades, repositorios y totales
+├── catalogo         Categorías, medios de pago, cuentas, tarjeta de crédito y alias de comercios
+├── movimiento       El movimiento (gasto, ingreso, etc.), su ciclo pendiente → confirmado y los totales
 └── config           Propiedades y reloj en hora de Argentina
+```
+
+El resto del repositorio:
+
+```
+├── src/main/resources
+│   ├── application.yml      Configuración y perfiles (dev, postgres)
+│   ├── db/migration/        Migraciones de Flyway (esquema y datos iniciales)
+│   └── prompts/             Instrucciones para la IA, editables sin tocar código
+├── src/test                 Tests con JUnit 5 (H2 en memoria)
+├── scripts/iniciar.ps1      Arranque con chequeos previos (lo llama iniciar.bat)
+├── docs/pedidos/            Los pedidos de cada etapa con los que se fue construyendo el bot
+├── docker-compose.yml       PostgreSQL para el perfil postgres
+└── mvnw, mvnw.cmd           Maven Wrapper
 ```

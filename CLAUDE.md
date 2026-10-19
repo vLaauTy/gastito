@@ -61,7 +61,9 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
 
 ## Estructura y convenciones
 
-- Paquete base: `ar.gastito`. Organización por funcionalidad (`bot`, `movimiento`, `ia`, `config`), no por capa técnica.
+- Paquete base: `ar.gastito`. Organización por funcionalidad (`bot`, `interpretacion`, `ia`, `catalogo`, `movimiento`, `config`), no por capa técnica. Las entidades de referencia (categorías, medios de pago, cuentas, tarjeta, alias de comercios) van en `catalogo`; `movimiento` es solo el movimiento.
+- Compilar y testear con el Maven Wrapper (`./mvnw`, o `mvnw.cmd` en Windows).
+- Los pedidos de cada etapa van en `docs/pedidos/`.
 - Nombres del dominio en español (`Movimiento`, `Categoria`, `MedioPago`), código y comentarios técnicos pueden ir en inglés o español pero consistentes.
 - Tests con JUnit 5. Todo parser o regla de negocio nueva lleva tests.
 - Commits chicos y descriptivos, uno por paso lógico.

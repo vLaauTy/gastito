@@ -11,7 +11,25 @@ data/
 
 # Build
 target/
+!.mvn/wrapper/maven-wrapper.jar
 
-# IDE
+# IntelliJ IDEA
 .idea/
+*.iws
 *.iml
+*.ipr
+
+# Eclipse / STS
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+# VS Code
+.vscode/
+
+# Restos de herramientas de migración automática
+.github/modernize/
