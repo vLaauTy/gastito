@@ -82,7 +82,24 @@ if ($Perfil -eq 'postgres') {
     Ok "Responde"
 }
 
-# 5. Compilar solo si no hay jar o si el código es más nuevo que el jar
+# 5. Whisper, para los audios. Es opcional: si no responde, el bot arranca igual y funciona con texto.
+Paso "Buscando el servidor de Whisper (audios)"
+$whisper = if ($variables['WHISPER_URL']) { $variables['WHISPER_URL'] } else { 'http://localhost:9000' }
+if ($whisper -match '^https?://([^:/]+)(?::(\d+))?') {
+    $puertoWhisper = if ($Matches[2]) { [int]$Matches[2] } elseif ($whisper -like 'https*') { 443 } else { 80 }
+    if (PuertoAbierto $Matches[1] $puertoWhisper) {
+        Ok "Responde"
+    } else {
+        Write-Host "   No responde: los audios no se van a poder transcribir hasta que prendas el contenedor de Whisper." -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "   WHISPER_URL no parece una URL (http://servidor:puerto): los audios no van a funcionar." -ForegroundColor Yellow
+}
+if (-not $variables['WHISPER_API_KEY']) {
+    Write-Host "   Falta WHISPER_API_KEY en el .env: el servidor de Whisper va a rechazar los audios." -ForegroundColor Yellow
+}
+
+# 6. Compilar solo si no hay jar o si el código es más nuevo que el jar
 $jar = JarCompilado
 $fuentes = @(Get-Item pom.xml) + @(Get-ChildItem src\main -Recurse -File)
 $ultimoCambio = ($fuentes | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
@@ -96,7 +113,7 @@ if (-not $jar -or $jar.LastWriteTime -lt $ultimoCambio) {
     Paso "El código no cambió desde la última compilación: uso el jar que ya está"
 }
 
-# 6. Arrancar
+# 7. Arrancar
 Write-Host ""
 Write-Host "Arrancando Gastito con el perfil $Perfil." -ForegroundColor Green
 Write-Host "Cuando aparezca 'Bot de Telegram conectado y escuchando mensajes', ya lo podés usar."

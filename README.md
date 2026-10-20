@@ -64,7 +64,8 @@ Doble clic en **`iniciar.bat`**, en la raíz del proyecto. Arranca con el perfil
 2. Que el `.env` tenga todas las variables (no muestra los valores).
 3. Que no haya otro Gastito prendido. Si hay uno, pregunta si lo apaga: dos a la vez se pisan en Telegram.
 4. Que PostgreSQL responda. Si la VM todavía está arrancando, espera hasta 3 minutos.
-5. Que el jar esté al día. Compila solo la primera vez y cuando cambió el código (sin correr los tests).
+5. Que responda el servidor de Whisper. Si no, avisa y arranca igual: con texto funciona, solo fallan los audios.
+6. Que el jar esté al día. Compila solo la primera vez y cuando cambió el código (sin correr los tests).
 
 Cuando en la ventana aparece `Bot de Telegram conectado y escuchando mensajes`, ya se puede usar. **Para
 apagarlo, cerrá la ventana.** Si algo falla, la ventana queda abierta con el motivo.
