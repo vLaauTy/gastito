@@ -1,0 +1,1 @@
+Gastos en pesos argentinos, por ejemplo: gasto 3700 en el kiosco, efectivo. Categorías: {{categorias}}. Medios de pago: {{mediosPago}}. Cuentas: {{cuentas}}.
