@@ -21,6 +21,7 @@
         <postgresql.version>42.7.14</postgresql.version>
         <telegrambots.version>10.3.0</telegrambots.version>
         <anthropic-java.version>2.71.0</anthropic-java.version>
+        <wiremock.version>3.13.2</wiremock.version>
     </properties>
 
     <dependencies>
@@ -79,6 +80,14 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Servidor HTTP falso para probar el cliente de Whisper. La versión standalone trae sus
+             dependencias adentro y no choca con el OkHttp de Telegram y Anthropic. -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <version>${wiremock.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
