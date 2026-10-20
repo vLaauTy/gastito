@@ -23,6 +23,7 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
   - `TELEGRAM_BOT_USERNAME`
   - `TELEGRAM_ALLOWED_USER_ID`
   - `ANTHROPIC_API_KEY`
+  - `WHISPER_URL` y `WHISPER_API_KEY` (servidor de Whisper para los audios)
 - Spring los lee con `spring.config.import=optional:file:.env[.properties]` en `application.yml`.
 - `.env` y `data/` tienen que estar en `.gitignore`. Nunca subas secretos al repo, nunca los imprimas en logs ni en mensajes de error.
 - Si no existe un `.env.example`, crealo con las variables vacías.
@@ -61,7 +62,7 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
 
 ## Estructura y convenciones
 
-- Paquete base: `ar.gastito`. Organización por funcionalidad (`bot`, `interpretacion`, `ia`, `catalogo`, `movimiento`, `config`), no por capa técnica. Las entidades de referencia (categorías, medios de pago, cuentas, tarjeta, alias de comercios) van en `catalogo`; `movimiento` es solo el movimiento.
+- Paquete base: `ar.gastito`. Organización por funcionalidad (`bot`, `interpretacion`, `ia`, `audio`, `catalogo`, `movimiento`, `config`), no por capa técnica. Las entidades de referencia (categorías, medios de pago, cuentas, tarjeta, alias de comercios) van en `catalogo`; `movimiento` es solo el movimiento.
 - Compilar y testear con el Maven Wrapper (`./mvnw`, o `mvnw.cmd` en Windows).
 - Los pedidos de cada etapa van en `docs/pedidos/`.
 - Nombres del dominio en español (`Movimiento`, `Categoria`, `MedioPago`), código y comentarios técnicos pueden ir en inglés o español pero consistentes.
@@ -70,8 +71,8 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
 
 ## Hoja de ruta
 
-1. **Etapa 1 (actual):** bot funcionando con mensajes de texto, interpretación con Haiku, confirmación y guardado.
-2. Etapa 2: audios (Whisper local + mismo flujo que texto).
+1. Etapa 1 (hecha): bot funcionando con mensajes de texto, interpretación con Haiku, confirmación y guardado.
+2. **Etapa 2 (actual):** audios (Whisper local + mismo flujo que texto).
 3. Etapa 3: fotos de tickets (visión de Haiku, detalle por producto).
 4. Etapa 4: resúmenes semanales y consultas en lenguaje natural.
 5. Etapa 5: panel web dentro de Telegram (Mini App).
