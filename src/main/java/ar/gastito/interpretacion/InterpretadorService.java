@@ -81,8 +81,17 @@ public class InterpretadorService {
     public record NoEsGasto() implements Resultado {
     }
 
-    /** @throws ar.gastito.ia.IaNoDisponibleException si hacía falta la IA y no se pudo usar */
+    /** Un mensaje escrito. */
     public Resultado interpretar(String texto) {
+        return interpretar(texto, PropositoIa.TEXTO);
+    }
+
+    /**
+     * @param proposito con qué propósito queda registrada en uso_ia la llamada a la IA, si hace falta
+     *                  (TEXTO para un mensaje escrito, AUDIO para la transcripción de un audio)
+     * @throws ar.gastito.ia.IaNoDisponibleException si hacía falta la IA y no se pudo usar
+     */
+    public Resultado interpretar(String texto, PropositoIa proposito) {
         Catalogo catalogo = catalogos.cargar();
         LocalDateTime ahora = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MINUTES);
 
@@ -116,7 +125,7 @@ public class InterpretadorService {
                 "ejemplos", ejemplos(movimientos.ultimasConfirmaciones()),
                 "hoy", FORMATO_HOY.format(ahora)));
         ClienteIa.Respuesta<InterpretacionIa> respuesta =
-                ia.extraer(instrucciones, texto, InterpretacionIa.class, PropositoIa.TEXTO);
+                ia.extraer(instrucciones, texto, InterpretacionIa.class, proposito);
 
         return switch (validador.validar(respuesta.valor(), catalogo, ahora)) {
             case ValidadorInterpretacion.Valida v -> {

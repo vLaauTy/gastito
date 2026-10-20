@@ -130,6 +130,28 @@ class InterpretadorServiceTest {
         assertThat(i.movimiento().candidatas()).containsExactly(SUPER, KIOSCO);
     }
 
+    @Test
+    void laTranscripcionDeUnAudioRegistraLaIaComoAudio() {
+        when(ia.extraer(anyString(), anyString(), eq(InterpretacionIa.class), eq(PropositoIa.AUDIO)))
+                .thenReturn(new ClienteIa.Respuesta<>(
+                        new InterpretacionIa(true, "3700", "Pan de pancho y papas", List.of("Supermercado"), "alta",
+                                "Efectivo", "", "", ""), 9L));
+
+        InterpretadorService.Interpretado i = (InterpretadorService.Interpretado) interpretador.interpretar(
+                "Gasto 3700 en pan de pancho y papas, efectivo", PropositoIa.AUDIO);
+
+        assertThat(i.usoIaId()).isEqualTo(9L);
+        verify(ia).extraer(anyString(), eq("Gasto 3700 en pan de pancho y papas, efectivo"),
+                eq(InterpretacionIa.class), eq(PropositoIa.AUDIO));
+    }
+
+    @Test
+    void unAudioQueEntiendeElParserSimpleNoUsaLaIa() {
+        interpretador.interpretar("kiosco 1500", PropositoIa.AUDIO);
+
+        verifyNoInteractions(ia);
+    }
+
     private void iaResponde(InterpretacionIa respuesta, long usoIaId) {
         when(ia.extraer(anyString(), anyString(), eq(InterpretacionIa.class), eq(PropositoIa.TEXTO)))
                 .thenReturn(new ClienteIa.Respuesta<>(respuesta, usoIaId));
