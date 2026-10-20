@@ -36,6 +36,14 @@ gastito:
       claude-haiku-5-5:
         entrada: 0.10
         salida: 0.50
+  audio:
+    # Servidor de Whisper compatible con la API de OpenAI (corre en la VM). La clave, solo en el .env.
+    url: ${WHISPER_URL:http://localhost:9000}
+    api-key: ${WHISPER_API_KEY:}
+    modelo: whisper-1
+    idioma: es
+    timeout: 60s
+    duracion-maxima: 60s
 
 ---
 spring:
