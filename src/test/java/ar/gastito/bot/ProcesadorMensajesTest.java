@@ -9,7 +9,9 @@ import static ar.gastito.bot.DatosDePrueba.RELOJ;
 import static ar.gastito.bot.DatosDePrueba.SALIDAS;
 import static ar.gastito.bot.DatosDePrueba.SUPER;
 import static ar.gastito.bot.DatosDePrueba.conCategoria;
+import static ar.gastito.bot.DatosDePrueba.conId;
 import static ar.gastito.bot.DatosDePrueba.confirmado;
+import static ar.gastito.bot.DatosDePrueba.deAudio;
 import static ar.gastito.bot.DatosDePrueba.dudoso;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -23,6 +25,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.List;
@@ -32,9 +35,13 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import ar.gastito.audio.TranscripcionNoDisponibleException;
+import ar.gastito.audio.TranscripcionService;
 import ar.gastito.catalogo.Catalogo;
 import ar.gastito.catalogo.CatalogoService;
+import ar.gastito.config.GastitoProperties;
 import ar.gastito.ia.IaNoDisponibleException;
+import ar.gastito.ia.PropositoIa;
 import ar.gastito.ia.RegistroUsoIa;
 import ar.gastito.ia.ResumenUsoIa;
 import ar.gastito.interpretacion.InterpretadorService;
@@ -58,13 +65,16 @@ class ProcesadorMensajesTest {
     private final MovimientoService movimientos = mock(MovimientoService.class);
     private final CatalogoService catalogos = mock(CatalogoService.class);
     private final RegistroUsoIa usoIa = mock(RegistroUsoIa.class);
+    private final TranscripcionService transcripciones = mock(TranscripcionService.class);
     private ProcesadorMensajes procesador;
 
     @BeforeEach
     void setUp() {
         FormatoMensajes formato = new FormatoMensajes(RELOJ);
+        GastitoProperties properties = new GastitoProperties(null, null, null, new GastitoProperties.Audio(
+                "http://whisper", "clave", "whisper-1", "es", Duration.ofSeconds(60), Duration.ofSeconds(60)));
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
-                new Tarjetas(formato), formato, new GraficoMes(formato), RELOJ);
+                new Tarjetas(formato), formato, new GraficoMes(formato), transcripciones, properties, RELOJ);
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));
     }
 
@@ -73,7 +83,7 @@ class ProcesadorMensajesTest {
         MovimientoInterpretado interpretado = new MovimientoInterpretado(pendiente.getMonto(),
                 pendiente.getDescripcion(), pendiente.getCategoria(), pendiente.getCandidatas(),
                 pendiente.getMedioPago(), null, null, pendiente.getFechaHora());
-        when(interpretador.interpretar(texto))
+        when(interpretador.interpretar(texto, PropositoIa.TEXTO))
                 .thenReturn(new InterpretadorService.Interpretado(interpretado, confianza, usoIaId));
         when(movimientos.crearPendiente(any(), eq(Origen.TEXTO), eq(texto))).thenReturn(pendiente);
 
@@ -264,7 +274,7 @@ class ProcesadorMensajesTest {
         assertThat(editada.teclado().botones()).extracting(Teclado.Boton::texto).contains("✅ Guardar");
 
         // Un número ya no se toma como monto de esa tarjeta.
-        when(interpretador.interpretar("500")).thenReturn(new InterpretadorService.NoEsGasto());
+        when(interpretador.interpretar("500", PropositoIa.TEXTO)).thenReturn(new InterpretadorService.NoEsGasto());
         procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "500");
         verify(movimientos, never()).cambiarMonto(anyLong(), any());
     }
@@ -274,7 +284,7 @@ class ProcesadorMensajesTest {
         when(movimientos.buscar(ID)).thenReturn(conCategoria("3700", KIOSCO));
         tocar("em:15");
         Movimiento otro = DatosDePrueba.conId(conCategoria("2000", SUPER), 16L);
-        when(interpretador.interpretar("super 2000")).thenReturn(new InterpretadorService.Interpretado(
+        when(interpretador.interpretar("super 2000", PropositoIa.TEXTO)).thenReturn(new InterpretadorService.Interpretado(
                 MovimientoInterpretado.conCategoria(new BigDecimal("2000"), "Super", SUPER, null, null, null, AHORA),
                 Confianza.ALTA, null));
         when(movimientos.crearPendiente(any(), any(), anyString())).thenReturn(otro);
@@ -343,7 +353,7 @@ class ProcesadorMensajesTest {
 
     @Test
     void siLaIaNoEstaDisponibleSugiereElFormatoSimple() {
-        when(interpretador.interpretar(anyString()))
+        when(interpretador.interpretar(anyString(), eq(PropositoIa.TEXTO)))
                 .thenThrow(new IaNoDisponibleException("No pude consultar a la IA", null));
 
         Accion.Enviar r = (Accion.Enviar) procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "algo largo").get(0);
@@ -354,9 +364,218 @@ class ProcesadorMensajesTest {
 
     @Test
     void mensajeQueNoEsGasto() {
-        when(interpretador.interpretar("hola")).thenReturn(new InterpretadorService.NoEsGasto());
+        when(interpretador.interpretar("hola", PropositoIa.TEXTO)).thenReturn(new InterpretadorService.NoEsGasto());
 
         assertThat(texto("hola")).contains("No encontré un gasto");
+    }
+
+    // --- Audios ---
+
+    static final byte[] AUDIO = { 1, 2, 3 };
+
+    private static AudioRecibido audio(int segundos) {
+        return new AudioRecibido(segundos, "voz.oga", () -> AUDIO);
+    }
+
+    private List<Accion> mandarAudio(String escuchado) {
+        when(transcripciones.transcribir(AUDIO, "voz.oga")).thenReturn(escuchado);
+        return procesador.procesarAudio(CHAT, MENSAJE_USUARIO, audio(5));
+    }
+
+    @Test
+    void unAudioTerminaEnLaMismaTarjetaQueUnTextoConLoQueEscucho() {
+        Movimiento pendiente = deAudio("3700", SUPER, "Gasto 3700 en pan de pancho y papas, efectivo");
+        when(interpretador.interpretar("Gasto 3700 en pan de pancho y papas, efectivo", PropositoIa.AUDIO))
+                .thenReturn(new InterpretadorService.Interpretado(new MovimientoInterpretado(new BigDecimal("3700"),
+                        "Pan de pancho y papas", SUPER, List.of(), null, null, null, AHORA), Confianza.ALTA, 9L));
+        when(movimientos.crearPendiente(any(), eq(Origen.AUDIO),
+                eq("Gasto 3700 en pan de pancho y papas, efectivo"))).thenReturn(pendiente);
+
+        List<Accion> acciones = mandarAudio("Gasto 3700 en pan de pancho y papas, efectivo.");
+
+        assertThat(acciones).hasSize(1);
+        Accion.Enviar tarjeta = (Accion.Enviar) acciones.get(0);
+        assertThat(tarjeta.html())
+                .startsWith("🎙 Escuché: \"Gasto 3700 en pan de pancho y papas, efectivo\"\n\n🧾 <b>Nuevo gasto</b>");
+        assertThat(tarjeta.teclado().botones()).extracting(Teclado.Boton::datos)
+                .containsExactly("g:15", "e:15", "c:15");
+        assertThat(tarjeta.tarjetaDeMovimiento()).isEqualTo(ID);
+        verify(usoIa).asociarMovimiento(9L, ID);
+    }
+
+    @Test
+    void unAudioDudosoPreguntaLaCategoriaComoUnTexto() {
+        Movimiento pendiente = conId(Movimiento.pendiente(new MovimientoInterpretado(new BigDecimal("3700"),
+                "Pan y papas", null, List.of(SUPER, KIOSCO), null, null, null, AHORA), Origen.AUDIO, "3700 pan y papas",
+                AHORA), ID);
+        when(interpretador.interpretar("3700 pan y papas", PropositoIa.AUDIO))
+                .thenReturn(new InterpretadorService.Interpretado(new MovimientoInterpretado(new BigDecimal("3700"),
+                        "Pan y papas", null, List.of(SUPER, KIOSCO), null, null, null, AHORA), Confianza.MEDIA, 9L));
+        when(movimientos.crearPendiente(any(), eq(Origen.AUDIO), eq("3700 pan y papas"))).thenReturn(pendiente);
+
+        Accion.Enviar tarjeta = (Accion.Enviar) mandarAudio("3700 pan y papas").get(0);
+
+        assertThat(tarjeta.html()).contains("🎙 Escuché", "¿Qué categoría?");
+        assertThat(tarjeta.teclado().botones()).extracting(Teclado.Boton::texto)
+                .startsWith("🛒 Supermercado", "🍬 Kiosco", "Otra…");
+    }
+
+    @Test
+    void audioDemasiadoLargoNoSeDescargaNiSeTranscribe() {
+        AudioRecibido largo = new AudioRecibido(75, "voz.oga", () -> {
+            throw new AssertionError("no tenía que descargarse");
+        });
+
+        Accion.Enviar r = (Accion.Enviar) procesador.procesarAudio(CHAT, MENSAJE_USUARIO, largo).get(0);
+
+        assertThat(r.html()).contains("75 segundos", "máximo es 60", "uno más corto");
+        verifyNoInteractions(transcripciones, interpretador);
+    }
+
+    @Test
+    void whisperApagadoPideMandarloEscrito() {
+        when(transcripciones.transcribir(AUDIO, "voz.oga")).thenThrow(new TranscripcionNoDisponibleException(
+                TranscripcionNoDisponibleException.Motivo.SIN_RESPUESTA, "El servidor de Whisper no respondió"));
+
+        Accion.Enviar r = (Accion.Enviar) procesador.procesarAudio(CHAT, MENSAJE_USUARIO, audio(5)).get(0);
+
+        assertThat(r.html()).isEqualTo(
+                "No pude transcribir el audio, ¿la VM está prendida? Mientras tanto mandámelo escrito.");
+        verifyNoInteractions(interpretador);
+    }
+
+    @Test
+    void claveDeWhisperRechazada() {
+        when(transcripciones.transcribir(AUDIO, "voz.oga")).thenThrow(new TranscripcionNoDisponibleException(
+                TranscripcionNoDisponibleException.Motivo.CLAVE_RECHAZADA, "rechazada"));
+
+        assertThat(((Accion.Enviar) procesador.procesarAudio(CHAT, MENSAJE_USUARIO, audio(5)).get(0)).html())
+                .contains("WHISPER_API_KEY");
+    }
+
+    @Test
+    void falloAlDescargarDeTelegram() {
+        AudioRecibido roto = new AudioRecibido(5, "voz.oga", () -> {
+            throw new java.io.IOException("sin red");
+        });
+
+        assertThat(((Accion.Enviar) procesador.procesarAudio(CHAT, MENSAJE_USUARIO, roto).get(0)).html())
+                .contains("No pude descargar el audio");
+        verifyNoInteractions(transcripciones);
+    }
+
+    @Test
+    void audioSinNadaQueEscuchar() {
+        assertThat(((Accion.Enviar) mandarAudio("  .  ").get(0)).html()).contains("No escuché nada");
+        verifyNoInteractions(interpretador);
+    }
+
+    @Test
+    void audioSinUnGastoMuestraLoQueEscucho() {
+        when(interpretador.interpretar("Hola, ¿cómo estás", PropositoIa.AUDIO))
+                .thenReturn(new InterpretadorService.NoEsGasto());
+
+        assertThat(((Accion.Enviar) mandarAudio("Hola, ¿cómo estás?").get(0)).html())
+                .startsWith("🎙 Escuché: \"Hola, ¿cómo estás\"")
+                .contains("No encontré un gasto en lo que escuché");
+        verify(movimientos, never()).crearPendiente(any(), any(), anyString());
+    }
+
+    @Test
+    void limpiaElPuntoFinalDeWhisper() {
+        assertThat(ProcesadorMensajes.limpiarTranscripcion(" Kiosco 1500. ")).isEqualTo("Kiosco 1500");
+        assertThat(ProcesadorMensajes.limpiarTranscripcion("¿Cuánto?")).isEqualTo("¿Cuánto");
+        assertThat(ProcesadorMensajes.limpiarTranscripcion("3.700")).isEqualTo("3.700");
+    }
+
+    // --- Audio mientras se edita un campo ---
+
+    @Test
+    void audioEditandoElMontoMuestraLoQueEscuchoSinAplicarlo() {
+        when(movimientos.buscar(ID)).thenReturn(conCategoria("3700", KIOSCO));
+        tocar("em:15");
+
+        List<Accion> acciones = mandarAudio("4000.");
+
+        assertThat(acciones).hasSize(2);
+        assertThat(acciones.get(0)).isEqualTo(new Accion.Borrar(MENSAJE_USUARIO));
+        Accion.Editar propuesta = edicion(acciones);
+        assertThat(propuesta.mensajeId()).isEqualTo(TARJETA);
+        assertThat(propuesta.html()).endsWith("🎙 Escuché: \"4000\" → <b>Monto: $4.000</b>");
+        assertThat(propuesta.teclado().botones()).extracting(Teclado.Boton::texto)
+                .containsExactly("✅ Aplicar", "↩ Cancelar edición");
+        verify(movimientos, never()).cambiarMonto(anyLong(), any());
+        verifyNoInteractions(interpretador);
+    }
+
+    @Test
+    void aplicarLaPropuestaCambiaElMonto() {
+        when(movimientos.buscar(ID)).thenReturn(conCategoria("3700", KIOSCO));
+        tocar("em:15");
+        mandarAudio("4.000 pesos");
+        when(movimientos.cambiarMonto(ID, new BigDecimal("4000"))).thenReturn(conCategoria("4000", KIOSCO));
+
+        List<Accion> acciones = tocar("a:15");
+
+        verify(movimientos).cambiarMonto(ID, new BigDecimal("4000"));
+        assertThat(edicion(acciones).html()).contains("💰 <b>$4.000</b>").doesNotContain("Escuché");
+        assertThat(edicion(acciones).teclado().botones()).extracting(Teclado.Boton::texto).contains("✅ Guardar");
+        assertThat(acciones).contains(new Accion.Avisar("✅ Aplicado"));
+        // Ya no se espera nada: el próximo audio es un gasto nuevo.
+        assertThat(tocar("a:15")).contains(new Accion.Avisar("Ese cambio ya no está pendiente"));
+    }
+
+    @Test
+    void cancelarLaEdicionNoCambiaNada() {
+        when(movimientos.buscar(ID)).thenReturn(conCategoria("3700", KIOSCO));
+        tocar("em:15");
+        mandarAudio("4000");
+
+        Accion.Editar editada = edicion(tocar("v:15"));
+
+        assertThat(editada.html()).contains("💰 <b>$3.700</b>").doesNotContain("Escuché");
+        verify(movimientos, never()).cambiarMonto(anyLong(), any());
+    }
+
+    @Test
+    void audioEditandoLaFechaProponeLaFecha() {
+        when(movimientos.buscar(ID)).thenReturn(conCategoria("3700", KIOSCO));
+        tocar("ef:15");
+
+        Accion.Editar propuesta = edicion(mandarAudio("Ayer 21:30."));
+
+        assertThat(propuesta.html()).endsWith("→ <b>Fecha: Ayer 21:30</b>");
+        when(movimientos.cambiarFechaHora(ID, LocalDateTime.of(2026, 10, 12, 21, 30)))
+                .thenReturn(conCategoria("3700", KIOSCO));
+        tocar("a:15");
+        verify(movimientos).cambiarFechaHora(ID, LocalDateTime.of(2026, 10, 12, 21, 30));
+    }
+
+    @Test
+    void audioQueNoSirveParaElCampoEsUnGastoNuevo() {
+        when(movimientos.buscar(ID)).thenReturn(conCategoria("3700", KIOSCO));
+        tocar("em:15");
+        when(interpretador.interpretar("Kiosco alfajor", PropositoIa.AUDIO))
+                .thenReturn(new InterpretadorService.NoEsGasto());
+
+        List<Accion> acciones = mandarAudio("Kiosco alfajor");
+
+        // La tarjeta que esperaba el monto vuelve a su estado y el audio se interpreta como gasto.
+        assertThat(edicion(acciones).html()).doesNotContain("Escribí el nuevo monto");
+        verify(interpretador).interpretar("Kiosco alfajor", PropositoIa.AUDIO);
+    }
+
+    @Test
+    void textoConUnaPropuestaPendienteSeAplicaDirecto() {
+        when(movimientos.buscar(ID)).thenReturn(conCategoria("3700", KIOSCO));
+        tocar("em:15");
+        mandarAudio("4000");
+        when(movimientos.cambiarMonto(ID, new BigDecimal("5000"))).thenReturn(conCategoria("5000", KIOSCO));
+
+        procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "5000");
+
+        verify(movimientos).cambiarMonto(ID, new BigDecimal("5000"));
+        verify(movimientos, never()).cambiarMonto(ID, new BigDecimal("4000"));
     }
 
     // --- Comandos ---
