@@ -8,12 +8,15 @@ import static ar.gastito.bot.DatosDePrueba.RELOJ;
 import static ar.gastito.bot.DatosDePrueba.SUPER;
 import static ar.gastito.bot.DatosDePrueba.conCategoria;
 import static ar.gastito.bot.DatosDePrueba.confirmado;
+import static ar.gastito.bot.DatosDePrueba.deAudio;
 import static ar.gastito.bot.DatosDePrueba.dudoso;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
 
 import org.junit.jupiter.api.Test;
+
+import ar.gastito.movimiento.Movimiento;
 
 class TarjetasTest {
 
@@ -66,6 +69,52 @@ class TarjetasTest {
         assertThat(tarjetas.pidiendo(conCategoria("3700", KIOSCO), Tarjetas.Campo.FECHA))
                 .startsWith("🧾 <b>Nuevo gasto</b>")
                 .contains("✏️ <b>Escribí la nueva fecha</b>");
+    }
+
+    @Test
+    void deUnAudioMuestraLoQueEscuchoArriba() {
+        assertThat(tarjetas.pendiente(deAudio("3700", SUPER, "Gasto 3700 en pan de pancho y papas, efectivo")))
+                .isEqualTo("""
+                        🎙 Escuché: "Gasto 3700 en pan de pancho y papas, efectivo"
+
+                        🧾 <b>Nuevo gasto</b>
+                        💰 <b>$3.700</b>
+                        📝 Pan de pancho y papas
+                        🛒 Supermercado
+                        💳 Efectivo
+                        📅 Hoy 16:42""");
+    }
+
+    @Test
+    void loQueEscuchoQuedaEnTodosLosEstados() {
+        Movimiento m = deAudio("3700", SUPER, "super 3700");
+
+        assertThat(tarjetas.pidiendo(m, Tarjetas.Campo.MONTO)).startsWith("🎙 Escuché: \"super 3700\"\n\n🧾");
+        assertThat(tarjetas.cancelado(m)).startsWith("🎙 Escuché: \"super 3700\"\n\n❌ <b>Cancelado</b>");
+        m.confirmar();
+        assertThat(tarjetas.guardado(m, BigDecimal.TEN)).startsWith("🎙 Escuché: \"super 3700\"\n\n✅ <b>Guardado</b>");
+        assertThat(tarjetas.terminado(m)).startsWith("🎙 Escuché: \"super 3700\"\n\n✅ <b>Guardado</b>");
+    }
+
+    @Test
+    void loQueEscuchoSeEscapaComoHtml() {
+        assertThat(tarjetas.pendiente(deAudio("3700", SUPER, "pan <b>&</b> papas")))
+                .startsWith("🎙 Escuché: \"pan &lt;b&gt;&amp;&lt;/b&gt; papas\"");
+    }
+
+    @Test
+    void unGastoEscritoNoMuestraLoEscuchado() {
+        assertThat(tarjetas.pendiente(conCategoria("3700", KIOSCO))).doesNotContain("🎙");
+    }
+
+    @Test
+    void propuestaDeUnAudioParaElCampoEnEdicion() {
+        assertThat(tarjetas.propuesta(conCategoria("3700", KIOSCO), "3700", Tarjetas.Campo.MONTO, "$3.700"))
+                .startsWith("🧾 <b>Nuevo gasto</b>")
+                .endsWith("\n\n🎙 Escuché: \"3700\" → <b>Monto: $3.700</b>");
+        assertThat(tarjetas.propuesta(ID).botones()).containsExactly(
+                new Teclado.Boton("✅ Aplicar", "a:15"),
+                new Teclado.Boton("↩ Cancelar edición", "v:15"));
     }
 
     // --- Botones ---

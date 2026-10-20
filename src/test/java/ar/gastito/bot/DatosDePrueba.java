@@ -59,6 +59,12 @@ final class DatosDePrueba {
         return m;
     }
 
+    /** Pendiente con categoría elegida que vino de un audio. */
+    static Movimiento deAudio(String monto, Categoria categoria, String escuchado) {
+        return conId(Movimiento.pendiente(new MovimientoInterpretado(new BigDecimal(monto), "Pan de pancho y papas",
+                categoria, List.of(), EFECTIVO, null, null, AHORA), Origen.AUDIO, escuchado, AHORA), ID);
+    }
+
     private static Movimiento movimiento(MovimientoInterpretado interpretado) {
         return conId(Movimiento.pendiente(interpretado, Origen.TEXTO, "x", AHORA), ID);
     }

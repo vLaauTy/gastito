@@ -13,6 +13,7 @@ import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.MedioPago;
 import ar.gastito.movimiento.EstadoMovimiento;
 import ar.gastito.movimiento.Movimiento;
+import ar.gastito.movimiento.Origen;
 
 /**
  * La tarjeta de un gasto: un mensaje con un dato por línea que se va editando en el lugar
@@ -33,18 +34,21 @@ public class Tarjetas {
     static final String EDITAR_MONTO = "em";
     static final String EDITAR_FECHA = "ef";
     static final String EDITAR_DESCRIPCION = "ed";
+    static final String APLICAR = "a";
     /** Id de medio de pago que significa "sin medio de pago". */
     static final long SIN_MEDIO = 0;
 
-    /** Campos que se editan escribiendo el valor nuevo. */
+    /** Campos que se editan escribiendo (o diciendo en un audio) el valor nuevo. */
     public enum Campo {
-        MONTO("✏️ <b>Escribí el nuevo monto</b>\n<i>Por ejemplo: 3700 o 1.500,50</i>"),
-        FECHA("✏️ <b>Escribí la nueva fecha</b>\n<i>Por ejemplo: ayer, el sábado, 12/10 o 12/10 21:30</i>"),
-        DESCRIPCION("✏️ <b>Escribí la nueva descripción</b>");
+        MONTO("Monto", "✏️ <b>Escribí el nuevo monto</b>\n<i>Por ejemplo: 3700 o 1.500,50</i>"),
+        FECHA("Fecha", "✏️ <b>Escribí la nueva fecha</b>\n<i>Por ejemplo: ayer, el sábado, 12/10 o 12/10 21:30</i>"),
+        DESCRIPCION("Descripción", "✏️ <b>Escribí la nueva descripción</b>");
 
+        private final String etiqueta;
         private final String pedido;
 
-        Campo(String pedido) {
+        Campo(String etiqueta, String pedido) {
+            this.etiqueta = etiqueta;
             this.pedido = pedido;
         }
     }
@@ -59,7 +63,7 @@ public class Tarjetas {
 
     /** La tarjeta de un gasto pendiente. */
     public String pendiente(Movimiento m) {
-        return "🧾 <b>Nuevo gasto</b>\n" + datos(m);
+        return escuchado(m) + "🧾 <b>Nuevo gasto</b>\n" + datos(m);
     }
 
     /** Pendiente sin monto, recién interpretado: se espera que el usuario lo escriba. */
@@ -72,19 +76,39 @@ public class Tarjetas {
         return pendiente(m) + "\n\n" + campo.pedido;
     }
 
+    /**
+     * Pendiente con el valor que se entendió de un audio para el campo que se estaba editando, antes de aplicarlo.
+     *
+     * @param valor el valor ya formateado ("$3.700", "Ayer 21:30")
+     */
+    public String propuesta(Movimiento m, String escuchado, Campo campo, String valor) {
+        return pendiente(m) + "\n\n🎙 Escuché: \"" + html(escuchado) + "\" → <b>" + campo.etiqueta + ": "
+                + html(valor) + "</b>";
+    }
+
     public String guardado(Movimiento m, BigDecimal totalMesCategoria) {
-        return "✅ <b>Guardado</b>\n" + datos(m) + "\n\n📊 En " + formato.mes(YearMonth.from(m.getFechaHora()))
-                + " llevás <b>" + formato.pesos(totalMesCategoria) + "</b> en "
-                + html(m.getCategoria().getNombreConEmoji()) + ".";
+        return escuchado(m) + "✅ <b>Guardado</b>\n" + datos(m) + "\n\n📊 En "
+                + formato.mes(YearMonth.from(m.getFechaHora())) + " llevás <b>" + formato.pesos(totalMesCategoria)
+                + "</b> en " + html(m.getCategoria().getNombreConEmoji()) + ".";
     }
 
     public String cancelado(Movimiento m) {
-        return "❌ <b>Cancelado</b>\n" + datos(m);
+        return escuchado(m) + "❌ <b>Cancelado</b>\n" + datos(m);
     }
 
     /** Cómo queda la tarjeta de un gasto que ya no está pendiente. */
     public String terminado(Movimiento m) {
-        return m.getEstado() == EstadoMovimiento.CONFIRMADO ? "✅ <b>Guardado</b>\n" + datos(m) : cancelado(m);
+        return m.getEstado() == EstadoMovimiento.CONFIRMADO
+                ? escuchado(m) + "✅ <b>Guardado</b>\n" + datos(m)
+                : cancelado(m);
+    }
+
+    /** Si el gasto vino de un audio, lo que se escuchó, arriba de todo: así se ve si Whisper entendió mal. */
+    private static String escuchado(Movimiento m) {
+        if (m.getOrigen() != Origen.AUDIO || m.getTextoOriginal() == null || m.getTextoOriginal().isBlank()) {
+            return "";
+        }
+        return "🎙 Escuché: \"" + html(m.getTextoOriginal()) + "\"\n\n";
     }
 
     private String datos(Movimiento m) {
@@ -152,6 +176,13 @@ public class Tarjetas {
 
     public Teclado soloVolver(long id) {
         return Teclado.constructor().fila(volver(id)).build();
+    }
+
+    /** Para un valor entendido de un audio: aplicarlo, o salir de la edición sin cambiar nada. */
+    public Teclado propuesta(long id) {
+        return Teclado.constructor()
+                .fila(boton("✅ Aplicar", APLICAR, id), boton("↩ Cancelar edición", VOLVER, id))
+                .build();
     }
 
     private static Teclado.Boton volver(long id) {
