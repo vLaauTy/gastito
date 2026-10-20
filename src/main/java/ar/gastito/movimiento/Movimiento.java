@@ -88,6 +88,9 @@ public class Movimiento {
     @OrderColumn(name = "orden")
     private List<Categoria> candidatas = new ArrayList<>();
 
+    /** El largo de la columna texto_original: un mensaje o una transcripción más larga se recorta. */
+    static final int LARGO_MAXIMO_TEXTO_ORIGINAL = 1000;
+
     protected Movimiento() {
     }
 
@@ -104,7 +107,9 @@ public class Movimiento {
         m.tarjeta = interpretado.tarjeta();
         m.origen = origen;
         m.estado = EstadoMovimiento.PENDIENTE;
-        m.textoOriginal = textoOriginal;
+        m.textoOriginal = textoOriginal != null && textoOriginal.length() > LARGO_MAXIMO_TEXTO_ORIGINAL
+                ? textoOriginal.substring(0, LARGO_MAXIMO_TEXTO_ORIGINAL)
+                : textoOriginal;
         m.creadoEn = ahora;
         if (m.categoria == null) {
             m.candidatas.addAll(interpretado.candidatas());

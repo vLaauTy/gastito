@@ -203,6 +203,16 @@ class MovimientoServiceTest {
         return categorias.findByNombre(nombre).orElseThrow();
     }
 
+    @Test
+    void unTextoOriginalMasLargoQueLaColumnaSeRecortaYSeGuarda() {
+        MovimientoInterpretado interpretado = MovimientoInterpretado.conCategoria(new BigDecimal("100"), "test",
+                categoria("Kiosco"), null, null, null, AHORA);
+
+        Movimiento m = service.crearPendiente(interpretado, Origen.AUDIO, "a".repeat(1500));
+
+        assertThat(service.buscar(m.getId()).getTextoOriginal()).hasSize(1000);
+    }
+
     private Movimiento pendiente(Categoria categoria, String monto, LocalDateTime fecha) {
         MovimientoInterpretado interpretado = MovimientoInterpretado.conCategoria(new BigDecimal(monto), "test",
                 categoria, null, null, null, fecha);
