@@ -57,6 +57,7 @@ public class ProcesadorMensajes {
             • 3700 en pan de pancho y papas, efectivo
             • pagué 12000 de nafta con la tarjeta
 
+            También me lo podés decir en un audio 🎙
             Te muestro lo que entendí y lo guardás con un toque.""";
 
     static final String AYUDA = """
@@ -65,6 +66,7 @@ public class ProcesadorMensajes {
             • Si escribís algo más largo ("ayer 3700 en pan y papas con QR"), lo interpreta la IA.
             • Montos a la argentina: 1.500 o 1500,50.
             • Fechas: "ayer", "anteayer", "el sábado", "12/10".
+            • Por audio 🎙: decilo como lo escribirías ("gasto 3700 en pan y papas, efectivo"), un gasto por audio. Arriba de la tarjeta te muestro lo que escuché.
 
             <b>La tarjeta</b>
             Te muestro lo que entendí. Si no estoy seguro de la categoría, te la pregunto con botones. Con ✏️ Editar cambiás cualquier dato antes de guardar.

@@ -1,9 +1,17 @@
 package ar.gastito.bot;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient;
@@ -12,6 +20,7 @@ import org.telegram.telegrambots.longpolling.starter.AfterBotRegistration;
 import org.telegram.telegrambots.longpolling.starter.SpringLongPollingBot;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
+import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.ParseMode;
 import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethod;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
@@ -20,6 +29,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.message.MaybeInaccessibleMessage;
@@ -38,7 +48,7 @@ import ar.gastito.config.GastitoProperties;
  */
 @Component
 @ConditionalOnProperty(prefix = "telegrambots", name = "enabled", havingValue = "true", matchIfMissing = true)
-public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
+public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer, DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(GastitoBot.class);
 
@@ -46,6 +56,9 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
     private final TelegramClient telegram;
     private final FiltroUsuario filtro;
     private final ProcesadorMensajes procesador;
+    /** Repite la acción "escribiendo…" mientras se transcribe un audio. */
+    private final ScheduledExecutorService programador = Executors.newSingleThreadScheduledExecutor(
+            Thread.ofPlatform().name("gastito-escribiendo").daemon().factory());
 
     public GastitoBot(GastitoProperties properties, FiltroUsuario filtro, ProcesadorMensajes procesador) {
         this.token = properties.telegram().token();
@@ -95,14 +108,20 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
             } else if (update.hasMessage()) {
                 Message mensaje = update.getMessage();
                 chatId = mensaje.getChatId();
-                if (!mensaje.hasText()) {
-                    ejecutar(chatId, null, List.of(Accion.Enviar.texto("Por ahora solo entiendo mensajes de texto.")));
-                    return;
+                if (mensaje.hasText()) {
+                    if (!mensaje.getText().startsWith("/")) {
+                        ejecutar(SendChatAction.builder().chatId(chatId).action("typing").build());
+                    }
+                    ejecutar(chatId, null, procesador.procesarTexto(chatId, mensaje.getMessageId(), mensaje.getText()));
+                } else if (mensaje.hasVoice() || mensaje.hasAudio()) {
+                    AudioRecibido audio = audio(mensaje);
+                    long chat = chatId;
+                    ejecutar(chatId, null, escribiendoMientras(chatId,
+                            () -> procesador.procesarAudio(chat, mensaje.getMessageId(), audio)));
+                } else {
+                    ejecutar(chatId, null, List.of(Accion.Enviar.texto(
+                            "Por ahora entiendo mensajes de texto y audios.")));
                 }
-                if (!mensaje.getText().startsWith("/")) {
-                    ejecutar(SendChatAction.builder().chatId(chatId).action("typing").build());
-                }
-                ejecutar(chatId, null, procesador.procesarTexto(chatId, mensaje.getMessageId(), mensaje.getText()));
             }
         } catch (RuntimeException e) {
             log.error("Error procesando el update {}", update.getUpdateId(), e);
@@ -113,6 +132,72 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
                 ejecutar(chatId, null, List.of(Accion.Enviar.texto("Uy, algo salió mal procesando eso 😕 Probá de nuevo.")));
             }
         }
+    }
+
+    /** Un mensaje de voz o un archivo de audio. Se descarga en memoria, recién cuando hace falta. */
+    private AudioRecibido audio(Message mensaje) {
+        String fileId;
+        Integer duracion;
+        String nombre;
+        if (mensaje.hasVoice()) {
+            fileId = mensaje.getVoice().getFileId();
+            duracion = mensaje.getVoice().getDuration();
+            nombre = "voz.oga";
+        } else {
+            fileId = mensaje.getAudio().getFileId();
+            duracion = mensaje.getAudio().getDuration();
+            nombre = nombreArchivo(mensaje.getAudio().getFileName(), mensaje.getAudio().getMimeType());
+        }
+        return new AudioRecibido(duracion == null ? 0 : duracion, nombre, () -> descargar(fileId));
+    }
+
+    private byte[] descargar(String fileId) throws IOException {
+        try {
+            File archivo = telegram.execute(GetFile.builder().fileId(fileId).build());
+            try (InputStream in = telegram.downloadFileAsStream(archivo.getFilePath())) {
+                return in.readAllBytes();
+            }
+        } catch (TelegramApiException e) {
+            throw new IOException(sinToken(e.getMessage()));
+        }
+    }
+
+    /** Whisper reconoce el formato por la extensión. */
+    static String nombreArchivo(String nombre, String mimeType) {
+        if (nombre != null && nombre.contains(".")) {
+            return nombre;
+        }
+        String tipo = mimeType == null ? "" : mimeType.toLowerCase();
+        if (tipo.contains("mpeg") || tipo.contains("mp3")) {
+            return "audio.mp3";
+        }
+        if (tipo.contains("mp4") || tipo.contains("m4a") || tipo.contains("aac")) {
+            return "audio.m4a";
+        }
+        if (tipo.contains("wav")) {
+            return "audio.wav";
+        }
+        return "audio.ogg";
+    }
+
+    /**
+     * Telegram muestra "escribiendo…" unos 5 segundos: mientras se transcribe (puede tardar más) se repite cada 4,
+     * así el usuario ve que el bot está trabajando.
+     */
+    private List<Accion> escribiendoMientras(long chatId, Supplier<List<Accion>> trabajo) {
+        ScheduledFuture<?> escribiendo = programador.scheduleAtFixedRate(
+                () -> ejecutar(SendChatAction.builder().chatId(chatId).action("typing").build()),
+                0, 4, TimeUnit.SECONDS);
+        try {
+            return trabajo.get();
+        } finally {
+            escribiendo.cancel(false);
+        }
+    }
+
+    @Override
+    public void destroy() {
+        programador.shutdownNow();
     }
 
     /** @param callbackId si las acciones responden a un botón, Telegram espera una respuesta (con o sin aviso) */
