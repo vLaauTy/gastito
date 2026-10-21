@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototipo · Dashboard de Gastito</title>
+<!--
+  Prototipo estático del dashboard (datos de ejemplo, sin lógica).
+  Es una referencia visual: la versión real se arma con la API y estos mismos colores y distribución.
+-->
+<style>
+  :root {
+    --bg: #F4F6F2; --surface: #FFFFFF; --border: #D5DBD2; --fg: #17201B; --muted: #55615A;
+    --accent: #1F7A4D; --accent-soft: #E3EFE7; --warn: #8A3B0F; --warn-soft: #FFF1E3;
+    --info: #1B3F8F; --info-soft: #E5ECFA; --nav: #17201B; --nav-fg: #E6ECE7;
+    --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+  .app { min-height: 100vh; display: flex; flex-wrap: wrap; }
+  nav { flex: 1 1 220px; max-width: 260px; background: var(--nav); color: var(--nav-fg); padding: 24px 16px; display: flex; flex-direction: column; gap: 24px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; }
+  .logo span { width: 36px; height: 36px; border-radius: 18px; background: var(--accent); display: grid; place-items: center; color: #fff; }
+  nav a { display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 10px; color: #B8C4BC; text-decoration: none; font-weight: 600; }
+  nav a.active { background: #2C3A33; color: #fff; }
+  nav a.off { opacity: .45; pointer-events: none; }
+  nav a.off small { margin-left: auto; font-weight: 500; font-size: 11px; }
+  .ia { margin-top: auto; background: #24302A; border-radius: 12px; padding: 12px; font-size: 12px; color: #9AA69E; }
+  .ia b { display: block; font-family: var(--mono); font-size: 18px; color: var(--nav-fg); margin: 4px 0; }
+  main { flex: 999 1 560px; min-width: 0; padding: 24px 32px 40px; display: flex; flex-direction: column; gap: 20px; }
+  header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+  h1 { margin: 0; font-size: 28px; }
+  .sub { color: var(--muted); font-size: 14px; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; }
+  button { min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid #B9C3BB; background: #fff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .card.dark { background: var(--fg); color: #fff; border-color: var(--fg); }
+  .label { font-size: 13px; color: var(--muted); }
+  .dark .label, .dark .note { color: #C9D3CC; }
+  .big { font-family: var(--mono); font-size: 26px; font-weight: 600; }
+  .note { font-size: 13px; color: var(--muted); }
+  .up { color: var(--warn); font-weight: 600; }
+  .bar { height: 8px; border-radius: 4px; background: #3A463F; }
+  .bar i { display: block; height: 8px; border-radius: 4px; background: #6FD39A; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+  h2 { margin: 0; font-size: 16px; }
+  .head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .chart { display: flex; align-items: flex-end; gap: 6px; height: 180px; border-bottom: 1px solid var(--border); position: relative; }
+  .chart i { flex: 1; border-radius: 4px 4px 0 0; background: #A9C9B6; }
+  .chart i.max { background: var(--accent); }
+  .chart .avg { position: absolute; left: 0; right: 0; border-top: 1px dashed #8A968E; }
+  .days { display: flex; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .days span { flex: 1; text-align: center; }
+  .cat { display: grid; grid-template-columns: minmax(0, 170px) minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 14px; }
+  .cat .track { height: 10px; border-radius: 5px; background: #E3E8E1; }
+  .cat .track i { display: block; height: 10px; border-radius: 5px; background: var(--accent); }
+  .money { font-family: var(--mono); font-size: 13px; text-align: right; }
+  .stack { display: flex; height: 14px; border-radius: 7px; overflow: hidden; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; }
+  .row2 { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+  .table-card { flex: 999 1 520px; min-width: 0; }
+  aside { flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 8px; }
+  td { padding: 10px 8px; border-top: 1px solid #EDF0EB; }
+  td.date { font-family: var(--mono); font-size: 13px; color: var(--muted); white-space: nowrap; }
+  td.amt { font-family: var(--mono); font-weight: 600; text-align: right; white-space: nowrap; }
+  .chip { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 8px; background: var(--accent-soft); color: #145637; }
+  .chip.audio { background: var(--info-soft); color: var(--info); }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+  input, select { min-height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 12px; font: inherit; font-size: 14px; background: var(--bg); }
+  .soon { background: var(--surface); border: 1px dashed #B9C3BB; border-radius: 14px; padding: 18px; color: var(--muted); font-size: 14px; }
+  .soon h2 { color: var(--fg); margin-bottom: 6px; }
+  .ing { display: flex; justify-content: space-between; font-size: 14px; padding: 6px 0; border-top: 1px solid #EDF0EB; }
+  .ing:first-of-type { border-top: 0; }
+
+  .view { display: flex; flex-direction: column; gap: 20px; }
+  .view[hidden] { display: none; }
+  .pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  button.mini { min-height: 32px; padding: 0 10px; font-size: 13px; }
+  button:disabled { opacity: .5; cursor: default; }
+  .modal { position: fixed; inset: 0; background: rgba(23,32,27,.45); display: grid; place-items: center; padding: 16px; }
+  .modal[hidden] { display: none; }
+  .dialog { width: min(420px, 100%); }
+  .dialog label { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .demo { font-size: 12px; color: #9AA69E; }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav aria-label="Secciones">
+    <div class="logo"><span>G</span>Gastito</div>
+    <div>
+      <a href="#resumen" data-view="resumen" class="active">Resumen</a>
+      <a href="#movimientos" data-view="movimientos">Movimientos</a>
+      <a href="#ingresos" data-view="ingresos">Ingresos</a>
+      <a href="#" class="off">Fijos y cuotas <small>Próximamente</small></a>
+      <a href="#" class="off">Juntadas <small>Próximamente</small></a>
+    </div>
+    <div class="ia">Costo de la IA en octubre<b>US$ 0,02</b>41 llamadas</div>
+  </nav>
+
+  <main>
+  <div class="view" id="v-resumen">
+    <header>
+      <div>
+        <h1>Octubre 2026</h1>
+        <div class="sub">Al 21 de octubre · datos de ejemplo</div>
+      </div>
+      <div class="btns">
+        <button>‹ Septiembre</button>
+        <button class="primary" data-open="modal">Cargar ingreso</button>
+        <button>Exportar CSV</button>
+      </div>
+    </header>
+
+    <section class="cards" aria-label="Resumen del mes">
+      <div class="card">
+        <div class="label">Gastado</div>
+        <div class="big">$186.400</div>
+        <div class="note"><span class="up">+8%</span> vs. septiembre al día 21</div>
+      </div>
+      <div class="card">
+        <div class="label">Ingresos del mes</div>
+        <div class="big" style="color:#145637">$405.000</div>
+        <div class="note">Sueldo $380.000 · extras $25.000</div>
+      </div>
+      <div class="card dark">
+        <div class="label">Disponible</div>
+        <div class="big">$218.600</div>
+        <div class="bar"><i style="width:46%"></i></div>
+        <div class="note">Gastaste el 46% de lo que cobraste</div>
+      </div>
+      <div class="card">
+        <div class="label">Promedio diario</div>
+        <div class="big">$8.876</div>
+        <div class="note">63 gastos en el mes</div>
+      </div>
+    </section>
+
+    <div class="grid2">
+      <section class="card" aria-label="Gasto por día">
+        <div class="head"><h2>Gasto por día</h2><span class="note">La línea punteada es el promedio</span></div>
+        <div class="chart" role="img" aria-label="Gasto de cada día del mes">
+          <div class="avg" style="bottom:20%"></div>
+          <i style="height:28%"></i><i style="height:14%"></i><i style="height:8%"></i><i class="max" style="height:91%"></i>
+          <i style="height:18%"></i><i style="height:5%"></i><i style="height:34%"></i><i style="height:11%"></i>
+          <i style="height:22%"></i><i style="height:38%"></i><i style="height:73%"></i><i style="height:47%"></i>
+          <i style="height:25%"></i><i style="height:9%"></i><i style="height:16%"></i><i style="height:30%"></i>
+          <i style="height:12%"></i><i style="height:41%"></i><i style="height:7%"></i><i style="height:19%"></i>
+          <i style="height:15%"></i>
+        </div>
+        <div class="days"><span>1</span><span></span><span></span><span>4</span><span></span><span></span><span>7</span><span></span><span></span><span>10</span><span></span><span></span><span>13</span><span></span><span></span><span>16</span><span></span><span></span><span>19</span><span></span><span>21</span></div>
+      </section>
+
+      <section class="card" aria-label="Por categoría y billetera">
+        <div class="head"><h2>Por categoría</h2></div>
+        <div class="cat"><span>🛒 Supermercado</span><div class="track"><i style="width:100%"></i></div><span class="money">$70.898</span></div>
+        <div class="cat"><span>🛡 Seguros</span><div class="track"><i style="width:46%"></i></div><span class="money">$32.887</span></div>
+        <div class="cat"><span>🍫 Kiosco</span><div class="track"><i style="width:40%"></i></div><span class="money">$28.400</span></div>
+        <div class="cat"><span>🏍 Transporte / Moto</span><div class="track"><i style="width:30%"></i></div><span class="money">$21.300</span></div>
+        <div class="cat"><span>🎉 Salidas</span><div class="track"><i style="width:28%"></i></div><span class="money">$19.500</span></div>
+        <div class="cat"><span>💡 Servicios</span><div class="track"><i style="width:19%"></i></div><span class="money">$13.415</span></div>
+
+        <h2 style="margin-top:10px">Por billetera</h2>
+        <div class="stack" role="img" aria-label="Reparto por billetera">
+          <i style="width:18%;background:#8A968E"></i>
+          <i style="width:22%;background:#1F7A4D"></i>
+          <i style="width:24%;background:#2457C5"></i>
+          <i style="width:33%;background:#B4531F"></i>
+          <i style="width:3%;background:#D5DBD2"></i>
+        </div>
+        <div class="legend">
+          <span><i style="background:#8A968E"></i>Efectivo $33.600</span>
+          <span><i style="background:#1F7A4D"></i>Galicia $41.000</span>
+          <span><i style="background:#2457C5"></i>Mercado Pago $44.700</span>
+          <span><i style="background:#B4531F"></i>MasterCard Gold $61.500</span>
+          <span><i style="background:#D5DBD2"></i>Sin especificar $5.600</span>
+        </div>
+      </section>
+    </div>
+
+    <div class="row2">
+      <section class="card table-card" aria-label="Últimos movimientos">
+        <div class="head">
+          <h2>Últimos movimientos <a href="#movimientos" data-view="movimientos" style="font-size:13px;font-weight:600;color:var(--accent);margin-left:8px">Ver todos</a></h2>
+          <div class="filters">
+            <label class="sr" for="q" style="position:absolute;left:-9999px">Buscar</label>
+            <input id="q" placeholder="Buscar…">
+            <label for="cat" style="position:absolute;left:-9999px">Categoría</label>
+            <select id="cat"><option>Todas las categorías</option></select>
+          </div>
+        </div>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Fecha</th><th>Detalle</th><th>Categoría</th><th>Medio</th><th>Origen</th><th style="text-align:right">Monto</th></tr></thead>
+            <tbody>
+              <tr><td class="date">21/10 16:42</td><td><b>Pan de pancho y papas</b></td><td>🛒 Supermercado</td><td>Efectivo</td><td><span class="chip audio">Audio</span></td><td class="amt">$3.700</td></tr>
+              <tr><td class="date">21/10 11:05</td><td><b>Alfajor y agua</b></td><td>🍫 Kiosco</td><td>QR · Mercado Pago</td><td><span class="chip">Texto</span></td><td class="amt">$1.800</td></tr>
+              <tr><td class="date">20/10 19:30</td><td><b>Nafta</b></td><td>🏍 Transporte / Moto</td><td>Crédito · MasterCard Gold</td><td><span class="chip audio">Audio</span></td><td class="amt">$9.300</td></tr>
+              <tr><td class="date">18/10 21:10</td><td><b>Cerveza con amigos</b></td><td>🎉 Salidas</td><td>Mercado Pago</td><td><span class="chip">Texto</span></td><td class="amt">$8.000</td></tr>
+              <tr><td class="date">05/10</td><td><b>Seguro</b></td><td>🛡 Seguros</td><td>Crédito · MasterCard Gold</td><td><span class="chip">Texto</span></td><td class="amt">$32.887</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside>
+        <section class="card" aria-label="Ingresos">
+          <div class="head"><h2>Ingresos de octubre</h2><button data-open="modal">Cargar</button></div>
+          <div class="ing"><span>Sueldo · 01/10 · Galicia</span><span class="money">$380.000</span></div>
+          <div class="ing"><span>Arreglo de PC · 12/10 · Mercado Pago</span><span class="money">$25.000</span></div>
+        </section>
+        <section class="soon"><h2>Lo que notó la IA</h2>Próximamente: llega con los resúmenes de la etapa 4.</section>
+        <section class="soon"><h2>Fijos y juntadas</h2>Próximamente: llegan en la etapa 6.</section>
+      </aside>
+    </div>
+  </div>
+  
+  <div class="view" id="v-movimientos" hidden>
+    <header>
+      <div><h1>Movimientos</h1><div class="sub">Octubre 2026 · 63 gastos · $186.400</div></div>
+      <div class="btns"><button>‹ Septiembre</button><button>Exportar CSV</button></div>
+    </header>
+    <section class="card">
+      <div class="filters">
+        <label for="q2" style="position:absolute;left:-9999px">Buscar</label>
+        <input id="q2" placeholder="Buscar: yerba, kiosco…" style="flex:1 1 220px">
+        <label for="f-cat" style="position:absolute;left:-9999px">Categoría</label>
+        <select id="f-cat"><option>Todas las categorías</option><option>🛒 Supermercado</option><option>🍫 Kiosco</option><option>🎉 Salidas</option></select>
+        <label for="f-med" style="position:absolute;left:-9999px">Medio de pago</label>
+        <select id="f-med"><option>Todos los medios</option><option>Efectivo</option><option>Débito</option><option>Crédito</option><option>QR</option><option>Transferencia</option></select>
+        <label for="f-ori" style="position:absolute;left:-9999px">Origen</label>
+        <select id="f-ori"><option>Texto y audio</option><option>Solo texto</option><option>Solo audio</option></select>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Fecha</th><th>Detalle</th><th>Categoría</th><th>Medio</th><th>Origen</th><th style="text-align:right">Monto</th><th></th></tr></thead>
+          <tbody><tr><td class="date">21/10 16:42</td><td><b>Pan de pancho y papas</b></td><td>🛒 Supermercado</td><td>Efectivo</td><td><span class="chip audio">Audio</span></td><td class="amt">$3.700</td><td><button class="mini">Editar</button></td></tr><tr><td class="date">21/10 11:05</td><td><b>Alfajor y agua</b></td><td>🍫 Kiosco</td><td>QR · Mercado Pago</td><td><span class="chip">Texto</span></td><td class="amt">$1.800</td><td><button class="mini">Editar</button></td></tr><tr><td class="date">20/10 19:30</td><td><b>Nafta</b></td><td>🏍 Transporte / Moto</td><td>Crédito · MasterCard Gold</td><td><span class="chip audio">Audio</span></td><td class="amt">$9.300</td><td><button class="mini">Editar</button></td></tr><tr><td class="date">19/10 13:15</td><td><b>Leche, yerba y galletitas</b></td><td>🛒 Supermercado</td><td>Débito · Galicia</td><td><span class="chip">Texto</span></td><td class="amt">$6.600</td><td><button class="mini">Editar</button></td></tr><tr><td class="date">18/10 21:10</td><td><b>Cerveza con amigos</b></td><td>🎉 Salidas</td><td>Mercado Pago</td><td><span class="chip">Texto</span></td><td class="amt">$8.000</td><td><button class="mini">Editar</button></td></tr><tr><td class="date">17/10 09:40</td><td><b>Café y medialunas</b></td><td>🍔 Comida afuera / delivery</td><td>QR · Mercado Pago</td><td><span class="chip audio">Audio</span></td><td class="amt">$4.200</td><td><button class="mini">Editar</button></td></tr><tr><td class="date">15/10 18:00</td><td><b>Detergente y esponjas</b></td><td>🧽 Productos para la casa</td><td>Efectivo</td><td><span class="chip">Texto</span></td><td class="amt">$3.900</td><td><button class="mini">Editar</button></td></tr><tr><td class="date">12/10 20:30</td><td><b>Pizza por app</b></td><td>🍔 Comida afuera / delivery</td><td>Crédito · MasterCard Gold</td><td><span class="chip">Texto</span></td><td class="amt">$14.500</td><td><button class="mini">Editar</button></td></tr><tr><td class="date">10/10 08:20</td><td><b>Gaseosa</b></td><td>🍫 Kiosco</td><td>Efectivo</td><td><span class="chip audio">Audio</span></td><td class="amt">$2.300</td><td><button class="mini">Editar</button></td></tr><tr><td class="date">08/10 17:45</td><td><b>Luz</b></td><td>💡 Servicios</td><td>Débito · Galicia</td><td><span class="chip">Texto</span></td><td class="amt">$13.415</td><td><button class="mini">Editar</button></td></tr><tr><td class="date">05/10</td><td><b>Seguro</b></td><td>🛡 Seguros</td><td>Crédito · MasterCard Gold</td><td><span class="chip">Texto</span></td><td class="amt">$32.887</td><td><button class="mini">Editar</button></td></tr><tr><td class="date">04/10 17:20</td><td><b>Compra grande del mes</b></td><td>🛒 Supermercado</td><td>Crédito · MasterCard Gold</td><td><span class="chip">Texto</span></td><td class="amt">$41.000</td><td><button class="mini">Editar</button></td></tr><tr><td class="date">03/10 22:00</td><td><b>Golosinas</b></td><td>🍫 Kiosco</td><td>Sin especificar</td><td><span class="chip audio">Audio</span></td><td class="amt">$1.600</td><td><button class="mini">Editar</button></td></tr></tbody>
+        </table>
+      </div>
+      <div class="pager"><span class="note">Mostrando 1–13 de 63</span><div class="btns"><button disabled>Anterior</button><button>Siguiente</button></div></div>
+    </section>
+    <p class="note">El botón Editar es solo una idea para más adelante: por ahora los gastos se corrigen desde el bot.</p>
+  </div>
+
+  <div class="view" id="v-ingresos" hidden>
+    <header>
+      <div><h1>Ingresos</h1><div class="sub">Octubre 2026</div></div>
+      <div class="btns"><button>‹ Septiembre</button><button class="primary" data-open="modal">Cargar ingreso</button></div>
+    </header>
+    <section class="cards">
+      <div class="card"><div class="label">Total cobrado</div><div class="big" style="color:#145637">$405.000</div></div>
+      <div class="card"><div class="label">Sueldo</div><div class="big">$380.000</div></div>
+      <div class="card"><div class="label">Extras</div><div class="big">$25.000</div><div class="note">1 trabajo</div></div>
+      <div class="card dark"><div class="label">Disponible</div><div class="big">$218.600</div><div class="bar"><i style="width:46%"></i></div></div>
+    </section>
+    <section class="card">
+      <h2>Detalle</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Cuenta</th><th style="text-align:right">Monto</th><th></th></tr></thead>
+          <tbody>
+            <tr><td class="date">01/10</td><td><span class="chip">Sueldo</span></td><td>Sueldo de septiembre</td><td>Galicia</td><td class="amt">$380.000</td><td><button class="mini">Borrar</button></td></tr>
+            <tr><td class="date">12/10</td><td><span class="chip audio">Extra</span></td><td>Arreglo de PC</td><td>Mercado Pago</td><td class="amt">$25.000</td><td><button class="mini">Borrar</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Ingresos de los últimos meses</h2>
+      <div class="cat"><span>Agosto</span><div class="track"><i style="width:88%"></i></div><span class="money">$356.000</span></div>
+      <div class="cat"><span>Septiembre</span><div class="track"><i style="width:94%"></i></div><span class="money">$380.000</span></div>
+      <div class="cat"><span>Octubre</span><div class="track"><i style="width:100%"></i></div><span class="money">$405.000</span></div>
+    </section>
+  </div>
+
+  <div class="modal" id="modal" hidden>
+    <form class="card dialog" aria-label="Cargar ingreso">
+      <h2>Cargar ingreso</h2>
+      <label for="i-tipo">Tipo</label>
+      <select id="i-tipo"><option>Sueldo</option><option>Extra (trabajo particular u otro)</option></select>
+      <label for="i-monto">Monto</label>
+      <input id="i-monto" placeholder="380.000">
+      <label for="i-desc">Descripción (opcional)</label>
+      <input id="i-desc" placeholder="Arreglo de PC para Carlos">
+      <label for="i-fecha">Fecha</label>
+      <input id="i-fecha" type="date" value="2026-10-21">
+      <label for="i-cuenta">Cuenta</label>
+      <select id="i-cuenta"><option>Galicia</option><option>Mercado Pago</option><option>Efectivo</option></select>
+      <div class="btns" style="justify-content:flex-end;margin-top:8px"><button type="button" data-close>Cancelar</button><button type="button" class="primary" data-close>Guardar</button></div>
+    </form>
+  </div>
+
+  </main>
+</div>
+
+<script>
+  const views = ['resumen', 'movimientos', 'ingresos'];
+  function show(v) {
+    if (!views.includes(v)) v = 'resumen';
+    views.forEach(x => document.getElementById('v-' + x).hidden = x !== v);
+    document.querySelectorAll('nav a[data-view]').forEach(a => a.classList.toggle('active', a.dataset.view === v));
+    window.scrollTo(0, 0);
+  }
+  document.addEventListener('click', e => {
+    const link = e.target.closest('[data-view]');
+    if (link) { e.preventDefault(); history.replaceState(null, '', '#' + link.dataset.view); show(link.dataset.view); }
+    if (e.target.closest('[data-open]')) document.getElementById('modal').hidden = false;
+    if (e.target.closest('[data-close]') || e.target.id === 'modal') document.getElementById('modal').hidden = true;
+  });
+  show(location.hash.slice(1));
+</script>
+</body>
+</html>
