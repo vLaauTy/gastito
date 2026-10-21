@@ -28,6 +28,9 @@ public class TarjetaCredito {
 
     private boolean activa = true;
 
+    /** Color de la billetera en el dashboard (#RRGGBB), o null para usar uno de reserva. */
+    private String color;
+
     protected TarjetaCredito() {
     }
 
@@ -49,5 +52,9 @@ public class TarjetaCredito {
 
     public boolean isActiva() {
         return activa;
+    }
+
+    public String getColor() {
+        return color;
     }
 }

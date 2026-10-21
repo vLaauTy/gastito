@@ -47,6 +47,10 @@ public class Movimiento {
     @Enumerated(EnumType.STRING)
     private TipoMovimiento tipo;
 
+    /** Solo en los ingresos: sueldo, aguinaldo o extra. */
+    @Enumerated(EnumType.STRING)
+    private ClaseIngreso claseIngreso;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "categoria_id")
     private Categoria categoria;
@@ -117,9 +121,34 @@ public class Movimiento {
         return m;
     }
 
-    /** Tiene monto y categoría: se puede guardar. */
+    /**
+     * Un ingreso pendiente, hasta que el usuario lo guarde. Va a una cuenta, o en efectivo (sin cuenta y con el
+     * medio de pago efectivo); sin ninguno de los dos, queda sin especificar.
+     */
+    public static Movimiento ingreso(ClaseIngreso clase, BigDecimal monto, String descripcion, Cuenta cuenta,
+            MedioPago efectivo, LocalDateTime fechaHora, Origen origen, String textoOriginal, LocalDateTime ahora) {
+        Movimiento m = new Movimiento();
+        m.tipo = TipoMovimiento.INGRESO;
+        m.claseIngreso = clase;
+        m.monto = monto;
+        m.descripcion = descripcion;
+        m.cuenta = cuenta;
+        m.medioPago = cuenta == null ? efectivo : null;
+        m.fechaHora = fechaHora;
+        m.origen = origen;
+        m.estado = EstadoMovimiento.PENDIENTE;
+        m.textoOriginal = textoOriginal;
+        m.creadoEn = ahora;
+        return m;
+    }
+
+    /** Tiene monto y, si es un gasto, categoría: se puede guardar. */
     public boolean isCompleto() {
-        return monto != null && categoria != null;
+        return monto != null && (tipo != TipoMovimiento.GASTO || categoria != null);
+    }
+
+    public boolean isIngreso() {
+        return tipo == TipoMovimiento.INGRESO;
     }
 
     public void confirmar() {
@@ -210,6 +239,10 @@ public class Movimiento {
 
     public TipoMovimiento getTipo() {
         return tipo;
+    }
+
+    public ClaseIngreso getClaseIngreso() {
+        return claseIngreso;
     }
 
     public Categoria getCategoria() {

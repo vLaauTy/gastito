@@ -1,5 +1,6 @@
 package ar.gastito.catalogo;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -21,6 +22,10 @@ public class MedioPago implements ConPalabrasClave {
     private String palabrasClave;
 
     private boolean activo = true;
+
+    /** Pagar con este medio es pagar en efectivo: el gasto va a la billetera Efectivo. */
+    @Column(name = "es_efectivo")
+    private boolean efectivo;
 
     protected MedioPago() {
     }
@@ -46,6 +51,10 @@ public class MedioPago implements ConPalabrasClave {
 
     public boolean isActivo() {
         return activo;
+    }
+
+    public boolean isEfectivo() {
+        return efectivo;
     }
 
     public boolean esTarjetaDeCredito() {

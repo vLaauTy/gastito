@@ -106,6 +106,46 @@ class MigracionTest {
                 .containsExactly("Supermercado", "Kiosco");
     }
 
+    // --- V3: ingresos y billeteras ---
+
+    @Test
+    void unIngresoConfirmadoNoNecesitaCategoriaPeroSiClase() {
+        jdbc.update("""
+                INSERT INTO movimiento (fecha_hora, monto, tipo, clase_ingreso, origen, estado, creado_en)
+                VALUES (CURRENT_TIMESTAMP, 380000, 'INGRESO', 'SUELDO', 'DASHBOARD', 'CONFIRMADO', CURRENT_TIMESTAMP)""");
+        jdbc.update("""
+                INSERT INTO movimiento (fecha_hora, monto, tipo, clase_ingreso, origen, estado, creado_en)
+                VALUES (CURRENT_TIMESTAMP, 190000, 'INGRESO', 'AGUINALDO', 'TEXTO', 'PENDIENTE', CURRENT_TIMESTAMP)""");
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO movimiento (fecha_hora, monto, tipo, clase_ingreso, origen, estado, creado_en)
+                VALUES (CURRENT_TIMESTAMP, 100, 'INGRESO', NULL, 'DASHBOARD', 'CONFIRMADO', CURRENT_TIMESTAMP)"""))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO movimiento (fecha_hora, monto, tipo, clase_ingreso, origen, estado, creado_en)
+                VALUES (CURRENT_TIMESTAMP, 100, 'INGRESO', 'PREMIO', 'DASHBOARD', 'CONFIRMADO', CURRENT_TIMESTAMP)"""))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void unGastoNoLlevaClaseDeIngreso() {
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO movimiento (fecha_hora, monto, tipo, clase_ingreso, origen, estado, creado_en)
+                VALUES (CURRENT_TIMESTAMP, 100, 'GASTO', 'EXTRA', 'TEXTO', 'PENDIENTE', CURRENT_TIMESTAMP)"""))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void soloElEfectivoEsEfectivoYLasBilleterasTienenColor() {
+        assertThat(jdbc.queryForList("SELECT nombre FROM medio_pago WHERE es_efectivo", String.class))
+                .containsExactly("Efectivo");
+        assertThat(jdbc.queryForObject("SELECT color FROM cuenta WHERE nombre = 'Galicia'", String.class))
+                .isEqualTo("#1F7A4D");
+        assertThat(jdbc.queryForObject("SELECT color FROM cuenta WHERE nombre = 'Mercado Pago'", String.class))
+                .isEqualTo("#2457C5");
+        assertThat(jdbc.queryForObject("SELECT color FROM tarjeta WHERE nombre = 'MasterCard Gold'", String.class))
+                .isEqualTo("#B4531F");
+    }
+
     private int contar(String tabla) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM " + tabla, Integer.class);
     }

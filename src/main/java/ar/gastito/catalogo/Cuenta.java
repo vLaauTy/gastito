@@ -20,6 +20,9 @@ public class Cuenta implements ConPalabrasClave {
 
     private boolean activa = true;
 
+    /** Color de la billetera en el dashboard (#RRGGBB), o null para usar uno de reserva. */
+    private String color;
+
     protected Cuenta() {
     }
 
@@ -44,5 +47,9 @@ public class Cuenta implements ConPalabrasClave {
 
     public boolean isActiva() {
         return activa;
+    }
+
+    public String getColor() {
+        return color;
     }
 }
