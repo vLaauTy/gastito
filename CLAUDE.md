@@ -72,8 +72,8 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
 ## Hoja de ruta
 
 1. Etapa 1 (hecha): bot funcionando con mensajes de texto, interpretación con Haiku, confirmación y guardado.
-2. **Etapa 2 (actual):** audios (Whisper local + mismo flujo que texto).
-3. Etapa 3: fotos de tickets (visión de Haiku, detalle por producto).
+2. Etapa 2 (hecha): audios (Whisper local + mismo flujo que texto).
+3. **Etapa 3 (actual):** fotos de tickets (visión de Haiku, detalle por producto).
 4. Etapa 4: resúmenes semanales y consultas en lenguaje natural.
 5. Etapa 5: panel web dentro de Telegram (Mini App).
 6. Etapa 6: compras repetidas, juntadas, ingresos, gastos fijos.
