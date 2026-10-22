@@ -11,12 +11,14 @@ public final class MenuFijo {
     static final String HOY = "📊 Hoy";
     static final String MES = "📅 Mes";
     static final String COSTOS = "💸 Costos IA";
+    static final String DASHBOARD = "🖥 Dashboard";
     static final String AYUDA = "❓ Ayuda";
 
     private static final Map<String, String> COMANDOS = Map.of(
             HOY, "/hoy",
             MES, "/mes",
             COSTOS, "/costos",
+            DASHBOARD, "/dashboard",
             AYUDA, "/ayuda");
 
     private MenuFijo() {
@@ -29,7 +31,8 @@ public final class MenuFijo {
 
     static ReplyKeyboardMarkup teclado() {
         return ReplyKeyboardMarkup.builder()
-                .keyboardRow(new KeyboardRow(HOY, MES, COSTOS, AYUDA))
+                .keyboardRow(new KeyboardRow(HOY, MES, COSTOS))
+                .keyboardRow(new KeyboardRow(DASHBOARD, AYUDA))
                 .resizeKeyboard(true)
                 .isPersistent(true)
                 .build();

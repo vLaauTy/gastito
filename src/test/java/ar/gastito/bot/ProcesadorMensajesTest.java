@@ -41,6 +41,7 @@ import ar.gastito.audio.TranscripcionService;
 import ar.gastito.catalogo.Catalogo;
 import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.config.GastitoProperties;
+import ar.gastito.dashboard.DashboardProperties;
 import ar.gastito.ia.IaNoDisponibleException;
 import ar.gastito.ia.PropositoIa;
 import ar.gastito.ia.RegistroUsoIa;
@@ -82,7 +83,8 @@ class ProcesadorMensajesTest {
         ComandosIngreso comandosIngreso = new ComandosIngreso(new ParserIngreso(), catalogos, ingresos,
                 new ResolvedorFechas(), tarjetas, RELOJ);
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
-                tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, properties, RELOJ);
+                tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, properties,
+                new DashboardProperties("http://localhost:8090", null), RELOJ);
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));
     }
 
@@ -657,6 +659,16 @@ class ProcesadorMensajesTest {
         assertThat(texto("/AYUDA@gastito_bot")).isEqualTo(ProcesadorMensajes.AYUDA);
         assertThat(texto("/cualquiera")).contains("No conozco ese comando");
         verifyNoInteractions(interpretador);
+    }
+
+    @Test
+    void dashboardMandaElLinkDeLaConfiguracionYTieneBotonEnElMenu() {
+        assertThat(texto("/dashboard"))
+                .contains("<a href=\"http://localhost:8090\">http://localhost:8090</a>")
+                .contains("PC");
+        assertThat(texto(MenuFijo.DASHBOARD)).isEqualTo(texto("/dashboard"));
+        assertThat(MenuFijo.teclado().getKeyboard()).anySatisfy(fila -> assertThat(fila).anySatisfy(
+                boton -> assertThat(boton.getText()).isEqualTo(MenuFijo.DASHBOARD)));
     }
 
     @Test

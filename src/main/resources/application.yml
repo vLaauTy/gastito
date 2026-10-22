@@ -44,6 +44,8 @@ gastito:
         entrada: 0.10
         salida: 0.50
   dashboard:
+    # El link que manda /dashboard: sale del puerto del servidor, no se escribe a mano.
+    url: http://localhost:${server.port}
     # Solo desde el .env. Si está, los pedidos que no vienen de esta PC lo tienen que traer.
     token: ${GASTITO_DASHBOARD_TOKEN:}
   audio:

@@ -24,6 +24,7 @@ import ar.gastito.audio.TranscripcionService;
 import ar.gastito.bot.Tarjetas.Campo;
 import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.config.GastitoProperties;
+import ar.gastito.dashboard.DashboardProperties;
 import ar.gastito.ia.IaNoDisponibleException;
 import ar.gastito.ia.PropositoIa;
 import ar.gastito.ia.RegistroUsoIa;
@@ -83,6 +84,7 @@ public class ProcesadorMensajes {
             /hoy – gastos de hoy y el total
             /mes – total del mes por categoría
             /costos – lo gastado en IA este mes
+            /dashboard – el link del dashboard, para ver tus gastos con gráficos
             /ayuda – este mensaje""";
 
     private final InterpretadorService interpretador;
@@ -96,6 +98,7 @@ public class ProcesadorMensajes {
     private final ComandosIngreso comandosIngreso;
     private final TranscripcionService transcripciones;
     private final Duration duracionMaximaAudio;
+    private final String urlDashboard;
     private final Clock clock;
 
     /** Por chat: el campo de qué tarjeta espera que el usuario escriba (o diga) el valor nuevo. */
@@ -127,7 +130,8 @@ public class ProcesadorMensajes {
     public ProcesadorMensajes(InterpretadorService interpretador, MovimientoService movimientos,
             CatalogoService catalogos, RegistroUsoIa usoIa, ResolvedorFechas fechas, Tarjetas tarjetas,
             FormatoMensajes formato, GraficoMes grafico, ComandosIngreso comandosIngreso,
-            TranscripcionService transcripciones, GastitoProperties properties, Clock clock) {
+            TranscripcionService transcripciones, GastitoProperties properties, DashboardProperties dashboard,
+            Clock clock) {
         this.grafico = grafico;
         this.comandosIngreso = comandosIngreso;
         this.interpretador = interpretador;
@@ -139,6 +143,7 @@ public class ProcesadorMensajes {
         this.formato = formato;
         this.transcripciones = transcripciones;
         this.duracionMaximaAudio = properties.audio().duracionMaxima();
+        this.urlDashboard = dashboard.url();
         this.clock = clock;
     }
 
@@ -506,6 +511,9 @@ public class ProcesadorMensajes {
             case "/hoy" -> hoy();
             case "/mes" -> mes();
             case "/costos" -> costos();
+            case "/dashboard" -> """
+                    🖥 <b>Dashboard</b>: <a href="%1$s">%1$s</a>
+                    Se abre desde el navegador de la PC donde corre Gastito.""".formatted(html(urlDashboard));
             default -> "No conozco ese comando. Mirá /ayuda";
         });
     }

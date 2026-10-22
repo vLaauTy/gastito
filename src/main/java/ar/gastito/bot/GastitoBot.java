@@ -90,6 +90,7 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
                 new BotCommand("sueldo", "Cargar el sueldo: /sueldo 380.000 galicia"),
                 new BotCommand("aguinaldo", "Cargar el aguinaldo"),
                 new BotCommand("ingreso", "Cargar otro ingreso: /ingreso 25000 arreglo de PC"),
+                new BotCommand("dashboard", "El link del dashboard (se abre en la PC)"),
                 new BotCommand("ayuda", "Cómo cargar gastos"),
                 new BotCommand("start", "Empezar y mostrar el menú"))).build());
     }

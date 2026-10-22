@@ -16,9 +16,10 @@ class AccesoDashboardTest {
 
     static final String TOKEN = "un-token-largo-de-prueba";
     static final String CELULAR = "192.168.0.50";
+    static final String URL = "http://localhost:8090";
 
     private static AccesoDashboard filtro(String token) {
-        return new AccesoDashboard(new DashboardProperties(token),
+        return new AccesoDashboard(new DashboardProperties(URL, token),
                 new MockEnvironment().withProperty("server.address", token == null ? "127.0.0.1" : "0.0.0.0"));
     }
 
@@ -43,7 +44,7 @@ class AccesoDashboardTest {
 
     @Test
     void sinTokenNoSePuedeAbrirALaRed() {
-        DashboardProperties sinToken = new DashboardProperties("");
+        DashboardProperties sinToken = new DashboardProperties(URL, "");
 
         assertThatThrownBy(() -> AccesoDashboard.verificarDireccion("0.0.0.0", sinToken))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("GASTITO_DASHBOARD_TOKEN");
@@ -57,7 +58,7 @@ class AccesoDashboardTest {
 
     @Test
     void conTokenSePuedeAbrirALaRed() {
-        assertThatCode(() -> AccesoDashboard.verificarDireccion("0.0.0.0", new DashboardProperties(TOKEN)))
+        assertThatCode(() -> AccesoDashboard.verificarDireccion("0.0.0.0", new DashboardProperties(URL, TOKEN)))
                 .doesNotThrowAnyException();
     }
 
