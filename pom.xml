@@ -22,6 +22,7 @@
         <telegrambots.version>10.3.0</telegrambots.version>
         <anthropic-java.version>2.71.0</anthropic-java.version>
         <wiremock.version>3.13.2</wiremock.version>
+        <chartjs.version>4.5.1</chartjs.version>
     </properties>
 
     <dependencies>
@@ -68,6 +69,17 @@
             <groupId>org.telegram</groupId>
             <artifactId>telegrambots-client</artifactId>
             <version>${telegrambots.version}</version>
+        </dependency>
+
+        <!-- Dashboard: Chart.js dentro del jar (anda sin internet), servido en /webjars/chart.js/... -->
+        <dependency>
+            <groupId>org.webjars.npm</groupId>
+            <artifactId>chart.js</artifactId>
+            <version>${chartjs.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.webjars</groupId>
+            <artifactId>webjars-locator-lite</artifactId>
         </dependency>
 
         <!-- IA -->

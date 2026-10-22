@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Gastito</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='18' fill='%231F7A4D'/%3E%3Ctext x='18' y='24' font-size='18' font-family='system-ui,sans-serif' font-weight='700' text-anchor='middle' fill='white'%3EG%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/css/app.css">
+<!-- Chart.js viene dentro del jar (WebJar): el dashboard anda sin internet. -->
+<script src="/webjars/chart.js/dist/chart.umd.min.js" defer></script>
+<script src="/js/app.js" defer></script>
+</head>
+<body>
+<div class="app">
+  <nav aria-label="Secciones">
+    <div class="logo"><span aria-hidden="true">G</span>Gastito</div>
+    <div class="links">
+      <a href="#resumen" data-view="resumen">Resumen</a>
+      <a href="#movimientos" data-view="movimientos">Movimientos</a>
+      <a href="#ingresos" data-view="ingresos">Ingresos</a>
+      <a class="off" aria-disabled="true">Fijos y cuotas <small>Próximamente</small></a>
+      <a class="off" aria-disabled="true">Juntadas <small>Próximamente</small></a>
+    </div>
+    <div class="ia" id="ia" aria-live="polite">
+      <span id="ia-titulo">Costo de la IA</span>
+      <b id="ia-costo">…</b>
+      <span id="ia-llamadas"></span>
+    </div>
+  </nav>
+
+  <main>
+    <div class="aviso" id="aviso" role="alert" hidden>
+      <span id="aviso-texto"></span>
+      <button type="button" class="mini" id="reintentar">Reintentar</button>
+    </div>
+
+    <!-- ===== Resumen ===== -->
+    <div class="view" id="v-resumen">
+      <header>
+        <div>
+          <h1 data-titulo-mes>…</h1>
+          <div class="sub" id="r-sub"></div>
+        </div>
+        <div class="btns">
+          <button type="button" data-mes="-1">‹ <span data-nombre-mes="-1"></span></button>
+          <button type="button" data-mes="1" hidden><span data-nombre-mes="1"></span> ›</button>
+          <button type="button" class="primary" data-abrir-ingreso>Cargar ingreso</button>
+          <a class="boton" data-csv>Exportar CSV</a>
+        </div>
+      </header>
+
+      <section class="cards" aria-label="Resumen del mes">
+        <div class="card">
+          <div class="label">Gastado</div>
+          <div class="big" id="r-gastado">…</div>
+          <div class="note" id="r-comparacion"></div>
+        </div>
+        <div class="card">
+          <div class="label">Ingresos del mes</div>
+          <div class="big positivo" id="r-ingresos">…</div>
+          <div class="note" id="r-ingresos-detalle"></div>
+        </div>
+        <div class="card dark">
+          <div class="label">Disponible</div>
+          <div class="big" id="r-disponible">…</div>
+          <div class="bar" id="r-disponible-barra" hidden><i></i></div>
+          <div class="note" id="r-disponible-nota"></div>
+        </div>
+        <div class="card">
+          <div class="label">Promedio diario</div>
+          <div class="big" id="r-promedio">…</div>
+          <div class="note" id="r-cantidad"></div>
+        </div>
+      </section>
+
+      <div class="vacio" id="r-vacio" hidden>
+        <h2>Todavía no hay gastos en <span data-mes-largo></span></h2>
+        <p>Cargá el primero desde el bot de Telegram: escribile algo como <b>kiosco 1500</b> o mandale un audio.</p>
+      </div>
+
+      <div class="grid2" id="r-graficos">
+        <section class="card" aria-label="Gasto por día">
+          <div class="head"><h2>Gasto por día</h2><span class="note">La línea punteada es el promedio</span></div>
+          <div class="grafico"><canvas id="grafico-dias" role="img" aria-label="Gasto de cada día del mes"></canvas></div>
+        </section>
+
+        <section class="card" aria-label="Por categoría y billetera">
+          <div class="head"><h2>Por categoría</h2></div>
+          <div id="r-categorias" class="lista"></div>
+
+          <h2 class="separado">Por billetera</h2>
+          <div class="stack" id="r-billetera-barra" role="img" aria-label="Reparto del gasto por billetera"></div>
+          <div class="legend" id="r-billetera-leyenda"></div>
+        </section>
+      </div>
+
+      <div class="row2">
+        <section class="card table-card" aria-label="Últimos movimientos">
+          <div class="head">
+            <h2>Últimos movimientos <a href="#movimientos" data-view="movimientos" class="ver-todos">Ver todos</a></h2>
+            <div class="filters">
+              <label class="sr" for="r-q">Buscar</label>
+              <input id="r-q" type="search" placeholder="Buscar…" autocomplete="off">
+              <label class="sr" for="r-cat">Categoría</label>
+              <select id="r-cat" data-categorias><option value="">Todas las categorías</option></select>
+            </div>
+          </div>
+          <div class="scroll">
+            <table>
+              <thead><tr><th>Fecha</th><th>Detalle</th><th>Categoría</th><th>Medio</th><th>Origen</th><th class="num">Monto</th></tr></thead>
+              <tbody id="r-movimientos"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <aside>
+          <section class="card" aria-label="Ingresos del mes">
+            <div class="head"><h2>Ingresos de <span data-mes-largo></span></h2><button type="button" data-abrir-ingreso>Cargar</button></div>
+            <div id="r-ingresos-lista"></div>
+          </section>
+          <section class="soon"><h2>Lo que notó la IA</h2>Próximamente: llega con los resúmenes de la etapa 4.</section>
+          <section class="soon"><h2>Fijos y juntadas</h2>Próximamente: llegan en la etapa 6.</section>
+        </aside>
+      </div>
+    </div>
+
+    <!-- ===== Movimientos ===== -->
+    <div class="view" id="v-movimientos" hidden>
+      <header>
+        <div><h1>Movimientos</h1><div class="sub" id="m-sub"></div></div>
+        <div class="btns">
+          <button type="button" data-mes="-1">‹ <span data-nombre-mes="-1"></span></button>
+          <button type="button" data-mes="1" hidden><span data-nombre-mes="1"></span> ›</button>
+          <a class="boton" data-csv>Exportar CSV</a>
+        </div>
+      </header>
+      <section class="card">
+        <div class="filters">
+          <label class="sr" for="m-q">Buscar</label>
+          <input id="m-q" type="search" placeholder="Buscar: yerba, kiosco…" class="crece" autocomplete="off">
+          <label class="sr" for="m-cat">Categoría</label>
+          <select id="m-cat" data-categorias><option value="">Todas las categorías</option></select>
+          <label class="sr" for="m-med">Medio de pago</label>
+          <select id="m-med"><option value="">Todos los medios</option></select>
+          <label class="sr" for="m-ori">Origen</label>
+          <select id="m-ori">
+            <option value="">Texto y audio</option>
+            <option value="TEXTO">Solo texto</option>
+            <option value="AUDIO">Solo audio</option>
+          </select>
+        </div>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Fecha</th><th>Detalle</th><th>Categoría</th><th>Medio</th><th>Origen</th><th class="num">Monto</th></tr></thead>
+            <tbody id="m-movimientos"></tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <span class="note" id="m-pagina"></span>
+          <div class="btns">
+            <button type="button" id="m-anterior">Anterior</button>
+            <button type="button" id="m-siguiente">Siguiente</button>
+          </div>
+        </div>
+      </section>
+      <p class="note">Los gastos se corrigen desde el bot: el dashboard es para mirar.</p>
+    </div>
+
+    <!-- ===== Ingresos ===== -->
+    <div class="view" id="v-ingresos" hidden>
+      <header>
+        <div><h1>Ingresos</h1><div class="sub" data-titulo-mes></div></div>
+        <div class="btns">
+          <button type="button" data-mes="-1">‹ <span data-nombre-mes="-1"></span></button>
+          <button type="button" data-mes="1" hidden><span data-nombre-mes="1"></span> ›</button>
+          <button type="button" class="primary" data-abrir-ingreso>Cargar ingreso</button>
+        </div>
+      </header>
+      <section class="cards" aria-label="Ingresos del mes">
+        <div class="card"><div class="label">Total cobrado</div><div class="big positivo" id="i-total">…</div></div>
+        <div class="card"><div class="label">Sueldo</div><div class="big" id="i-sueldo">…</div></div>
+        <div class="card"><div class="label">Aguinaldo</div><div class="big" id="i-aguinaldo">…</div></div>
+        <div class="card"><div class="label">Extras</div><div class="big" id="i-extras">…</div><div class="note" id="i-extras-nota"></div></div>
+        <div class="card dark">
+          <div class="label">Disponible</div>
+          <div class="big" id="i-disponible">…</div>
+          <div class="bar" id="i-disponible-barra" hidden><i></i></div>
+          <div class="note" id="i-disponible-nota"></div>
+        </div>
+      </section>
+      <section class="card">
+        <h2>Detalle</h2>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Cuenta</th><th class="num">Monto</th><th></th></tr></thead>
+            <tbody id="i-detalle"></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="card">
+        <h2>Ingresos de los últimos meses</h2>
+        <div id="i-meses" class="lista"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- ===== Cargar ingreso ===== -->
+<div class="modal" id="modal" hidden>
+  <form class="card dialog" id="form-ingreso" aria-labelledby="form-titulo" novalidate>
+    <h2 id="form-titulo">Cargar ingreso</h2>
+    <label for="i-clase">Tipo</label>
+    <select id="i-clase" required></select>
+    <label for="i-monto">Monto</label>
+    <input id="i-monto" inputmode="decimal" placeholder="380.000" required autocomplete="off">
+    <label for="i-desc">Descripción (opcional)</label>
+    <input id="i-desc" maxlength="255" placeholder="Arreglo de PC para Carlos" autocomplete="off">
+    <label for="i-fecha">Fecha</label>
+    <input id="i-fecha" type="date" required>
+    <label for="i-cuenta">Cuenta</label>
+    <select id="i-cuenta"></select>
+    <p class="error" id="form-error" role="alert" hidden></p>
+    <div class="btns fin">
+      <button type="button" data-cerrar>Cancelar</button>
+      <button type="submit" class="primary" id="form-guardar">Guardar</button>
+    </div>
+  </form>
+</div>
+</body>
+</html>
