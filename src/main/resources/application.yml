@@ -12,6 +12,10 @@ spring:
       ddl-auto: validate
   flyway:
     locations: classpath:db/migration
+  jackson:
+    # La plata va en el JSON como 380000.00, nunca como 3.8E+5.
+    generator:
+      write-bigdecimal-as-plain: true
 
 server:
   # 8090 y no 8080, que en esta PC lo usa otro servicio. Se cambia con SERVER_PORT en el .env.

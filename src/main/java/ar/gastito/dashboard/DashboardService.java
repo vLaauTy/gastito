@@ -295,7 +295,7 @@ public class DashboardService {
                 r.cantidadExtras());
     }
 
-    private static IngresoDelMes ingreso(Movimiento m) {
+    static IngresoDelMes ingreso(Movimiento m) {
         String billetera = m.getCuenta() != null ? m.getCuenta().getNombre()
                 : m.getMedioPago() != null && m.getMedioPago().isEfectivo() ? "Efectivo"
                 : "Sin especificar";
