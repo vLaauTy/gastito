@@ -206,6 +206,14 @@ public class Movimiento {
         cambiarEstadoDesdePendiente(EstadoMovimiento.CANCELADO);
     }
 
+    /** Borra un ingreso ya guardado: queda CANCELADO, así no suma pero queda el registro. */
+    public void anularIngreso() {
+        if (!isIngreso() || estado != EstadoMovimiento.CONFIRMADO) {
+            throw new IllegalStateException("El movimiento " + id + " no es un ingreso guardado");
+        }
+        estado = EstadoMovimiento.CANCELADO;
+    }
+
     private void cambiarEstadoDesdePendiente(EstadoMovimiento nuevo) {
         if (estado != EstadoMovimiento.PENDIENTE) {
             throw new IllegalStateException("El movimiento " + id + " ya está " + estado);

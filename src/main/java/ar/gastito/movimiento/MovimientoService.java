@@ -52,14 +52,19 @@ public class MovimientoService {
         return movimientos.save(Movimiento.pendiente(interpretado, origen, textoOriginal, LocalDateTime.now(clock)));
     }
 
-    /** Confirma el movimiento y devuelve el total del mes (del mes del movimiento) en su categoría. */
+    /**
+     * Confirma el movimiento y devuelve un total del mes del movimiento: el de su categoría si es un gasto, o el
+     * de todos los ingresos si es un ingreso.
+     */
     @Transactional
     public Confirmacion confirmar(Long id) {
         Movimiento m = buscarPendiente(id);
         m.confirmar();
         movimientos.flush();
         Periodo mes = Periodo.delMes(YearMonth.from(m.getFechaHora()));
-        BigDecimal total = movimientos.totalGastosDeCategoria(m.getCategoria().getId(), mes.desde(), mes.hasta());
+        BigDecimal total = m.isIngreso()
+                ? movimientos.totalIngresos(mes.desde(), mes.hasta())
+                : movimientos.totalGastosDeCategoria(m.getCategoria().getId(), mes.desde(), mes.hasta());
         return new Confirmacion(m, total);
     }
 
