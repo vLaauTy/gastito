@@ -14,7 +14,11 @@ Cómo se interpreta un mensaje, de lo más barato a lo más caro:
 
 Los audios se transcriben con un servidor de Whisper local y el texto sigue el mismo camino.
 
-Todos los totales se calculan con SQL sobre la base.
+Para mirar y analizar hay un **dashboard web** servido por la misma aplicación: gasto del mes, comparación con el
+mes anterior, gasto por día, por categoría y por billetera, movimientos con buscador, e ingresos (sueldo,
+aguinaldo y extras) con lo que queda disponible.
+
+Todos los totales se calculan con SQL o Java sobre la base; ni la IA ni el navegador hacen cuentas.
 
 ## Requisitos
 
@@ -40,6 +44,10 @@ ANTHROPIC_API_KEY=sk-ant-...
 # Audios (servidor de Whisper en la VM)
 WHISPER_URL=http://localhost:9000
 WHISPER_API_KEY=...                      # docker exec whisper whisper_manage --getkey
+
+# Opcional: abrir el dashboard en el celular (ver "Dashboard web")
+#SERVER_ADDRESS=0.0.0.0
+#GASTITO_DASHBOARD_TOKEN=...
 ```
 
 El bot ignora en silencio los mensajes de cualquier usuario que no sea `TELEGRAM_ALLOWED_USER_ID`.
@@ -132,18 +140,102 @@ Así, si Whisper entendió mal, lo ves antes de guardar. También acepta archivo
 Lo que guardás le enseña al bot: la próxima vez que cargues algo parecido usa la misma categoría, y tus últimas
 20 confirmaciones van como ejemplos en el prompt de la IA.
 
+### Ingresos
+
+Tres comandos, uno por tipo. El aguinaldo va aparte del sueldo para que no infle la comparación entre meses;
+cualquier otra cosa (un trabajo particular, una venta, un regalo) es un extra con descripción:
+
+```
+/sueldo 380.000 galicia
+/aguinaldo 190 mil galicia
+/ingreso 25000 arreglo de PC a mercado pago
+/ingreso 5000 regalo en efectivo ayer
+```
+
+El monto acepta `380.000`, `380 mil` o `25k`. La cuenta se reconoce por su nombre o sus palabras clave; si no la
+decís, se usa la del último ingreso de ese tipo. Como los gastos, llega una tarjeta con **✅ Guardar** y
+**❌ Cancelar**. También se cargan y se borran desde el dashboard.
+
+### Comandos
+
 Abajo del chat queda un menú fijo con estos comandos, que también están en el botón Menú de Telegram:
 
-| Botón          | Comando   | Qué hace                                         |
-|----------------|-----------|--------------------------------------------------|
-|                | `/start`  | Saludo, ejemplos y el menú                       |
-| 📊 Hoy         | `/hoy`    | Gastos de hoy y el total                         |
-| 📅 Mes         | `/mes`    | Total del mes y barras por categoría             |
-| 💸 Costos IA   | `/costos` | Lo gastado en IA este mes, en dólares            |
-| ❓ Ayuda       | `/ayuda`  | Cómo cargar gastos                               |
+| Botón          | Comando      | Qué hace                                         |
+|----------------|--------------|--------------------------------------------------|
+|                | `/start`     | Saludo, ejemplos y el menú                       |
+| 📊 Hoy         | `/hoy`       | Gastos de hoy y el total                         |
+| 📅 Mes         | `/mes`       | Total del mes y barras por categoría             |
+| 💸 Costos IA   | `/costos`    | Lo gastado en IA este mes, en dólares            |
+| 🖥 Dashboard   | `/dashboard` | El link del dashboard (se abre desde la PC)      |
+| ❓ Ayuda       | `/ayuda`     | Cómo cargar gastos e ingresos                    |
+|                | `/sueldo`, `/aguinaldo`, `/ingreso` | Cargar un ingreso                 |
 
 Las categorías, sus descripciones (las que lee la IA), sus emojis y las palabras clave del parser simple están en
 la tabla `categoria` y se pueden cambiar en la base sin tocar código.
+
+## Dashboard web
+
+Con la aplicación prendida, abrí en el navegador de la PC:
+
+```
+http://localhost:8090
+```
+
+(Es el puerto de `server.port`; si lo cambiás con `SERVER_PORT`, el link de `/dashboard` cambia solo.)
+
+- **Resumen:** gastado en el mes con la comparación contra el mes anterior *hasta el mismo día* (el 13 de octubre
+  se compara con el 1 al 13 de septiembre), ingresos, disponible (lo cobrado menos lo gastado, con una barra) y
+  promedio diario. Gasto por día con la línea del promedio y el día más alto destacado, por categoría, por
+  billetera y los últimos movimientos.
+- **Movimientos:** todos los gastos del mes, con buscador (sin importar tildes ni mayúsculas), filtros por
+  categoría, medio de pago y origen, y páginas.
+- **Ingresos:** sueldo, aguinaldo y extras del mes, el detalle con **Borrar**, los últimos 6 meses y el
+  formulario **Cargar ingreso**.
+- **Exportar CSV:** los gastos e ingresos del mes para Excel en castellano (separador `;`, coma decimal).
+
+Las billeteras salen de los datos: cada gasto va a su tarjeta o su cuenta, o a **Efectivo** si se pagó en
+efectivo. Una cuenta o tarjeta nueva aparece sola (su color está en la columna `color` de `cuenta` o `tarjeta`).
+Lo que no tiene medio de pago ni cuenta queda en **Sin especificar**, en gris claro: son los gastos para
+corregir desde el bot. Fijos, Juntadas y "Lo que notó la IA" aparecen como *Próximamente*.
+
+Se adapta al celular y tiene modo oscuro según la configuración del sistema. Chart.js viene dentro del jar
+(WebJar), así que anda sin internet.
+
+### Abrirlo en el celular (misma red Wi-Fi)
+
+Por defecto el servidor escucha solo en `127.0.0.1`: nadie más de la red ve tus gastos. Para abrirlo en el
+celular hacen falta las dos cosas juntas en el `.env` (sin token, la aplicación **no arranca** escuchando en la
+red):
+
+```properties
+SERVER_ADDRESS=0.0.0.0
+GASTITO_DASHBOARD_TOKEN=una-clave-larga-y-al-azar
+```
+
+Después, desde el celular, abrí una vez `http://<ip-de-la-pc>:8090/?token=<el-token>`. El token queda guardado
+en una cookie del navegador del celular (30 días) y se saca de la URL. Desde la PC se sigue entrando sin token.
+Un pedido que no viene de la PC y no trae el token recibe 401. Si Windows pregunta por el firewall, permití el
+acceso solo en redes privadas.
+
+### La API
+
+La misma API va a servir para la Mini App de Telegram. Todo devuelve JSON con la plata como número con 2
+decimales, y acepta `?mes=2026-10` (por defecto, el mes actual):
+
+| Endpoint                          | Qué devuelve                                                   |
+|-----------------------------------|----------------------------------------------------------------|
+| `GET /api/resumen`                | Gastado, cantidad, promedio, comparación, ingresos y disponible |
+| `GET /api/gastos/por-dia`         | Un valor por día (con los días en cero), promedio y día máximo  |
+| `GET /api/gastos/por-categoria`   | Monto, cantidad y emoji por categoría, de mayor a menor         |
+| `GET /api/gastos/por-billetera`   | Por tarjeta, cuenta, efectivo y sin especificar, con color      |
+| `GET /api/movimientos`            | Paginado; filtros `categoria`, `medioPago`, `origen`, `q`       |
+| `GET /api/movimientos.csv`        | Gastos e ingresos del mes en CSV                                |
+| `GET /api/costos-ia`              | Costo en USD, llamadas y desglose por propósito                 |
+| `GET /api/catalogo`               | Categorías, medios de pago, cuentas y tipos de ingreso          |
+| `GET /api/ingresos`               | Ingresos del mes y totales por tipo                             |
+| `GET /api/ingresos/por-mes`       | Total de los últimos meses (`hasta`, `meses`, por defecto 6)    |
+| `POST /api/ingresos`              | Cargar un ingreso (JSON: `clase`, `monto`, `descripcion`, `cuentaId`, `fecha`) |
+| `DELETE /api/ingresos/{id}`       | Borrar un ingreso (queda cancelado)                             |
 
 ## Pasar a PostgreSQL (perfil `postgres`)
 
@@ -239,7 +331,8 @@ ar.gastito
 ├── ia               Cliente de Claude, prompts, registro de tokens y costo (uso_ia)
 ├── audio            Transcripción de audios con el servidor de Whisper
 ├── catalogo         Categorías, medios de pago, cuentas, tarjeta de crédito y alias de comercios
-├── movimiento       El movimiento (gasto, ingreso, etc.), su ciclo pendiente → confirmado y los totales
+├── movimiento       Gastos e ingresos, su ciclo pendiente → confirmado y los totales
+├── dashboard        API REST del dashboard, sus cálculos y el acceso (127.0.0.1 o token)
 └── config           Propiedades y reloj en hora de Argentina
 ```
 
@@ -249,10 +342,12 @@ El resto del repositorio:
 ├── src/main/resources
 │   ├── application.yml      Configuración y perfiles (dev, postgres)
 │   ├── db/migration/        Migraciones de Flyway (esquema y datos iniciales)
-│   └── prompts/             Instrucciones para la IA y para Whisper, editables sin tocar código
-├── src/test                 Tests con JUnit 5 (H2 en memoria)
+│   ├── prompts/             Instrucciones para la IA y para Whisper, editables sin tocar código
+│   └── static/              El dashboard: index.html, css/ y js/ (sin framework)
+├── src/test                 Tests con JUnit 5 (H2 en memoria, MockMvc, WireMock)
 ├── scripts/iniciar.ps1      Arranque con chequeos previos (lo llama iniciar.bat)
 ├── docs/pedidos/            Los pedidos de cada etapa con los que se fue construyendo el bot
+├── docs/prototipo-dashboard.html  El prototipo visual del dashboard
 ├── docker-compose.yml       PostgreSQL para el perfil postgres
 └── mvnw, mvnw.cmd           Maven Wrapper
 ```

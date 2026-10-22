@@ -24,6 +24,7 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
   - `TELEGRAM_ALLOWED_USER_ID`
   - `ANTHROPIC_API_KEY`
   - `WHISPER_URL` y `WHISPER_API_KEY` (servidor de Whisper para los audios)
+  - Opcionales: `SERVER_ADDRESS` y `GASTITO_DASHBOARD_TOKEN`, juntas, para abrir el dashboard en la red. Por defecto el servidor escucha solo en `127.0.0.1`, y sin token no arranca escuchando en otra dirección.
 - Spring los lee con `spring.config.import=optional:file:.env[.properties]` en `application.yml`.
 - `.env` y `data/` tienen que estar en `.gitignore`. Nunca subas secretos al repo, nunca los imprimas en logs ni en mensajes de error.
 - Si no existe un `.env.example`, crealo con las variables vacías.
@@ -36,7 +37,7 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
 4. **Plata siempre en `BigDecimal`**, moneda ARS por defecto. Nunca `double`.
 5. **Tipos de movimiento** (una sola tabla `movimiento` con un campo `tipo`):
    - `GASTO`: cuenta como gasto.
-   - `INGRESO`: sueldo o trabajo particular. Cuenta como ingreso.
+   - `INGRESO`: cuenta como ingreso. Lleva una `clase_ingreso` fija: `SUELDO`, `AGUINALDO` (va aparte para no inflar la comparación del sueldo entre meses) o `EXTRA` (trabajo particular, venta, regalo…, con descripción). No lleva categoría.
    - `DEVOLUCION`: alguien devuelve plata (por ejemplo su parte de una juntada). No cuenta como ingreso.
    - `PAGO_TARJETA`: pago del resumen de la tarjeta. No cuenta como gasto, porque los consumos ya se contaron al comprar.
    - `ENTRE_CUENTAS`: pasar plata entre cuentas propias. No cuenta.
@@ -62,9 +63,11 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
 
 ## Estructura y convenciones
 
-- Paquete base: `ar.gastito`. Organización por funcionalidad (`bot`, `interpretacion`, `ia`, `audio`, `catalogo`, `movimiento`, `config`), no por capa técnica. Las entidades de referencia (categorías, medios de pago, cuentas, tarjeta, alias de comercios) van en `catalogo`; `movimiento` es solo el movimiento.
+- Paquete base: `ar.gastito`. Organización por funcionalidad (`bot`, `interpretacion`, `ia`, `audio`, `catalogo`, `movimiento`, `dashboard`, `config`), no por capa técnica. Las entidades de referencia (categorías, medios de pago, cuentas, tarjeta, alias de comercios) van en `catalogo`; `movimiento` es solo el movimiento.
 - Compilar y testear con el Maven Wrapper (`./mvnw`, o `mvnw.cmd` en Windows).
 - Los pedidos de cada etapa van en `docs/pedidos/`.
+- **Dashboard web** (`ar.gastito.dashboard` + `src/main/resources/static/`): API REST bajo `/api` y una página en HTML, CSS y JS sin framework, siguiendo `docs/prototipo-dashboard.html`. El JavaScript no calcula nada: los totales, promedios y porcentajes llegan hechos de la API (la misma API va a servir para la Mini App). Plata en el JSON como número con 2 decimales; el formato argentino lo hace el frontend. Chart.js por WebJar, nunca desde un CDN.
+- Las billeteras del dashboard salen de los datos (la tarjeta o la cuenta del movimiento, o `medio_pago.es_efectivo`), nunca de nombres fijos en el código.
 - Nombres del dominio en español (`Movimiento`, `Categoria`, `MedioPago`), código y comentarios técnicos pueden ir en inglés o español pero consistentes.
 - Tests con JUnit 5. Todo parser o regla de negocio nueva lleva tests.
 - Commits chicos y descriptivos, uno por paso lógico.
@@ -74,6 +77,7 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
 1. Etapa 1 (hecha): bot funcionando con mensajes de texto, interpretación con Haiku, confirmación y guardado.
 2. Etapa 2 (hecha): audios (Whisper local + mismo flujo que texto).
 3. **Etapa 3 (actual):** fotos de tickets (visión de Haiku, detalle por producto).
+   - Hecho fuera de orden: el dashboard web (en `localhost`, base de la etapa 5) y la carga de ingresos (sueldo, aguinaldo y extras, de la etapa 6), por bot y por dashboard. Ver `docs/pedidos/dashboard.md`.
 4. Etapa 4: resúmenes semanales y consultas en lenguaje natural.
 5. Etapa 5: panel web dentro de Telegram (Mini App).
 6. Etapa 6: compras repetidas, juntadas, ingresos, gastos fijos.
