@@ -4,6 +4,11 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
@@ -14,7 +19,22 @@ import ar.gastito.movimiento.Movimiento;
  * Consultas del dashboard. Solo cuentan gastos confirmados (tipo GASTO, estado CONFIRMADO): los pendientes,
  * cancelados, pagos de tarjeta, pases entre cuentas y devoluciones no. Los rangos de fecha son [desde, hasta).
  */
-interface DashboardRepository extends Repository<Movimiento, Long> {
+interface DashboardRepository extends Repository<Movimiento, Long>, JpaSpecificationExecutor<Movimiento> {
+
+    /** La tabla de movimientos: filtros armados con {@link Specification} (ver {@link ConsultaMovimientos}). */
+    @Override
+    @EntityGraph(attributePaths = {"categoria", "medioPago", "cuenta", "tarjeta"})
+    Page<Movimiento> findAll(Specification<Movimiento> filtros, Pageable pagina);
+
+    /** Gastos e ingresos confirmados, para el CSV. */
+    @EntityGraph(attributePaths = {"categoria", "medioPago", "cuenta", "tarjeta"})
+    @Query("""
+            select m from Movimiento m
+            where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
+              and m.tipo in (ar.gastito.movimiento.TipoMovimiento.GASTO, ar.gastito.movimiento.TipoMovimiento.INGRESO)
+              and m.fechaHora >= :desde and m.fechaHora < :hasta
+            order by m.fechaHora, m.id""")
+    List<Movimiento> gastosEIngresos(@Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta);
 
     record TotalPorDia(int dia, BigDecimal total) {
     }
