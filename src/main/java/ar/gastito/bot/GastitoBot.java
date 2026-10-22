@@ -87,6 +87,9 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
                 new BotCommand("hoy", "Gastos de hoy y el total"),
                 new BotCommand("mes", "Total del mes por categoría"),
                 new BotCommand("costos", "Lo gastado en IA este mes"),
+                new BotCommand("sueldo", "Cargar el sueldo: /sueldo 380.000 galicia"),
+                new BotCommand("aguinaldo", "Cargar el aguinaldo"),
+                new BotCommand("ingreso", "Cargar otro ingreso: /ingreso 25000 arreglo de PC"),
                 new BotCommand("ayuda", "Cómo cargar gastos"),
                 new BotCommand("start", "Empezar y mostrar el menú"))).build());
     }

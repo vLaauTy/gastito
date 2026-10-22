@@ -3,6 +3,8 @@ package ar.gastito.interpretacion;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.test.util.ReflectionTestUtils;
+
 import ar.gastito.catalogo.Catalogo;
 import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.Cuenta;
@@ -18,7 +20,7 @@ final class CatalogoDePrueba {
     static final Categoria SALUD = new Categoria(10L, "Salud / farmacia", "farmacia,salud,medico,remedios", "Farmacia, médicos, análisis.", "💊");
     static final Categoria OTROS = new Categoria(13L, "Otros", "otros,otro,varios", "Lo que no encaja en ninguna otra categoría.", "📦");
 
-    static final MedioPago EFECTIVO = new MedioPago("Efectivo", "efectivo,cash");
+    static final MedioPago EFECTIVO = efectivo(new MedioPago("Efectivo", "efectivo,cash"));
     static final MedioPago DEBITO = new MedioPago("Débito", "debito");
     static final MedioPago CREDITO = new MedioPago("Tarjeta de crédito", "tarjeta,credito,mastercard");
     static final MedioPago QR = new MedioPago("QR", "qr");
@@ -31,6 +33,11 @@ final class CatalogoDePrueba {
                 List.of(EFECTIVO, DEBITO, CREDITO, QR),
                 List.of(GALICIA, MERCADO_PAGO),
                 Optional.empty());
+    }
+
+    private static MedioPago efectivo(MedioPago medio) {
+        ReflectionTestUtils.setField(medio, "efectivo", true);
+        return medio;
     }
 
     private CatalogoDePrueba() {

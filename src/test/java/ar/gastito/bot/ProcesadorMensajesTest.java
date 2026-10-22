@@ -15,6 +15,7 @@ import static ar.gastito.bot.DatosDePrueba.deAudio;
 import static ar.gastito.bot.DatosDePrueba.dudoso;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -45,8 +46,11 @@ import ar.gastito.ia.PropositoIa;
 import ar.gastito.ia.RegistroUsoIa;
 import ar.gastito.ia.ResumenUsoIa;
 import ar.gastito.interpretacion.InterpretadorService;
+import ar.gastito.interpretacion.ParserIngreso;
 import ar.gastito.interpretacion.ResolvedorFechas;
+import ar.gastito.movimiento.ClaseIngreso;
 import ar.gastito.movimiento.Confianza;
+import ar.gastito.movimiento.IngresoService;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoIncompletoException;
 import ar.gastito.movimiento.MovimientoInterpretado;
@@ -66,6 +70,7 @@ class ProcesadorMensajesTest {
     private final CatalogoService catalogos = mock(CatalogoService.class);
     private final RegistroUsoIa usoIa = mock(RegistroUsoIa.class);
     private final TranscripcionService transcripciones = mock(TranscripcionService.class);
+    private final IngresoService ingresos = mock(IngresoService.class);
     private ProcesadorMensajes procesador;
 
     @BeforeEach
@@ -73,8 +78,11 @@ class ProcesadorMensajesTest {
         FormatoMensajes formato = new FormatoMensajes(RELOJ);
         GastitoProperties properties = new GastitoProperties(null, null, null, new GastitoProperties.Audio(
                 "http://whisper", "clave", "whisper-1", "es", Duration.ofSeconds(60), Duration.ofSeconds(60)));
+        Tarjetas tarjetas = new Tarjetas(formato);
+        ComandosIngreso comandosIngreso = new ComandosIngreso(new ParserIngreso(), catalogos, ingresos,
+                new ResolvedorFechas(), tarjetas, RELOJ);
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
-                new Tarjetas(formato), formato, new GraficoMes(formato), transcripciones, properties, RELOJ);
+                tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, properties, RELOJ);
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));
     }
 
@@ -576,6 +584,64 @@ class ProcesadorMensajesTest {
 
         verify(movimientos).cambiarMonto(ID, new BigDecimal("5000"));
         verify(movimientos, never()).cambiarMonto(ID, new BigDecimal("4000"));
+    }
+
+    // --- Ingresos ---
+
+    @Test
+    void sueldoArmaUnaTarjetaPendienteConGuardarYCancelar() {
+        Movimiento pendiente = ingreso(ClaseIngreso.SUELDO, "380000", null);
+        when(ingresos.crearPendiente(eq(ClaseIngreso.SUELDO), any(), any(), any(), eq(false), any(),
+                eq("/sueldo 380.000"))).thenReturn(pendiente);
+
+        Accion.Enviar tarjeta = (Accion.Enviar) procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "/sueldo 380.000")
+                .get(0);
+
+        assertThat(tarjeta.html()).startsWith("💵 <b>Nuevo ingreso</b>\n💰 <b>$380.000</b>\n🏷 Sueldo");
+        assertThat(tarjeta.teclado().botones()).extracting(Teclado.Boton::datos).containsExactly("g:15", "c:15");
+        assertThat(tarjeta.tarjetaDeMovimiento()).isEqualTo(ID);
+        verify(ingresos).crearPendiente(ClaseIngreso.SUELDO, new BigDecimal("380000"), null, null, false, AHORA,
+                "/sueldo 380.000");
+        verifyNoInteractions(interpretador);
+    }
+
+    @Test
+    void ingresoExtraConDescripcionYEfectivoYAguinaldo() {
+        when(ingresos.crearPendiente(any(), any(), any(), any(), anyBoolean(), any(), anyString()))
+                .thenReturn(ingreso(ClaseIngreso.EXTRA, "5000", "Regalo"));
+
+        procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "/ingreso 5000 regalo en efectivo");
+        procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "/aguinaldo 190 mil");
+
+        verify(ingresos).crearPendiente(ClaseIngreso.EXTRA, new BigDecimal("5000"), "regalo", null, true, AHORA,
+                "/ingreso 5000 regalo en efectivo");
+        verify(ingresos).crearPendiente(ClaseIngreso.AGUINALDO, new BigDecimal("190000"), null, null, false, AHORA,
+                "/aguinaldo 190 mil");
+    }
+
+    @Test
+    void guardarUnIngresoMuestraElTotalCobradoEnElMes() {
+        Movimiento sueldo = ingreso(ClaseIngreso.SUELDO, "380000", null);
+        sueldo.confirmar();
+        when(movimientos.confirmar(ID))
+                .thenReturn(new MovimientoService.Confirmacion(sueldo, new BigDecimal("405000")));
+
+        Accion.Editar editada = edicion(tocar("g:15"));
+
+        assertThat(editada.html()).startsWith("✅ <b>Guardado</b>\n💰 <b>$380.000</b>\n🏷 Sueldo")
+                .endsWith("En octubre 2026 cobraste <b>$405.000</b> en total.");
+    }
+
+    @Test
+    void sinMontoOMontoRaroMuestraUnEjemplo() {
+        assertThat(texto("/sueldo")).contains("Decime el monto", "/sueldo 380.000 galicia");
+        assertThat(texto("/ingreso arreglo de PC")).contains("No entendí el monto", "/ingreso 25000");
+        verifyNoInteractions(ingresos);
+    }
+
+    private static Movimiento ingreso(ClaseIngreso clase, String monto, String descripcion) {
+        return conId(Movimiento.ingreso(clase, new BigDecimal(monto), descripcion, null, null, AHORA, Origen.TEXTO,
+                "x", AHORA), ID);
     }
 
     // --- Comandos ---

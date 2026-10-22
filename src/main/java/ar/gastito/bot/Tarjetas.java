@@ -61,9 +61,9 @@ public class Tarjetas {
 
     // --- Textos ---
 
-    /** La tarjeta de un gasto pendiente. */
+    /** La tarjeta de un gasto (o un ingreso) pendiente. */
     public String pendiente(Movimiento m) {
-        return escuchado(m) + "🧾 <b>Nuevo gasto</b>\n" + datos(m);
+        return escuchado(m) + (m.isIngreso() ? "💵 <b>Nuevo ingreso</b>\n" : "🧾 <b>Nuevo gasto</b>\n") + datos(m);
     }
 
     /** Pendiente sin monto, recién interpretado: se espera que el usuario lo escriba. */
@@ -86,10 +86,14 @@ public class Tarjetas {
                 + html(valor) + "</b>";
     }
 
-    public String guardado(Movimiento m, BigDecimal totalMesCategoria) {
-        return escuchado(m) + "✅ <b>Guardado</b>\n" + datos(m) + "\n\n📊 En "
-                + formato.mes(YearMonth.from(m.getFechaHora())) + " llevás <b>" + formato.pesos(totalMesCategoria)
-                + "</b> en " + html(m.getCategoria().getNombreConEmoji()) + ".";
+    /** @param totalMes de un gasto, el total del mes en su categoría; de un ingreso, el de todos los ingresos */
+    public String guardado(Movimiento m, BigDecimal totalMes) {
+        String mes = formato.mes(YearMonth.from(m.getFechaHora()));
+        return escuchado(m) + "✅ <b>Guardado</b>\n" + datos(m) + "\n\n📊 En " + mes
+                + (m.isIngreso()
+                        ? " cobraste <b>" + formato.pesos(totalMes) + "</b> en total."
+                        : " llevás <b>" + formato.pesos(totalMes) + "</b> en "
+                                + html(m.getCategoria().getNombreConEmoji()) + ".");
     }
 
     public String cancelado(Movimiento m) {
@@ -112,6 +116,9 @@ public class Tarjetas {
     }
 
     private String datos(Movimiento m) {
+        if (m.isIngreso()) {
+            return datosIngreso(m);
+        }
         List<String> lineas = new ArrayList<>();
         lineas.add(m.getMonto() == null ? "💰 <i>Falta el monto</i>" : "💰 <b>" + formato.pesos(m.getMonto()) + "</b>");
         if (m.getDescripcion() != null && !m.getDescripcion().isBlank()) {
@@ -125,16 +132,34 @@ public class Tarjetas {
         return String.join("\n", lineas);
     }
 
+    private String datosIngreso(Movimiento m) {
+        List<String> lineas = new ArrayList<>();
+        lineas.add("💰 <b>" + formato.pesos(m.getMonto()) + "</b>");
+        lineas.add("🏷 " + m.getClaseIngreso().getNombre());
+        if (m.getDescripcion() != null && !m.getDescripcion().isBlank()) {
+            lineas.add("📝 " + html(m.getDescripcion()));
+        }
+        String destino = m.getCuenta() != null ? html(m.getCuenta().getNombre())
+                : m.getMedioPago() != null && m.getMedioPago().isEfectivo() ? "Efectivo"
+                : "<i>Sin especificar</i>";
+        lineas.add("🏦 " + destino);
+        lineas.add("📅 " + formato.fecha(m.getFechaHora()));
+        return String.join("\n", lineas);
+    }
+
     // --- Botones ---
 
     /**
      * Sin categoría: una fila por candidata y "Otra…". Sin monto: "Poner monto". Completo: "Guardar".
-     * Siempre "Editar" y "Cancelar".
+     * Siempre "Editar" y "Cancelar". Un ingreso solo tiene "Guardar" y "Cancelar": si algo está mal, se cancela
+     * y se manda de nuevo.
      */
     public Teclado principal(Movimiento m) {
         long id = m.getId();
         Teclado.Constructor t = Teclado.constructor();
-        if (m.getCategoria() == null) {
+        if (m.isIngreso()) {
+            t.fila(boton("✅ Guardar", GUARDAR, id), boton("❌ Cancelar", CANCELAR, id));
+        } else if (m.getCategoria() == null) {
             for (Categoria c : m.getCandidatas()) {
                 t.fila(boton(c.getNombreConEmoji(), CATEGORIA, id, c.getId()));
             }

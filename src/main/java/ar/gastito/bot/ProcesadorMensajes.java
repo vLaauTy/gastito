@@ -31,6 +31,7 @@ import ar.gastito.ia.ResumenUsoIa;
 import ar.gastito.interpretacion.InterpretadorService;
 import ar.gastito.interpretacion.Montos;
 import ar.gastito.interpretacion.ResolvedorFechas;
+import ar.gastito.movimiento.ClaseIngreso;
 import ar.gastito.movimiento.EstadoMovimiento;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoIncompletoException;
@@ -72,6 +73,12 @@ public class ProcesadorMensajes {
             Te muestro lo que entendí. Si no estoy seguro de la categoría, te la pregunto con botones. Con ✏️ Editar cambiás cualquier dato antes de guardar.
             Aprendo de lo que guardás: la próxima vez que cargues algo parecido, uso la misma categoría.
 
+            <b>Ingresos</b>
+            /sueldo 380.000 galicia
+            /aguinaldo 190 mil galicia
+            /ingreso 25000 arreglo de PC a mercado pago (cualquier otro ingreso: una venta, un regalo…)
+            Si no decís la cuenta, uso la del último ingreso de ese tipo. Te muestro la tarjeta y lo guardás con un toque.
+
             <b>Comandos</b>
             /hoy – gastos de hoy y el total
             /mes – total del mes por categoría
@@ -86,6 +93,7 @@ public class ProcesadorMensajes {
     private final Tarjetas tarjetas;
     private final FormatoMensajes formato;
     private final GraficoMes grafico;
+    private final ComandosIngreso comandosIngreso;
     private final TranscripcionService transcripciones;
     private final Duration duracionMaximaAudio;
     private final Clock clock;
@@ -118,9 +126,10 @@ public class ProcesadorMensajes {
 
     public ProcesadorMensajes(InterpretadorService interpretador, MovimientoService movimientos,
             CatalogoService catalogos, RegistroUsoIa usoIa, ResolvedorFechas fechas, Tarjetas tarjetas,
-            FormatoMensajes formato, GraficoMes grafico, TranscripcionService transcripciones,
-            GastitoProperties properties, Clock clock) {
+            FormatoMensajes formato, GraficoMes grafico, ComandosIngreso comandosIngreso,
+            TranscripcionService transcripciones, GastitoProperties properties, Clock clock) {
         this.grafico = grafico;
+        this.comandosIngreso = comandosIngreso;
         this.interpretador = interpretador;
         this.movimientos = movimientos;
         this.catalogos = catalogos;
@@ -156,7 +165,8 @@ public class ProcesadorMensajes {
         }
 
         if (comando != null) {
-            acciones.add(responderComando(comando));
+            ClaseIngreso clase = ComandosIngreso.clase(comando);
+            acciones.add(clase != null ? comandosIngreso.responder(clase, limpio) : responderComando(comando));
         } else {
             acciones.add(nuevoGasto(chatId, limpio, Origen.TEXTO));
         }
