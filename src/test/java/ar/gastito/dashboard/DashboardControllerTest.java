@@ -30,6 +30,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -59,7 +60,9 @@ class DashboardControllerTest {
     static final LocalDateTime AHORA = LocalDateTime.of(2026, 10, 21, 16, 42);
     static final YearMonth OCTUBRE = YearMonth.of(2026, 10);
 
+    /** El filtro de acceso también corre: los pedidos de MockMvc vienen de 127.0.0.1 a localhost y pasan. */
     @TestConfiguration
+    @EnableConfigurationProperties(DashboardProperties.class)
     static class Reloj {
         @Bean
         Clock clock() {

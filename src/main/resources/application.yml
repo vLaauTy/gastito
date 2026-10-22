@@ -20,6 +20,9 @@ spring:
 server:
   # 8090 y no 8080, que en esta PC lo usa otro servicio. Se cambia con SERVER_PORT en el .env.
   port: ${SERVER_PORT:8090}
+  # Solo esta PC ve el dashboard. Para abrirlo al celular: SERVER_ADDRESS=0.0.0.0 y GASTITO_DASHBOARD_TOKEN en el
+  # .env (sin token, la aplicación no arranca escuchando en la red).
+  address: ${SERVER_ADDRESS:127.0.0.1}
 
 telegrambots:
   # En false no arranca el long polling (se usa en los tests).
@@ -40,6 +43,9 @@ gastito:
       claude-haiku-5-5:
         entrada: 0.10
         salida: 0.50
+  dashboard:
+    # Solo desde el .env. Si está, los pedidos que no vienen de esta PC lo tienen que traer.
+    token: ${GASTITO_DASHBOARD_TOKEN:}
   audio:
     # Servidor de Whisper compatible con la API de OpenAI (corre en la VM). La clave, solo en el .env.
     url: ${WHISPER_URL:http://localhost:9000}
