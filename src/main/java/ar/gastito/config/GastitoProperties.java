@@ -6,17 +6,20 @@ import java.time.ZoneId;
 import java.util.Map;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.util.unit.DataSize;
 
 @ConfigurationProperties(prefix = "gastito")
-public record GastitoProperties(ZoneId zonaHoraria, Telegram telegram, Ia ia, Audio audio) {
+public record GastitoProperties(ZoneId zonaHoraria, Telegram telegram, Ia ia, Audio audio, Ticket ticket) {
 
     public record Telegram(String token, String username, long allowedUserId) {
     }
 
     /**
-     * @param precios precios en USD por millón de tokens, por modelo
+     * @param url       la API de Anthropic; en los tests, un servidor falso
+     * @param maxTokens tope de la respuesta al interpretar un texto
+     * @param precios   precios en USD por millón de tokens, por modelo
      */
-    public record Ia(String apiKey, String modelo, long maxTokens, Map<String, Precio> precios) {
+    public record Ia(String apiKey, String url, String modelo, long maxTokens, Map<String, Precio> precios) {
     }
 
     public record Precio(BigDecimal entrada, BigDecimal salida) {
@@ -32,5 +35,16 @@ public record GastitoProperties(ZoneId zonaHoraria, Telegram telegram, Ia ia, Au
      */
     public record Audio(String url, String apiKey, String modelo, String idioma, Duration timeout,
             Duration duracionMaxima) {
+    }
+
+    /**
+     * Lectura de fotos de tickets.
+     *
+     * @param carpetaDatos  las fotos van en carpetaDatos/tickets/AAAA/MM/<id>.jpg
+     * @param ladoMaximo    la foto se achica a este lado más largo, en píxeles, antes de mandarla a la IA
+     * @param tamanioMaximo imágenes más pesadas no se procesan
+     * @param maxTokens     tope de la respuesta de la IA (un ticket largo tiene muchos productos)
+     */
+    public record Ticket(String carpetaDatos, int ladoMaximo, DataSize tamanioMaximo, long maxTokens) {
     }
 }

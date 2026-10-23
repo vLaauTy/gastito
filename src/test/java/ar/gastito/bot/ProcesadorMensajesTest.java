@@ -78,7 +78,7 @@ class ProcesadorMensajesTest {
     void setUp() {
         FormatoMensajes formato = new FormatoMensajes(RELOJ);
         GastitoProperties properties = new GastitoProperties(null, null, null, new GastitoProperties.Audio(
-                "http://whisper", "clave", "whisper-1", "es", Duration.ofSeconds(60), Duration.ofSeconds(60)));
+                "http://whisper", "clave", "whisper-1", "es", Duration.ofSeconds(60), Duration.ofSeconds(60)), null);
         Tarjetas tarjetas = new Tarjetas(formato);
         ComandosIngreso comandosIngreso = new ComandosIngreso(new ParserIngreso(), catalogos, ingresos,
                 new ResolvedorFechas(), tarjetas, RELOJ);

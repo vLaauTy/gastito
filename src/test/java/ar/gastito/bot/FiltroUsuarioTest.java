@@ -22,7 +22,7 @@ class FiltroUsuarioTest {
 
     private static FiltroUsuario filtro(long permitido) {
         return new FiltroUsuario(new GastitoProperties(ZoneId.of("America/Argentina/Buenos_Aires"),
-                new GastitoProperties.Telegram("token", "bot", permitido), null, null));
+                new GastitoProperties.Telegram("token", "bot", permitido), null, null, null));
     }
 
     private static Update mensajeDe(Long userId) {

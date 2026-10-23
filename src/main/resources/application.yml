@@ -36,6 +36,7 @@ gastito:
     allowed-user-id: ${TELEGRAM_ALLOWED_USER_ID:0}
   ia:
     api-key: ${ANTHROPIC_API_KEY:}
+    url: https://api.anthropic.com
     modelo: claude-haiku-5-5
     max-tokens: 1024
     # Precios en USD por millón de tokens (prompts de hasta 100.000 tokens).
@@ -56,6 +57,14 @@ gastito:
     idioma: es
     timeout: 60s
     duracion-maxima: 60s
+  ticket:
+    # Las fotos quedan en data/tickets/AAAA/MM/<id>.jpg (data/ está en el .gitignore).
+    carpeta-datos: data
+    # Lado más largo de la foto que se manda a la IA: un ticket se lee igual y cuesta menos tokens.
+    lado-maximo: 1568
+    tamanio-maximo: 10MB
+    # Un ticket largo trae muchos productos: la respuesta necesita más lugar que la de un texto.
+    max-tokens: 4096
 
 ---
 spring:
