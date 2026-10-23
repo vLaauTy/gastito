@@ -55,23 +55,9 @@ public class ValidadorInterpretacion {
         if (ia == null || !ia.esGasto()) {
             return new NoEsGasto();
         }
-        List<Categoria> candidatas = new ArrayList<>();
-        boolean primeraExiste = false;
-        List<String> nombres = ia.categorias() == null ? List.of() : ia.categorias();
-        for (int i = 0; i < nombres.size() && candidatas.size() < MAXIMO_CANDIDATAS; i++) {
-            Optional<Categoria> c = buscar(nombres.get(i), catalogo.categorias());
-            if (i == 0) {
-                primeraExiste = c.isPresent();
-            }
-            c.filter(categoria -> !candidatas.contains(categoria)).ifPresent(candidatas::add);
-        }
-        Confianza confianza = confianza(ia.confianza());
-        if (candidatas.isEmpty()) {
-            candidatas.add(catalogo.otros());
-            confianza = Confianza.BAJA;
-        } else if (confianza == Confianza.ALTA && !primeraExiste) {
-            confianza = Confianza.BAJA;
-        }
+        Candidatas c = candidatas(ia.categorias(), ia.confianza(), catalogo);
+        List<Categoria> candidatas = c.categorias();
+        Confianza confianza = c.confianza();
 
         MedioPago medio = buscar(ia.medioPago(), catalogo.mediosPago()).orElse(null);
         Cuenta cuenta = buscar(ia.cuenta(), catalogo.cuentas()).orElse(null);
@@ -91,6 +77,35 @@ public class ValidadorInterpretacion {
         return new Valida(movimiento, confianza);
     }
 
+    /**
+     * Las categorías que propuso la IA que existen, sin repetir y en orden (al menos una).
+     *
+     * @param confianza ya corregida: baja si no quedó ninguna o si la primera propuesta no existe
+     */
+    public record Candidatas(List<Categoria> categorias, Confianza confianza) {
+    }
+
+    public static Candidatas candidatas(List<String> nombres, String confianzaIa, Catalogo catalogo) {
+        List<Categoria> candidatas = new ArrayList<>();
+        boolean primeraExiste = false;
+        List<String> propuestas = nombres == null ? List.of() : nombres;
+        for (int i = 0; i < propuestas.size() && candidatas.size() < MAXIMO_CANDIDATAS; i++) {
+            Optional<Categoria> c = buscar(propuestas.get(i), catalogo.categorias());
+            if (i == 0) {
+                primeraExiste = c.isPresent();
+            }
+            c.filter(categoria -> !candidatas.contains(categoria)).ifPresent(candidatas::add);
+        }
+        Confianza confianza = confianza(confianzaIa);
+        if (candidatas.isEmpty()) {
+            candidatas.add(catalogo.otros());
+            confianza = Confianza.BAJA;
+        } else if (confianza == Confianza.ALTA && !primeraExiste) {
+            confianza = Confianza.BAJA;
+        }
+        return new Candidatas(List.copyOf(candidatas), confianza);
+    }
+
     static Confianza confianza(String texto) {
         if (texto == null) {
             return Confianza.BAJA;
@@ -102,7 +117,8 @@ public class ValidadorInterpretacion {
         };
     }
 
-    static Optional<BigDecimal> monto(String texto) {
+    /** Un importe en pesos: "1500", "1500.50" o a la argentina ("1.500,50"). Vacío si no es positivo. */
+    public static Optional<BigDecimal> monto(String texto) {
         if (texto == null || texto.isBlank()) {
             return Optional.empty();
         }
@@ -127,7 +143,7 @@ public class ValidadorInterpretacion {
     }
 
     /** Primero por nombre exacto (sin tildes ni mayúsculas), después por palabra clave. */
-    private static <T extends ConPalabrasClave> Optional<T> buscar(String nombre, List<T> opciones) {
+    public static <T extends ConPalabrasClave> Optional<T> buscar(String nombre, List<T> opciones) {
         if (nombre == null || nombre.isBlank()) {
             return Optional.empty();
         }
