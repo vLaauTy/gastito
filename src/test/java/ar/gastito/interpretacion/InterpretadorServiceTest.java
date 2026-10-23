@@ -224,7 +224,7 @@ class InterpretadorServiceTest {
 
     @Test
     void sinConfirmacionesElPromptLoDice() {
-        assertThat(InterpretadorService.ejemplos(List.of())).isEqualTo("(todavía no hay)");
+        assertThat(ContextoIa.ejemplos(List.of())).isEqualTo("(todavía no hay)");
     }
 
     @Test

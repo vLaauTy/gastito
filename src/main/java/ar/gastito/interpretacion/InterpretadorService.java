@@ -2,20 +2,14 @@ package ar.gastito.interpretacion;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
 import ar.gastito.catalogo.Catalogo;
 import ar.gastito.catalogo.CatalogoService;
-import ar.gastito.catalogo.Categoria;
-import ar.gastito.catalogo.ConPalabrasClave;
 import ar.gastito.catalogo.Cuenta;
 import ar.gastito.catalogo.MedioPago;
 import ar.gastito.catalogo.TarjetaCredito;
@@ -23,7 +17,6 @@ import ar.gastito.ia.ClienteIa;
 import ar.gastito.ia.Prompts;
 import ar.gastito.ia.PropositoIa;
 import ar.gastito.movimiento.Confianza;
-import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
 import ar.gastito.movimiento.MovimientoService;
 
@@ -39,8 +32,6 @@ import ar.gastito.movimiento.MovimientoService;
 public class InterpretadorService {
 
     static final String PROMPT = "interpretar-gasto";
-    private static final DateTimeFormatter FORMATO_HOY =
-            DateTimeFormatter.ofPattern("EEEE d/M/yyyy", Locale.forLanguageTag("es-AR"));
 
     private final CatalogoService catalogos;
     private final ParserSimple parser;
@@ -119,11 +110,11 @@ public class InterpretadorService {
 
         // 3. IA, con las descripciones de las categorías y las últimas confirmaciones como ejemplos.
         String instrucciones = prompts.cargar(PROMPT, Map.of(
-                "categorias", categorias(catalogo.categorias()),
-                "mediosPago", lista(catalogo.mediosPago()),
-                "cuentas", lista(catalogo.cuentas()),
-                "ejemplos", ejemplos(movimientos.ultimasConfirmaciones()),
-                "hoy", FORMATO_HOY.format(ahora)));
+                "categorias", ContextoIa.categorias(catalogo.categorias()),
+                "mediosPago", ContextoIa.lista(catalogo.mediosPago()),
+                "cuentas", ContextoIa.lista(catalogo.cuentas()),
+                "ejemplos", ContextoIa.ejemplos(movimientos.ultimasConfirmaciones()),
+                "hoy", ContextoIa.hoy(ahora)));
         ClienteIa.Respuesta<InterpretacionIa> respuesta =
                 ia.extraer(instrucciones, texto, InterpretacionIa.class, proposito);
 
@@ -147,28 +138,5 @@ public class InterpretadorService {
 
     private static TarjetaCredito tarjeta(MedioPago medio, Catalogo catalogo) {
         return medio != null && medio.esTarjetaDeCredito() ? catalogo.tarjetaCredito().orElse(null) : null;
-    }
-
-    /** "- Kiosco: golosinas, bebidas…". */
-    static String categorias(List<Categoria> categorias) {
-        return categorias.stream()
-                .map(c -> c.getDescripcion() == null || c.getDescripcion().isBlank()
-                        ? "- " + c.getNombre()
-                        : "- " + c.getNombre() + ": " + c.getDescripcion())
-                .collect(Collectors.joining("\n"));
-    }
-
-    /** "- "Pan de pancho y papas" → Supermercado". */
-    static String ejemplos(List<Movimiento> confirmados) {
-        if (confirmados.isEmpty()) {
-            return "(todavía no hay)";
-        }
-        return confirmados.stream()
-                .map(m -> "- \"" + m.getDescripcion() + "\" → " + m.getCategoria().getNombre())
-                .collect(Collectors.joining("\n"));
-    }
-
-    private static String lista(List<? extends ConPalabrasClave> opciones) {
-        return opciones.stream().map(o -> "- " + o.getNombre()).collect(Collectors.joining("\n"));
     }
 }
