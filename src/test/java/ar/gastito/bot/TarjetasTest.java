@@ -13,9 +13,12 @@ import static ar.gastito.bot.DatosDePrueba.dudoso;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
 
+import ar.gastito.movimiento.ItemTicket;
 import ar.gastito.movimiento.Movimiento;
 
 class TarjetasTest {
@@ -168,5 +171,79 @@ class TarjetasTest {
     void losDatosDeLosBotonesEntranEnTelegram() {
         assertThat(tarjetas.categorias(Long.MAX_VALUE, CATEGORIAS).botones())
                 .allSatisfy(b -> assertThat(b.datos().getBytes()).hasSizeLessThanOrEqualTo(64));
+    }
+
+    // --- Tickets ---
+
+    @Test
+    void tarjetaDeUnTicketComoElPedido() {
+        assertThat(tarjetas.pendiente(DatosDePrueba.ticket("8050", SUPER, DatosDePrueba.PRODUCTOS))).isEqualTo("""
+                🧾 <b>Ticket</b> · Supermercado Día
+                📅 sáb 10/10 17:20
+                🛒 <b>Productos</b>
+                <pre>Leche 1 L ×2 .......... $2.900
+                Yerba 500 g ........... $3.900
+                Galletitas ............ $1.250</pre>
+                💰 Total <b>$8.050</b>
+                💳 Débito
+                🛒 Supermercado""");
+    }
+
+    @Test
+    void losRenglonesTienenTodosElMismoAnchoConElPrecioALaDerecha() {
+        Movimiento m = DatosDePrueba.ticket("1", SUPER, List.of(
+                item("Un producto con un nombre larguísimo que no entra", "123456.78"),
+                item("Pan", "1"),
+                new ItemTicket("Queso", new BigDecimal("0.532"), new BigDecimal("5990"), new BigDecimal("3186.68")),
+                item("2x1 Galletitas", "-250")));
+
+        assertThat(m.getItems()).extracting(tarjetas::renglon)
+                .allSatisfy(r -> assertThat(r).hasSize(Tarjetas.ANCHO_RENGLON))
+                .containsExactly(
+                        "Un producto con… . $123.456,78",
+                        "Pan ....................... $1",
+                        "Queso ×0,532 ....... $3.186,68",
+                        "2x1 Galletitas ......... -$250");
+    }
+
+    @Test
+    void muestraHastaOchoProductosYCuantosMasHay() {
+        List<ItemTicket> diez = IntStream.rangeClosed(1, 10).mapToObj(i -> item("Producto " + i, "100")).toList();
+
+        String html = tarjetas.pendiente(DatosDePrueba.ticket("1000", SUPER, diez));
+
+        assertThat(html).contains("Producto 8 ").doesNotContain("Producto 9 ").contains("…y 2 más</pre>");
+    }
+
+    @Test
+    void siLosProductosNoEntranEnElMensajeMuestraSoloElTotalYElResumen() {
+        // Con 8 renglones recortados a 30 caracteres siempre entra en Telegram: se prueba con un límite chico.
+        Tarjetas chicas = new Tarjetas(new FormatoMensajes(RELOJ), 200);
+        List<ItemTicket> items = List.of(item("Leche", "100"), item("Yerba", "100"), item("Pan", "100"),
+                item("Queso", "100"), item("Desc", "-50"));
+
+        String html = chicas.pendiente(DatosDePrueba.ticket("350", SUPER, items));
+
+        assertThat(html).doesNotContain("<pre>").contains("🛒 4 productos y 1 descuento\n💰 Total <b>$350</b>");
+    }
+
+    @Test
+    void elAvisoDeLaSumaSoloAparecePendiente() {
+        Movimiento m = DatosDePrueba.ticket("9000", SUPER, DatosDePrueba.PRODUCTOS);
+
+        assertThat(tarjetas.pendiente(m)).contains("⚠️ Los productos suman <b>$8.050</b>");
+        m.confirmar();
+        assertThat(tarjetas.guardado(m, new BigDecimal("9000"))).doesNotContain("⚠️")
+                .startsWith("✅ <b>Guardado</b> · Supermercado Día\n📅");
+    }
+
+    @Test
+    void unTicketSinProductosMuestraSoloElTotal() {
+        assertThat(tarjetas.pendiente(DatosDePrueba.ticket("1500", KIOSCO, List.of())))
+                .doesNotContain("🛒 <b>Productos</b>").contains("💰 Total <b>$1.500</b>").doesNotContain("⚠️");
+    }
+
+    private static ItemTicket item(String descripcion, String subtotal) {
+        return new ItemTicket(descripcion, null, null, new BigDecimal(subtotal));
     }
 }

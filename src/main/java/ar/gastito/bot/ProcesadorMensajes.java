@@ -39,6 +39,8 @@ import ar.gastito.movimiento.MovimientoIncompletoException;
 import ar.gastito.movimiento.MovimientoNoPendienteException;
 import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Origen;
+import ar.gastito.ticket.ImagenInvalidaException;
+import ar.gastito.ticket.TicketService;
 
 /**
  * La conversación con el usuario, sin depender de la API de Telegram: recibe textos y botones y devuelve
@@ -59,7 +61,7 @@ public class ProcesadorMensajes {
             • 3700 en pan de pancho y papas, efectivo
             • pagué 12000 de nafta con la tarjeta
 
-            También me lo podés decir en un audio 🎙
+            También me lo podés decir en un audio 🎙 o mandarme la foto del ticket 🧾
             Te muestro lo que entendí y lo guardás con un toque.""";
 
     static final String AYUDA = """
@@ -69,6 +71,7 @@ public class ProcesadorMensajes {
             • Montos a la argentina: 1.500 o 1500,50.
             • Fechas: "ayer", "anteayer", "el sábado", "12/10".
             • Por audio 🎙: decilo como lo escribirías ("gasto 3700 en pan y papas, efectivo"), un gasto por audio. Arriba de la tarjeta te muestro lo que escuché.
+            • Con la foto del ticket 🧾: leo el comercio, los productos y el total. Si querés, escribí algo con la foto ("efectivo", "con la de Galicia"). Un ticket por foto, entero y sin reflejos.
 
             <b>La tarjeta</b>
             Te muestro lo que entendí. Si no estoy seguro de la categoría, te la pregunto con botones. Con ✏️ Editar cambiás cualquier dato antes de guardar.
@@ -97,6 +100,7 @@ public class ProcesadorMensajes {
     private final GraficoMes grafico;
     private final ComandosIngreso comandosIngreso;
     private final TranscripcionService transcripciones;
+    private final TicketService tickets;
     private final Duration duracionMaximaAudio;
     private final String urlDashboard;
     private final Clock clock;
@@ -130,8 +134,9 @@ public class ProcesadorMensajes {
     public ProcesadorMensajes(InterpretadorService interpretador, MovimientoService movimientos,
             CatalogoService catalogos, RegistroUsoIa usoIa, ResolvedorFechas fechas, Tarjetas tarjetas,
             FormatoMensajes formato, GraficoMes grafico, ComandosIngreso comandosIngreso,
-            TranscripcionService transcripciones, GastitoProperties properties, DashboardProperties dashboard,
-            Clock clock) {
+            TranscripcionService transcripciones, TicketService tickets, GastitoProperties properties,
+            DashboardProperties dashboard, Clock clock) {
+        this.tickets = tickets;
         this.grafico = grafico;
         this.comandosIngreso = comandosIngreso;
         this.interpretador = interpretador;
@@ -228,6 +233,73 @@ public class ProcesadorMensajes {
         }
         acciones.add(nuevoGasto(chatId, escuchado, Origen.AUDIO));
         return acciones;
+    }
+
+    // --- Fotos de tickets ---
+
+    /**
+     * Se lee el ticket y queda la tarjeta de siempre, con los productos. Una foto no es el valor de un campo: si
+     * la tarjeta esperaba uno, vuelve a su estado normal.
+     *
+     * @param mensajeId la foto del usuario
+     */
+    public List<Accion> procesarFoto(long chatId, int mensajeId, FotoRecibida foto) {
+        List<Accion> acciones = new ArrayList<>();
+        Espera espera = esperas.remove(chatId);
+        if (espera != null) {
+            acciones.addAll(restaurar(espera));
+        }
+        acciones.add(nuevoTicket(foto));
+        return acciones;
+    }
+
+    private Accion nuevoTicket(FotoRecibida foto) {
+        if (foto.bytes() != null && tickets.superaElTamanio(foto.bytes())) {
+            return Accion.Enviar.texto(demasiadoGrande());
+        }
+        TicketService.Resultado resultado;
+        try {
+            resultado = tickets.leer(foto.descarga().descargar(), foto.texto());
+        } catch (IOException e) {
+            log.warn("No se pudo descargar la foto de Telegram ({})", e.getClass().getSimpleName());
+            return Accion.Enviar.texto("No pude descargar la foto de Telegram 😕 Probá mandarla de nuevo.");
+        } catch (ImagenInvalidaException e) {
+            return Accion.Enviar.texto(switch (e.getMotivo()) {
+                case DEMASIADO_GRANDE -> demasiadoGrande();
+                case FORMATO_NO_SOPORTADO -> """
+                        No pude abrir esa imagen 😕
+                        Mandala como foto (no como archivo), o en JPG o PNG.""";
+            });
+        } catch (IaNoDisponibleException e) {
+            return Accion.Enviar.texto("""
+                    No pude leer el ticket: %s.
+                    Mientras tanto escribime el gasto, por ejemplo: super 8050"""
+                    .formatted(html(e.getMessage())));
+        }
+        return switch (resultado) {
+            case TicketService.Leido l -> {
+                Movimiento m = l.movimiento();
+                yield Accion.Enviar.tarjeta(tarjetas.pendiente(m), tarjetas.principal(m), m.getId());
+            }
+            case TicketService.NoEsTicket n -> Accion.Enviar.texto("""
+                    Esa foto no parece un ticket 🤔
+                    Mandame la foto de un ticket o una factura de compra, o escribime el gasto ("super 8050").""");
+            case TicketService.Ilegible i -> Accion.Enviar.texto(switch (i.motivo()) {
+                case BORROSA -> """
+                        No pude leer bien el ticket: la foto salió borrosa 📷
+                        Sacala de nuevo con buena luz, con el ticket entero y sin reflejos. Si es muy largo, sacalo en dos partes y mandá una foto por parte.""";
+                case CORTADA, SIN_TOTAL -> """
+                        No encontré el total del ticket 🤔 No guardé nada.
+                        Mandame una foto más clara, con el ticket entero (que se vea el TOTAL) y sin reflejos.""";
+            });
+        };
+    }
+
+    private String demasiadoGrande() {
+        return """
+                La imagen pesa más de %d MB 🙏
+                Mandala como foto (Telegram la achica sola) o en un archivo más liviano."""
+                .formatted(tickets.tamanioMaximo().toMegabytes());
     }
 
     /** Whisper suele cerrar con un punto ("Kiosco 1500."), que no es parte del dato. */
@@ -418,9 +490,14 @@ public class ProcesadorMensajes {
                 yield List.of(new Accion.Editar(mensajeId, tarjetas.guardado(c.movimiento(), c.totalMesCategoria()),
                         Teclado.NINGUNO), new Accion.Avisar("✅ Guardado"));
             }
-            case Tarjetas.CANCELAR -> List.of(
-                    new Accion.Editar(mensajeId, tarjetas.cancelado(movimientos.cancelar(id)), Teclado.NINGUNO),
-                    new Accion.Avisar("Cancelado"));
+            case Tarjetas.CANCELAR -> {
+                Movimiento cancelado = movimientos.cancelar(id);
+                if (cancelado.getOrigen() == Origen.TICKET) {
+                    tickets.borrarFoto(cancelado);
+                }
+                yield List.of(new Accion.Editar(mensajeId, tarjetas.cancelado(cancelado), Teclado.NINGUNO),
+                        new Accion.Avisar("Cancelado"));
+            }
             case Tarjetas.VOLVER -> List.of(principal(chatId, mensajeId, pendiente(id)));
             case Tarjetas.EDITAR -> List.of(
                     new Accion.Editar(mensajeId, tarjetas.pendiente(pendiente(id)), tarjetas.edicion(id)));

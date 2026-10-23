@@ -10,6 +10,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.MedioPago;
+import ar.gastito.movimiento.ItemTicket;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
 import ar.gastito.movimiento.Origen;
@@ -68,6 +69,22 @@ final class DatosDePrueba {
     static Movimiento deAudio(String monto, Categoria categoria, String escuchado) {
         return conId(Movimiento.pendiente(new MovimientoInterpretado(new BigDecimal(monto), "Pan de pancho y papas",
                 categoria, List.of(), EFECTIVO, null, null, AHORA), Origen.AUDIO, escuchado, AHORA), ID);
+    }
+
+    /** Los productos del ticket del pedido: suman $8.050. */
+    static final List<ItemTicket> PRODUCTOS = List.of(
+            new ItemTicket("Leche 1 L", new BigDecimal("2"), new BigDecimal("1450.00"), new BigDecimal("2900.00")),
+            new ItemTicket("Yerba 500 g", null, null, new BigDecimal("3900.00")),
+            new ItemTicket("Galletitas", null, null, new BigDecimal("1250.00")));
+
+    /** Sábado 10/10 17:20, cuando se compró el ticket. */
+    static final LocalDateTime FECHA_TICKET = LocalDateTime.of(2026, 10, 10, 17, 20);
+
+    /** Un ticket pendiente del Supermercado Día con débito; la categoría puede quedar sin elegir. */
+    static Movimiento ticket(String total, Categoria categoria, List<ItemTicket> items, Categoria... candidatas) {
+        MovimientoInterpretado interpretado = new MovimientoInterpretado(new BigDecimal(total), "Supermercado Día",
+                categoria, List.of(candidatas), DEBITO, null, null, FECHA_TICKET);
+        return conId(Movimiento.deTicket(interpretado, "Supermercado Día", items, null, AHORA), ID);
     }
 
     private static Movimiento movimiento(MovimientoInterpretado interpretado) {

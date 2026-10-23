@@ -2,6 +2,7 @@ package ar.gastito.bot;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -33,6 +34,7 @@ import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.message.MaybeInaccessibleMessage;
+import org.telegram.telegrambots.meta.api.objects.photo.PhotoSize;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
@@ -56,7 +58,7 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
     private final TelegramClient telegram;
     private final FiltroUsuario filtro;
     private final ProcesadorMensajes procesador;
-    /** Repite la acción "escribiendo…" mientras se transcribe un audio. */
+    /** Repite la acción "escribiendo…" mientras se transcribe un audio o se lee un ticket. */
     private final ScheduledExecutorService programador = Executors.newSingleThreadScheduledExecutor(
             Thread.ofPlatform().name("gastito-escribiendo").daemon().factory());
 
@@ -122,9 +124,14 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
                     long chat = chatId;
                     ejecutar(chatId, null, escribiendoMientras(chatId,
                             () -> procesador.procesarAudio(chat, mensaje.getMessageId(), audio)));
+                } else if (mensaje.hasPhoto() || esImagen(mensaje)) {
+                    FotoRecibida foto = foto(mensaje);
+                    long chat = chatId;
+                    ejecutar(chatId, null, escribiendoMientras(chatId,
+                            () -> procesador.procesarFoto(chat, mensaje.getMessageId(), foto)));
                 } else {
                     ejecutar(chatId, null, List.of(Accion.Enviar.texto(
-                            "Por ahora entiendo mensajes de texto y audios.")));
+                            "Por ahora entiendo mensajes de texto, audios y fotos de tickets.")));
                 }
             }
         } catch (RuntimeException e) {
@@ -153,6 +160,29 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
             nombre = nombreArchivo(mensaje.getAudio().getFileName(), mensaje.getAudio().getMimeType());
         }
         return new AudioRecibido(duracion == null ? 0 : duracion, nombre, () -> descargar(fileId));
+    }
+
+    /** Un archivo con tipo imagen (una foto mandada "como archivo", sin que Telegram la comprima). */
+    private static boolean esImagen(Message mensaje) {
+        return mensaje.hasDocument() && mensaje.getDocument().getMimeType() != null
+                && mensaje.getDocument().getMimeType().toLowerCase().startsWith("image/");
+    }
+
+    /** De una foto, la de mayor resolución de las que manda Telegram. Se descarga recién cuando hace falta. */
+    private FotoRecibida foto(Message mensaje) {
+        String fileId;
+        Long bytes;
+        if (mensaje.hasPhoto()) {
+            PhotoSize mayor = mensaje.getPhoto().stream()
+                    .max(Comparator.comparingLong(p -> (long) p.getWidth() * p.getHeight()))
+                    .orElseThrow();
+            fileId = mayor.getFileId();
+            bytes = mayor.getFileSize() == null ? null : mayor.getFileSize().longValue();
+        } else {
+            fileId = mensaje.getDocument().getFileId();
+            bytes = mensaje.getDocument().getFileSize();
+        }
+        return new FotoRecibida(bytes, mensaje.getCaption(), () -> descargar(fileId));
     }
 
     private byte[] descargar(String fileId) throws IOException {

@@ -7,13 +7,16 @@ import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.MedioPago;
 import ar.gastito.movimiento.EstadoMovimiento;
 import ar.gastito.movimiento.Movimiento;
+import ar.gastito.movimiento.MovimientoItem;
 import ar.gastito.movimiento.Origen;
+import ar.gastito.ticket.ValidadorTicket;
 
 /**
  * La tarjeta de un gasto: un mensaje con un dato por línea que se va editando en el lugar
@@ -38,6 +41,12 @@ public class Tarjetas {
     /** Id de medio de pago que significa "sin medio de pago". */
     static final long SIN_MEDIO = 0;
 
+    static final int PRODUCTOS_VISIBLES = 8;
+    /** Caracteres de un renglón de producto: entra en la pantalla de un celular sin cortarse. */
+    static final int ANCHO_RENGLON = 30;
+    /** Telegram admite 4096 caracteres; se deja lugar para lo que se agrega al editar (pedidos, avisos). */
+    static final int LARGO_MAXIMO_TICKET = 3500;
+
     /** Campos que se editan escribiendo (o diciendo en un audio) el valor nuevo. */
     public enum Campo {
         MONTO("Monto", "✏️ <b>Escribí el nuevo monto</b>\n<i>Por ejemplo: 3700 o 1.500,50</i>"),
@@ -54,16 +63,26 @@ public class Tarjetas {
     }
 
     private final FormatoMensajes formato;
+    private final int largoMaximoTicket;
 
+    @Autowired
     public Tarjetas(FormatoMensajes formato) {
+        this(formato, LARGO_MAXIMO_TICKET);
+    }
+
+    Tarjetas(FormatoMensajes formato, int largoMaximoTicket) {
         this.formato = formato;
+        this.largoMaximoTicket = largoMaximoTicket;
     }
 
     // --- Textos ---
 
-    /** La tarjeta de un gasto (o un ingreso) pendiente. */
+    /** La tarjeta de un gasto (o un ingreso) pendiente. Un ticket avisa si los productos no suman el total. */
     public String pendiente(Movimiento m) {
-        return escuchado(m) + (m.isIngreso() ? "💵 <b>Nuevo ingreso</b>\n" : "🧾 <b>Nuevo gasto</b>\n") + datos(m);
+        if (esTicket(m)) {
+            return conTitulo(m, "🧾 <b>Ticket</b>") + avisoDeSuma(m);
+        }
+        return conTitulo(m, m.isIngreso() ? "💵 <b>Nuevo ingreso</b>" : "🧾 <b>Nuevo gasto</b>");
     }
 
     /** Pendiente sin monto, recién interpretado: se espera que el usuario lo escriba. */
@@ -89,7 +108,7 @@ public class Tarjetas {
     /** @param totalMes de un gasto, el total del mes en su categoría; de un ingreso, el de todos los ingresos */
     public String guardado(Movimiento m, BigDecimal totalMes) {
         String mes = formato.mes(YearMonth.from(m.getFechaHora()));
-        return escuchado(m) + "✅ <b>Guardado</b>\n" + datos(m) + "\n\n📊 En " + mes
+        return conTitulo(m, "✅ <b>Guardado</b>") + "\n\n📊 En " + mes
                 + (m.isIngreso()
                         ? " cobraste <b>" + formato.pesos(totalMes) + "</b> en total."
                         : " llevás <b>" + formato.pesos(totalMes) + "</b> en "
@@ -97,14 +116,29 @@ public class Tarjetas {
     }
 
     public String cancelado(Movimiento m) {
-        return escuchado(m) + "❌ <b>Cancelado</b>\n" + datos(m);
+        return conTitulo(m, "❌ <b>Cancelado</b>");
     }
 
     /** Cómo queda la tarjeta de un gasto que ya no está pendiente. */
     public String terminado(Movimiento m) {
-        return m.getEstado() == EstadoMovimiento.CONFIRMADO
-                ? escuchado(m) + "✅ <b>Guardado</b>\n" + datos(m)
-                : cancelado(m);
+        return m.getEstado() == EstadoMovimiento.CONFIRMADO ? conTitulo(m, "✅ <b>Guardado</b>") : cancelado(m);
+    }
+
+    /**
+     * El título y los datos. Un ticket lleva el comercio (la descripción) en el título; si con los productos el
+     * mensaje no entra en Telegram, se muestran solo el total y cuántos productos son.
+     */
+    private String conTitulo(Movimiento m, String titulo) {
+        if (!esTicket(m)) {
+            return escuchado(m) + titulo + "\n" + datos(m);
+        }
+        String encabezado = titulo + " · " + html(m.getDescripcion()) + "\n";
+        String completo = encabezado + datosTicket(m, true);
+        return completo.length() <= largoMaximoTicket ? completo : encabezado + datosTicket(m, false);
+    }
+
+    private static boolean esTicket(Movimiento m) {
+        return m.getOrigen() == Origen.TICKET;
     }
 
     /** Si el gasto vino de un audio, lo que se escuchó, arriba de todo: así se ve si Whisper entendió mal. */
@@ -130,6 +164,73 @@ public class Tarjetas {
         lineas.add("💳 " + html(FormatoMensajes.medio(m.getMedioPago(), m.getCuenta())));
         lineas.add("📅 " + formato.fecha(m.getFechaHora()));
         return String.join("\n", lineas);
+    }
+
+    /**
+     * Fecha, productos (hasta {@value #PRODUCTOS_VISIBLES} y "…y N más"), total, medio de pago y categoría.
+     * Los productos van en monoespaciado, así los precios quedan alineados.
+     */
+    private String datosTicket(Movimiento m, boolean conProductos) {
+        List<String> lineas = new ArrayList<>();
+        lineas.add("📅 " + formato.fecha(m.getFechaHora()));
+        List<MovimientoItem> items = m.getItems();
+        if (!items.isEmpty() && conProductos) {
+            StringBuilder bloque = new StringBuilder("🛒 <b>Productos</b>\n<pre>");
+            for (int i = 0; i < Math.min(PRODUCTOS_VISIBLES, items.size()); i++) {
+                bloque.append(html(renglon(items.get(i)))).append('\n');
+            }
+            if (items.size() > PRODUCTOS_VISIBLES) {
+                bloque.append("…y ").append(items.size() - PRODUCTOS_VISIBLES).append(" más\n");
+            }
+            bloque.setLength(bloque.length() - 1);
+            lineas.add(bloque.append("</pre>").toString());
+        } else if (!items.isEmpty()) {
+            long productos = items.stream().filter(i -> !i.isDescuento()).count();
+            long descuentos = items.size() - productos;
+            lineas.add("🛒 " + productos + (productos == 1 ? " producto" : " productos")
+                    + (descuentos == 0 ? "" : " y " + descuentos + (descuentos == 1 ? " descuento" : " descuentos")));
+        }
+        lineas.add("💰 Total <b>" + formato.pesos(m.getMonto()) + "</b>");
+        lineas.add("💳 " + html(FormatoMensajes.medio(m.getMedioPago(), m.getCuenta())));
+        Categoria c = m.getCategoria();
+        lineas.add(c == null ? "🏷 <b>¿Qué categoría?</b>"
+                : (c.getEmoji() == null ? "🏷" : c.getEmoji()) + " " + html(c.getNombre()));
+        return String.join("\n", lineas);
+    }
+
+    /** "Leche 1 L ×2 ....... $2.900", con el precio contra el margen derecho. */
+    String renglon(MovimientoItem item) {
+        BigDecimal subtotal = item.getSubtotal();
+        String precio = subtotal.signum() < 0 ? "-" + formato.pesos(subtotal.negate()) : formato.pesos(subtotal);
+        String nombre = item.getDescripcion() + cantidad(item.getCantidad());
+        int lugar = ANCHO_RENGLON - precio.length() - 3; // dos espacios y al menos un punto
+        if (nombre.length() > lugar) {
+            nombre = nombre.substring(0, Math.max(1, lugar - 1)).strip() + "…";
+        }
+        int puntos = Math.max(1, ANCHO_RENGLON - nombre.length() - precio.length() - 2);
+        return nombre + " " + ".".repeat(puntos) + " " + precio;
+    }
+
+    /** " ×2", " ×0,532"; nada si es una unidad o no figura. */
+    private static String cantidad(BigDecimal cantidad) {
+        if (cantidad == null || cantidad.compareTo(BigDecimal.ONE) == 0) {
+            return "";
+        }
+        return " ×" + cantidad.stripTrailingZeros().toPlainString().replace('.', ',');
+    }
+
+    /** Solo mientras está pendiente: después de guardar ya no hay nada que revisar. */
+    private String avisoDeSuma(Movimiento m) {
+        if (m.getItems().isEmpty() || m.getMonto() == null) {
+            return "";
+        }
+        BigDecimal suma = m.getItems().stream().map(MovimientoItem::getSubtotal).reduce(BigDecimal.ZERO,
+                BigDecimal::add);
+        if (ValidadorTicket.coinciden(suma, m.getMonto())) {
+            return "";
+        }
+        return "\n\n⚠️ Los productos suman <b>" + formato.pesos(suma) + "</b> y el total dice <b>"
+                + formato.pesos(m.getMonto()) + "</b>. Revisalo antes de guardar.";
     }
 
     private String datosIngreso(Movimiento m) {

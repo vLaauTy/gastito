@@ -13,6 +13,8 @@ import static ar.gastito.bot.DatosDePrueba.conId;
 import static ar.gastito.bot.DatosDePrueba.confirmado;
 import static ar.gastito.bot.DatosDePrueba.deAudio;
 import static ar.gastito.bot.DatosDePrueba.dudoso;
+import static ar.gastito.bot.DatosDePrueba.PRODUCTOS;
+import static ar.gastito.bot.DatosDePrueba.ticket;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -35,6 +37,8 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.util.unit.DataSize;
 
 import ar.gastito.audio.TranscripcionNoDisponibleException;
 import ar.gastito.audio.TranscripcionService;
@@ -59,6 +63,9 @@ import ar.gastito.movimiento.MovimientoNoPendienteException;
 import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Origen;
 import ar.gastito.movimiento.TotalPorCategoria;
+import ar.gastito.ticket.ImagenInvalidaException;
+import ar.gastito.ticket.TicketService;
+import ar.gastito.ticket.ValidadorTicket;
 
 class ProcesadorMensajesTest {
 
@@ -72,6 +79,7 @@ class ProcesadorMensajesTest {
     private final RegistroUsoIa usoIa = mock(RegistroUsoIa.class);
     private final TranscripcionService transcripciones = mock(TranscripcionService.class);
     private final IngresoService ingresos = mock(IngresoService.class);
+    private final TicketService tickets = mock(TicketService.class);
     private ProcesadorMensajes procesador;
 
     @BeforeEach
@@ -83,9 +91,10 @@ class ProcesadorMensajesTest {
         ComandosIngreso comandosIngreso = new ComandosIngreso(new ParserIngreso(), catalogos, ingresos,
                 new ResolvedorFechas(), tarjetas, RELOJ);
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
-                tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, properties,
+                tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, properties,
                 new DashboardProperties("http://localhost:8090", null), RELOJ);
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));
+        when(tickets.tamanioMaximo()).thenReturn(DataSize.ofMegabytes(10));
     }
 
     /** El usuario manda un gasto y el interpretador devuelve lo que se guarda como pendiente. */
@@ -586,6 +595,169 @@ class ProcesadorMensajesTest {
 
         verify(movimientos).cambiarMonto(ID, new BigDecimal("5000"));
         verify(movimientos, never()).cambiarMonto(ID, new BigDecimal("4000"));
+    }
+
+    // --- Fotos de tickets ---
+
+    static final byte[] FOTO = {(byte) 0xFF, (byte) 0xD8, 1, 2, 3};
+
+    private static FotoRecibida foto(String texto) {
+        return new FotoRecibida(5L, texto, () -> FOTO);
+    }
+
+    private Accion.Enviar mandarFoto(String texto) {
+        List<Accion> acciones = procesador.procesarFoto(CHAT, MENSAJE_USUARIO, foto(texto));
+        assertThat(acciones).hasSize(1).first().isInstanceOf(Accion.Enviar.class);
+        return (Accion.Enviar) acciones.get(0);
+    }
+
+    @Test
+    void unaFotoTerminaEnLaMismaTarjetaDeConfirmacionQueUnTexto() {
+        Movimiento leido = ticket("8050", SUPER, PRODUCTOS);
+        when(tickets.leer(FOTO, "con débito")).thenReturn(new TicketService.Leido(leido));
+
+        Accion.Enviar tarjeta = mandarFoto("con débito");
+
+        assertThat(tarjeta.html())
+                .startsWith("🧾 <b>Ticket</b> · Supermercado Día\n📅 sáb 10/10 17:20\n🛒 <b>Productos</b>\n<pre>")
+                .contains("Leche 1 L ×2 ")
+                .contains("💰 Total <b>$8.050</b>\n💳 Débito\n🛒 Supermercado")
+                .doesNotContain("⚠️");
+        assertThat(tarjeta.teclado().botones()).extracting(Teclado.Boton::datos)
+                .containsExactly("g:15", "e:15", "c:15");
+        assertThat(tarjeta.tarjetaDeMovimiento()).isEqualTo(ID);
+
+        // Guardar funciona igual que con un texto.
+        Movimiento guardado = ticket("8050", SUPER, PRODUCTOS);
+        guardado.confirmar();
+        when(movimientos.confirmar(ID))
+                .thenReturn(new MovimientoService.Confirmacion(guardado, new BigDecimal("20000")));
+        procesador.tarjetaEnviada(CHAT, ID, TARJETA);
+        Accion.Editar editada = edicion(tocar("g:15"));
+        assertThat(editada.html()).startsWith("✅ <b>Guardado</b> · Supermercado Día")
+                .endsWith("llevás <b>$20.000</b> en 🛒 Supermercado.");
+    }
+
+    @Test
+    void unTicketSinCategoriaClaraLaPreguntaConBotones() {
+        when(tickets.leer(FOTO, null))
+                .thenReturn(new TicketService.Leido(ticket("8050", null, PRODUCTOS, SUPER, KIOSCO)));
+
+        Accion.Enviar tarjeta = mandarFoto(null);
+
+        assertThat(tarjeta.html()).contains("🏷 <b>¿Qué categoría?</b>");
+        assertThat(tarjeta.teclado().botones()).extracting(Teclado.Boton::datos)
+                .containsExactly("k:15:2", "k:15:1", "o:15", "e:15", "c:15");
+    }
+
+    @Test
+    void siLosProductosNoSumanElTotalLaTarjetaAvisa() {
+        when(tickets.leer(FOTO, null)).thenReturn(new TicketService.Leido(ticket("9000", SUPER, PRODUCTOS)));
+
+        assertThat(mandarFoto(null).html()).endsWith(
+                "⚠️ Los productos suman <b>$8.050</b> y el total dice <b>$9.000</b>. Revisalo antes de guardar.");
+    }
+
+    @Test
+    void unaFotoQueNoEsTicketLoDice() {
+        when(tickets.leer(FOTO, null)).thenReturn(new TicketService.NoEsTicket());
+
+        assertThat(mandarFoto(null).html()).startsWith("Esa foto no parece un ticket 🤔");
+        verify(movimientos, never()).crearPendiente(any(), any(), any());
+    }
+
+    @Test
+    void unaFotoBorrosaPideOtraConBuenaLuz() {
+        when(tickets.leer(FOTO, null)).thenReturn(new TicketService.Ilegible(ValidadorTicket.Motivo.BORROSA));
+
+        assertThat(mandarFoto(null).html()).contains("la foto salió borrosa").contains("sin reflejos");
+    }
+
+    @Test
+    void unTicketSinTotalNoGuardaYPideOtraFoto() {
+        when(tickets.leer(FOTO, null)).thenReturn(new TicketService.Ilegible(ValidadorTicket.Motivo.SIN_TOTAL));
+
+        assertThat(mandarFoto(null).html()).startsWith("No encontré el total del ticket 🤔 No guardé nada.")
+                .contains("más clara").contains("entero").contains("sin reflejos");
+    }
+
+    @Test
+    void unaImagenDeMasDeDiezMegasNoSeDescarga() {
+        when(tickets.superaElTamanio(20_000_000L)).thenReturn(true);
+        FotoRecibida grande = new FotoRecibida(20_000_000L, null, () -> {
+            throw new AssertionError("no se tenía que descargar");
+        });
+
+        Accion.Enviar r = (Accion.Enviar) procesador.procesarFoto(CHAT, MENSAJE_USUARIO, grande).get(0);
+
+        assertThat(r.html()).startsWith("La imagen pesa más de 10 MB 🙏");
+        verify(tickets, never()).leer(any(), any());
+    }
+
+    @Test
+    void unaImagenQueNoSePuedeAbrirPideMandarlaComoFoto() {
+        when(tickets.leer(FOTO, null)).thenThrow(new ImagenInvalidaException(
+                ImagenInvalidaException.Motivo.FORMATO_NO_SOPORTADO, "heic"));
+
+        assertThat(mandarFoto(null).html()).contains("Mandala como foto (no como archivo)");
+    }
+
+    @Test
+    void sinIaElTicketNoSeLeeYSugiereEscribirlo() {
+        when(tickets.leer(FOTO, null)).thenThrow(new IaNoDisponibleException("No pude consultar a la IA", null));
+
+        assertThat(mandarFoto(null).html()).startsWith("No pude leer el ticket: No pude consultar a la IA.")
+                .contains("super 8050");
+    }
+
+    @Test
+    void siNoSePuedeDescargarLaFotoLoDice() {
+        FotoRecibida rota = new FotoRecibida(5L, null, () -> {
+            throw new java.io.IOException("timeout");
+        });
+
+        Accion.Enviar r = (Accion.Enviar) procesador.procesarFoto(CHAT, MENSAJE_USUARIO, rota).get(0);
+
+        assertThat(r.html()).startsWith("No pude descargar la foto de Telegram");
+    }
+
+    @Test
+    void cancelarUnTicketBorraSuFoto() {
+        Movimiento cancelado = ticket("8050", SUPER, PRODUCTOS);
+        cancelado.cancelar();
+        when(movimientos.cancelar(ID)).thenReturn(cancelado);
+
+        List<Accion> acciones = tocar("c:15");
+
+        assertThat(edicion(acciones).html()).startsWith("❌ <b>Cancelado</b> · Supermercado Día");
+        verify(tickets).borrarFoto(cancelado);
+    }
+
+    @Test
+    void cancelarUnGastoDeTextoNoTocaFotos() {
+        Movimiento cancelado = conCategoria("1500", KIOSCO);
+        cancelado.cancelar();
+        when(movimientos.cancelar(ID)).thenReturn(cancelado);
+
+        tocar("c:15");
+
+        verify(tickets, never()).borrarFoto(any());
+    }
+
+    @Test
+    void unaFotoMientrasSeEditaUnCampoVuelveLaTarjetaAtrasYLeeElTicket() {
+        Movimiento enEdicion = conCategoria("1500", KIOSCO);
+        when(movimientos.buscar(ID)).thenReturn(enEdicion);
+        tocar("em:15"); // la tarjeta espera el monto
+        Movimiento leido = ticket("8050", SUPER, PRODUCTOS);
+        ReflectionTestUtils.setField(leido, "id", 16L);
+        when(tickets.leer(FOTO, null)).thenReturn(new TicketService.Leido(leido));
+
+        List<Accion> acciones = procesador.procesarFoto(CHAT, MENSAJE_USUARIO, foto(null));
+
+        assertThat(acciones).hasSize(2);
+        assertThat(edicion(acciones).html()).startsWith("🧾 <b>Nuevo gasto</b>").doesNotContain("Escribí");
+        assertThat(((Accion.Enviar) acciones.get(1)).html()).startsWith("🧾 <b>Ticket</b>");
     }
 
     // --- Ingresos ---
