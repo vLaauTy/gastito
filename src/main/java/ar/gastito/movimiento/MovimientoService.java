@@ -52,6 +52,24 @@ public class MovimientoService {
         return movimientos.save(Movimiento.pendiente(interpretado, origen, textoOriginal, LocalDateTime.now(clock)));
     }
 
+    /** Un gasto leído de un ticket, con sus productos. */
+    @Transactional
+    public Movimiento crearPendienteDeTicket(MovimientoInterpretado interpretado, String comercio,
+            List<ItemTicket> items, String textoOriginal) {
+        return movimientos.save(Movimiento.deTicket(interpretado, comercio, items, textoOriginal,
+                LocalDateTime.now(clock)));
+    }
+
+    @Transactional
+    public void asociarFotoTicket(Long id, String ruta) {
+        buscar(id).asociarFotoTicket(ruta);
+    }
+
+    @Transactional
+    public void quitarFotoTicket(Long id) {
+        buscar(id).quitarFotoTicket();
+    }
+
     /**
      * Confirma el movimiento y devuelve un total del mes del movimiento: el de su categoría si es un gasto, o el
      * de todos los ingresos si es un ingreso.

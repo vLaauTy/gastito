@@ -17,7 +17,7 @@ import org.springframework.data.repository.query.Param;
  */
 public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
 
-    @EntityGraph(attributePaths = {"categoria", "medioPago", "cuenta", "tarjeta", "candidatas"})
+    @EntityGraph(attributePaths = {"categoria", "medioPago", "cuenta", "tarjeta", "candidatas", "items"})
     Optional<Movimiento> findConDetalleById(Long id);
 
     /** Últimos gastos confirmados, del más nuevo al más viejo (ejemplos para la IA). */

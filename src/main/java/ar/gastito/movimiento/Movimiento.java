@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -17,6 +18,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 
@@ -92,6 +95,17 @@ public class Movimiento {
     @OrderColumn(name = "orden")
     private List<Categoria> candidatas = new ArrayList<>();
 
+    /** De un ticket: el comercio tal como lo leyó la IA (la descripción arranca igual, pero se puede editar). */
+    private String comercio;
+
+    /** De un ticket: la foto, relativa a la carpeta de datos (tickets/AAAA/MM/<id>.jpg). */
+    private String fotoTicket;
+
+    /** De un ticket: los productos y descuentos, en el orden impreso. */
+    @OneToMany(mappedBy = "movimiento", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("orden")
+    private List<MovimientoItem> items = new ArrayList<>();
+
     /** El largo de la columna texto_original: un mensaje o una transcripción más larga se recorta. */
     static final int LARGO_MAXIMO_TEXTO_ORIGINAL = 1000;
 
@@ -117,6 +131,22 @@ public class Movimiento {
         m.creadoEn = ahora;
         if (m.categoria == null) {
             m.candidatas.addAll(interpretado.candidatas());
+        }
+        return m;
+    }
+
+    /**
+     * Un gasto leído de la foto de un ticket, con sus productos. La foto se asocia después, cuando el movimiento
+     * ya tiene id.
+     *
+     * @param textoOriginal el texto que acompañaba la foto, o null
+     */
+    public static Movimiento deTicket(MovimientoInterpretado interpretado, String comercio, List<ItemTicket> items,
+            String textoOriginal, LocalDateTime ahora) {
+        Movimiento m = pendiente(interpretado, Origen.TICKET, textoOriginal, ahora);
+        m.comercio = comercio;
+        for (ItemTicket item : items) {
+            m.items.add(new MovimientoItem(m, m.items.size(), item));
         }
         return m;
     }
@@ -225,6 +255,19 @@ public class Movimiento {
         return estado == EstadoMovimiento.PENDIENTE;
     }
 
+    /** @param ruta relativa a la carpeta de datos */
+    public void asociarFotoTicket(String ruta) {
+        if (origen != Origen.TICKET) {
+            throw new IllegalStateException("El movimiento " + id + " no viene de un ticket");
+        }
+        this.fotoTicket = ruta;
+    }
+
+    /** La foto se borró del disco (por ejemplo, porque se canceló el ticket). */
+    public void quitarFotoTicket() {
+        this.fotoTicket = null;
+    }
+
     public Long getId() {
         return id;
     }
@@ -299,5 +342,17 @@ public class Movimiento {
 
     public List<Categoria> getCandidatas() {
         return Collections.unmodifiableList(candidatas);
+    }
+
+    public String getComercio() {
+        return comercio;
+    }
+
+    public String getFotoTicket() {
+        return fotoTicket;
+    }
+
+    public List<MovimientoItem> getItems() {
+        return Collections.unmodifiableList(items);
     }
 }

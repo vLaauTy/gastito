@@ -146,6 +146,42 @@ class MigracionTest {
                 .isEqualTo("#B4531F");
     }
 
+    // --- V4: tickets ---
+
+    @Test
+    void soloUnTicketTieneFoto() {
+        jdbc.update("""
+                INSERT INTO movimiento (fecha_hora, monto, tipo, origen, estado, creado_en, comercio, foto_ticket)
+                VALUES (CURRENT_TIMESTAMP, 8050, 'GASTO', 'TICKET', 'PENDIENTE', CURRENT_TIMESTAMP, 'DIA',
+                        'tickets/2026/10/1.jpg')""");
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO movimiento (fecha_hora, monto, tipo, origen, estado, creado_en, foto_ticket)
+                VALUES (CURRENT_TIMESTAMP, 100, 'GASTO', 'TEXTO', 'PENDIENTE', CURRENT_TIMESTAMP, 'tickets/x.jpg')"""))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void losProductosSeBorranConElMovimientoYNoRepitenOrden() {
+        jdbc.update("""
+                INSERT INTO movimiento (id, fecha_hora, monto, tipo, origen, estado, creado_en)
+                VALUES (2000, CURRENT_TIMESTAMP, 8050, 'GASTO', 'TICKET', 'PENDIENTE', CURRENT_TIMESTAMP)""");
+        jdbc.update("""
+                INSERT INTO movimiento_item (movimiento_id, orden, descripcion, cantidad, precio_unitario, subtotal)
+                VALUES (2000, 0, 'Leche 1 L', 2, 1450, 2900)""");
+        jdbc.update("""
+                INSERT INTO movimiento_item (movimiento_id, orden, descripcion, subtotal)
+                VALUES (2000, 1, 'Descuento 2x1', -250)""");
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO movimiento_item (movimiento_id, orden, descripcion, subtotal)
+                VALUES (2000, 1, 'Otro', 100)""")).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO movimiento_item (movimiento_id, orden, descripcion, cantidad, subtotal)
+                VALUES (2000, 2, 'Cero', 0, 100)""")).isInstanceOf(DataIntegrityViolationException.class);
+
+        jdbc.update("DELETE FROM movimiento WHERE id = 2000");
+        assertThat(contar("movimiento_item")).isZero();
+    }
+
     private int contar(String tabla) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM " + tabla, Integer.class);
     }

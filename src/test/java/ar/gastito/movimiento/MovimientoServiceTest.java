@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -49,6 +50,9 @@ class MovimientoServiceTest {
 
     @Autowired
     MedioPagoRepository medios;
+
+    @Autowired
+    TestEntityManager entityManager;
 
     @Test
     void alConfirmarDevuelveElTotalDelMesEnLaCategoria() {
@@ -211,6 +215,41 @@ class MovimientoServiceTest {
         Movimiento m = service.crearPendiente(interpretado, Origen.AUDIO, "a".repeat(1500));
 
         assertThat(service.buscar(m.getId()).getTextoOriginal()).hasSize(1000);
+    }
+
+    @Test
+    void unTicketGuardaSusProductosEnOrdenConElDescuentoNegativo() {
+        MovimientoInterpretado interpretado = MovimientoInterpretado.conCategoria(new BigDecimal("8050.00"),
+                "Supermercado Día", categoria("Supermercado"), null, null, null, AHORA);
+        List<ItemTicket> items = List.of(
+                new ItemTicket("Leche 1 L", new BigDecimal("2"), new BigDecimal("1450.00"), new BigDecimal("2900.00")),
+                new ItemTicket("Yerba 500 g", null, null, new BigDecimal("3900.00")),
+                new ItemTicket("Galletitas", null, null, new BigDecimal("1500.00")),
+                new ItemTicket("Descuento 2x1", null, null, new BigDecimal("-250.00")));
+
+        Movimiento m = service.crearPendienteDeTicket(interpretado, "DIA TIENDA 5601", items, "con débito");
+        service.asociarFotoTicket(m.getId(), "tickets/2026/10/" + m.getId() + ".jpg");
+        entityManager.flush();
+        entityManager.clear();
+
+        Movimiento leido = service.buscar(m.getId());
+        assertThat(leido.getOrigen()).isEqualTo(Origen.TICKET);
+        assertThat(leido.getComercio()).isEqualTo("DIA TIENDA 5601");
+        assertThat(leido.getFotoTicket()).isEqualTo("tickets/2026/10/" + m.getId() + ".jpg");
+        assertThat(leido.getTextoOriginal()).isEqualTo("con débito");
+        assertThat(leido.getItems()).extracting(MovimientoItem::getDescripcion)
+                .containsExactly("Leche 1 L", "Yerba 500 g", "Galletitas", "Descuento 2x1");
+        assertThat(leido.getItems().get(0).getCantidad()).isEqualByComparingTo("2");
+        assertThat(leido.getItems().get(3).isDescuento()).isTrue();
+        assertThat(leido.getItems().get(3).getSubtotal()).isEqualByComparingTo("-250");
+    }
+
+    @Test
+    void soloUnTicketPuedeTenerFoto() {
+        Movimiento texto = pendiente(categoria("Kiosco"), "1500", AHORA);
+
+        assertThatThrownBy(() -> service.asociarFotoTicket(texto.getId(), "tickets/x.jpg"))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     private Movimiento pendiente(Categoria categoria, String monto, LocalDateTime fecha) {
