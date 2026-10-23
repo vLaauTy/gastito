@@ -1,8 +1,8 @@
 # Gastito
 
 Bot de Telegram personal para registrar gastos. Le escribís algo como `kiosco 1500` o
-`3700 en pan de pancho y papas, efectivo` (o se lo decís en un audio), te muestra lo que entendió y lo guardás
-con un botón.
+`3700 en pan de pancho y papas, efectivo` (o se lo decís en un audio, o le mandás la foto del ticket), te
+muestra lo que entendió y lo guardás con un botón.
 
 Cómo se interpreta un mensaje, de lo más barato a lo más caro:
 
@@ -12,7 +12,9 @@ Cómo se interpreta un mensaje, de lo más barato a lo más caro:
 3. **Claude Haiku:** devuelve hasta 3 categorías posibles y qué tan seguro está. Si no está seguro, el bot te
    pregunta con botones.
 
-Los audios se transcriben con un servidor de Whisper local y el texto sigue el mismo camino.
+Los audios se transcriben con un servidor de Whisper local y el texto sigue el mismo camino. Las fotos de
+tickets las lee Haiku (visión): comercio, fecha, productos y total; Java controla que los productos sumen el
+total antes de mostrar la tarjeta.
 
 Para mirar y analizar hay un **dashboard web** servido por la misma aplicación: gasto del mes, comparación con el
 mes anterior, gasto por día, por categoría y por billetera, movimientos con buscador, e ingresos (sueldo,
@@ -27,6 +29,7 @@ Todos los totales se calculan con SQL o Java sobre la base; ni la IA ni el naveg
 - Una API key de Anthropic.
 - Para los audios: un servidor de Whisper con API compatible con la de OpenAI (ver
   [La VM: Whisper y PostgreSQL](#la-vm-whisper-y-postgresql)). Sin él, el bot funciona igual con texto.
+- Para las fotos de tickets no hace falta nada más: usa el mismo modelo, Claude Haiku, que acepta imágenes.
 
 No hace falta Docker en Windows: por defecto la base es H2 en un archivo dentro del proyecto.
 
@@ -59,6 +62,10 @@ Otros ajustes, en `src/main/resources/application.yml`:
 - `gastito.audio.timeout`: cuánto esperar la transcripción (por defecto `60s`).
 - `gastito.audio.duracion-maxima`: audios más largos no se procesan (por defecto `60s`).
 - `gastito.audio.idioma` y `gastito.audio.modelo`: `es` y `whisper-1`.
+- `gastito.ticket.lado-maximo`: la foto se achica a este lado más largo antes de mandarla (por defecto `1568`).
+- `gastito.ticket.tamanio-maximo`: imágenes más pesadas no se procesan (por defecto `10MB`).
+- `gastito.ticket.max-tokens`: tope de la respuesta de la IA al leer un ticket (por defecto `4096`).
+- `gastito.ticket.carpeta-datos`: las fotos quedan en `<carpeta>/tickets/AAAA/MM/<id>.jpg` (por defecto `data`).
 - `gastito.zona-horaria`: por defecto `America/Argentina/Buenos_Aires`.
 
 Las instrucciones que se le mandan a la IA y a Whisper están en `src/main/resources/prompts/` y se pueden
@@ -137,8 +144,49 @@ Así, si Whisper entendió mal, lo ves antes de guardar. También acepta archivo
 - Whisper corre local y no cuesta nada: no se registra en `uso_ia`. La llamada a Haiku que interpreta el texto
   transcripto, si hace falta, sí se registra, con propósito `AUDIO`.
 
+### Fotos de tickets
+
+Sacale una foto al ticket y mandásela al bot (como foto, o como archivo de imagen). Mientras lo lee muestra
+"escribiendo…", y llega la tarjeta de siempre con el detalle:
+
+```
+🧾 Ticket · Supermercado Día
+📅 sáb 18/10 17:20
+🛒 Productos
+Leche 1 L ×2 .......... $2.900
+Yerba 500 g ........... $3.900
+Galletitas ............ $1.250
+💰 Total $8.050
+💳 Débito
+🛒 Supermercado
+```
+
+Con **✅ Guardar**, **✏️ Editar** y **❌ Cancelar**, igual que un gasto escrito. Se editan los mismos campos; la
+descripción arranca con el nombre del comercio.
+
+- El monto es el **total impreso**. Gastito suma los productos, resta los descuentos y, si la diferencia con el
+  total pasa los $10, la tarjeta avisa: *⚠️ Los productos suman $X y el total dice $Y. Revisalo antes de
+  guardar.*
+- Si no se lee el total, no se guarda nada y te pide una foto más clara, con el ticket entero y sin reflejos.
+- La fecha es la del ticket. Una fecha futura o de hace más de un año se toma como mal leída y queda la de hoy.
+- Si escribís algo con la foto, se usa como pista: *"efectivo"*, *"con la de Galicia"*.
+- Muestra hasta 8 productos y "…y N más". El detalle completo se ve en el dashboard.
+- Antes de mandarla, la foto se endereza, se achica a 1568 px de lado y se pasa a JPEG: se lee igual y cuesta
+  menos tokens. Más de 10 MB no se procesa; una imagen HEIC o WebP mandada como archivo, tampoco (mandala como
+  foto).
+- Un ticket por foto. Si es muy largo y sale borroso, sacalo en dos partes.
+- La lectura queda en `uso_ia` con propósito `TICKET`.
+
+**Privacidad.** Los tickets traen los últimos números de la tarjeta, el CUIT o el nombre del cajero. En la base
+se guarda solo el comercio, la fecha, los productos (tabla `movimiento_item`), el total y el medio de pago: la
+respuesta de la IA no tiene campos para lo demás, y además Java borra de los textos cualquier número de 6 dígitos
+o más y las tarjetas enmascaradas (`**** 1234`). La foto (achicada y sin los metadatos de la original) queda en
+`data/tickets/AAAA/MM/<id>.jpg`, que está en el `.gitignore`; si cancelás el ticket, se borra. Para leerla, la
+foto viaja a la API de Anthropic.
+
 Lo que guardás le enseña al bot: la próxima vez que cargues algo parecido usa la misma categoría, y tus últimas
-20 confirmaciones van como ejemplos en el prompt de la IA.
+20 confirmaciones van como ejemplos en el prompt de la IA. Con los tickets, la categoría que le diste a un
+comercio manda sobre la que propone la IA.
 
 ### Ingresos
 
@@ -188,7 +236,8 @@ http://localhost:8090
   promedio diario. Gasto por día con la línea del promedio y el día más alto destacado, por categoría, por
   billetera y los últimos movimientos.
 - **Movimientos:** todos los gastos del mes, con buscador (sin importar tildes ni mayúsculas), filtros por
-  categoría, medio de pago y origen, y páginas.
+  categoría, medio de pago y origen (texto, audio o ticket), y páginas. Los gastos que vienen de un ticket tienen
+  el botón **🧾 Productos**, que despliega el detalle, la suma contra el total y el link **Ver foto**.
 - **Ingresos:** sueldo, aguinaldo y extras del mes, el detalle con **Borrar**, los últimos 6 meses y el
   formulario **Cargar ingreso**.
 - **Exportar CSV:** los gastos e ingresos del mes para Excel en castellano (separador `;`, coma decimal).
@@ -229,6 +278,8 @@ decimales, y acepta `?mes=2026-10` (por defecto, el mes actual):
 | `GET /api/gastos/por-categoria`   | Monto, cantidad y emoji por categoría, de mayor a menor         |
 | `GET /api/gastos/por-billetera`   | Por tarjeta, cuenta, efectivo y sin especificar, con color      |
 | `GET /api/movimientos`            | Paginado; filtros `categoria`, `medioPago`, `origen`, `q`       |
+| `GET /api/movimientos/{id}/items` | Productos y descuentos de un ticket, su suma y si coincide con el total |
+| `GET /api/movimientos/{id}/foto`  | La foto del ticket (JPEG)                                       |
 | `GET /api/movimientos.csv`        | Gastos e ingresos del mes en CSV                                |
 | `GET /api/costos-ia`              | Costo en USD, llamadas y desglose por propósito                 |
 | `GET /api/catalogo`               | Categorías, medios de pago, cuentas y tipos de ingreso          |
@@ -310,8 +361,9 @@ Test-NetConnection 127.0.0.1 -Port 5432
 ./mvnw test
 ```
 
-Usan H2 en memoria y no se conectan a Telegram, a Anthropic ni a Whisper: el servidor de Whisper se simula con
-WireMock, así que no hace falta Docker.
+Usan H2 en memoria y no se conectan a Telegram, a Anthropic ni a Whisper: Whisper y la API de Anthropic se
+simulan con WireMock (incluida una respuesta con el JSON mal formado), así que no hace falta Docker. Las
+imágenes de prueba de los tickets se generan en el test.
 
 Hay además un test que llama a la API real de Anthropic con la key del `.env`. Sirve para revisar el prompt
 después de cambiarlo y cuesta fracciones de centavo. No corre con `./mvnw test`; se corre a mano:
@@ -330,6 +382,7 @@ ar.gastito
 ├── interpretacion   Parser simple, historial, validación de la respuesta de la IA, fechas relativas
 ├── ia               Cliente de Claude, prompts, registro de tokens y costo (uso_ia)
 ├── audio            Transcripción de audios con el servidor de Whisper
+├── ticket           Fotos de tickets: achicar la imagen, leerla con Haiku, validar y guardar la foto
 ├── catalogo         Categorías, medios de pago, cuentas, tarjeta de crédito y alias de comercios
 ├── movimiento       Gastos e ingresos, su ciclo pendiente → confirmado y los totales
 ├── dashboard        API REST del dashboard, sus cálculos y el acceso (127.0.0.1 o token)

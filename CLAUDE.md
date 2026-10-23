@@ -63,10 +63,11 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
 
 ## Estructura y convenciones
 
-- Paquete base: `ar.gastito`. Organización por funcionalidad (`bot`, `interpretacion`, `ia`, `audio`, `catalogo`, `movimiento`, `dashboard`, `config`), no por capa técnica. Las entidades de referencia (categorías, medios de pago, cuentas, tarjeta, alias de comercios) van en `catalogo`; `movimiento` es solo el movimiento.
+- Paquete base: `ar.gastito`. Organización por funcionalidad (`bot`, `interpretacion`, `ia`, `audio`, `ticket`, `catalogo`, `movimiento`, `dashboard`, `config`), no por capa técnica. Las entidades de referencia (categorías, medios de pago, cuentas, tarjeta, alias de comercios) van en `catalogo`; `movimiento` es solo el movimiento.
 - Compilar y testear con el Maven Wrapper (`./mvnw`, o `mvnw.cmd` en Windows).
 - Los pedidos de cada etapa van en `docs/pedidos/`.
 - **Dashboard web** (`ar.gastito.dashboard` + `src/main/resources/static/`): API REST bajo `/api` y una página en HTML, CSS y JS sin framework, siguiendo `docs/prototipo-dashboard.html`. El JavaScript no calcula nada: los totales, promedios y porcentajes llegan hechos de la API (la misma API va a servir para la Mini App). Plata en el JSON como número con 2 decimales; el formato argentino lo hace el frontend. Chart.js por WebJar, nunca desde un CDN.
+- **Tickets** (`ar.gastito.ticket`): la foto se achica a 1568 px y se pasa a JPEG antes de mandarla a Haiku. El monto es el total impreso; la suma de productos menos descuentos se controla en Java (`ValidadorTicket`, tolerancia $10) y sin total no se guarda nada. Los productos van en `movimiento_item` (descuentos con subtotal negativo) y la foto en `data/tickets/AAAA/MM/<id>.jpg`, que se borra si el ticket se cancela. Nunca guardar números de tarjeta, CUIT ni cajero: la respuesta de la IA no tiene campos para eso y Java borra los números largos.
 - Las billeteras del dashboard salen de los datos (la tarjeta o la cuenta del movimiento, o `medio_pago.es_efectivo`), nunca de nombres fijos en el código.
 - Nombres del dominio en español (`Movimiento`, `Categoria`, `MedioPago`), código y comentarios técnicos pueden ir en inglés o español pero consistentes.
 - Tests con JUnit 5. Todo parser o regla de negocio nueva lleva tests.
@@ -76,9 +77,9 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
 
 1. Etapa 1 (hecha): bot funcionando con mensajes de texto, interpretación con Haiku, confirmación y guardado.
 2. Etapa 2 (hecha): audios (Whisper local + mismo flujo que texto).
-3. **Etapa 3 (actual):** fotos de tickets (visión de Haiku, detalle por producto).
+3. Etapa 3 (hecha): fotos de tickets (visión de Haiku, detalle por producto). Ver `docs/pedidos/etapa-3.md`.
    - Hecho fuera de orden: el dashboard web (en `localhost`, base de la etapa 5) y la carga de ingresos (sueldo, aguinaldo y extras, de la etapa 6), por bot y por dashboard. Ver `docs/pedidos/dashboard.md`.
-4. Etapa 4: resúmenes semanales y consultas en lenguaje natural.
+4. **Etapa 4 (actual):** resúmenes semanales y consultas en lenguaje natural.
 5. Etapa 5: panel web dentro de Telegram (Mini App).
 6. Etapa 6: compras repetidas, juntadas, ingresos, gastos fijos.
 7. Etapa 7: resumen de la tarjeta (PDF con texto, se parsea con PDFBox sin IA) y avisos automáticos de Galicia y Mercado Pago.
