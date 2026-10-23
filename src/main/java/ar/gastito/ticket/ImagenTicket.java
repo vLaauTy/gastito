@@ -18,6 +18,7 @@ import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageInputStream;
 import javax.imageio.stream.ImageOutputStream;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import ar.gastito.config.GastitoProperties;
@@ -36,6 +37,7 @@ public class ImagenTicket {
 
     private final int ladoMaximo;
 
+    @Autowired
     public ImagenTicket(GastitoProperties properties) {
         this(properties.ticket().ladoMaximo());
     }
