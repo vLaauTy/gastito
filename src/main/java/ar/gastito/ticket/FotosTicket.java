@@ -31,7 +31,7 @@ public class FotosTicket {
         this(Path.of(properties.ticket().carpetaDatos()));
     }
 
-    FotosTicket(Path carpetaDatos) {
+    public FotosTicket(Path carpetaDatos) {
         this.datos = carpetaDatos.toAbsolutePath().normalize();
         this.tickets = datos.resolve(CARPETA);
     }

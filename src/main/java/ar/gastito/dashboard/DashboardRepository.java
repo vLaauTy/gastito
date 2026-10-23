@@ -3,6 +3,7 @@ package ar.gastito.dashboard;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,6 +26,15 @@ interface DashboardRepository extends Repository<Movimiento, Long>, JpaSpecifica
     @Override
     @EntityGraph(attributePaths = {"categoria", "medioPago", "cuenta", "tarjeta"})
     Page<Movimiento> findAll(Specification<Movimiento> filtros, Pageable pagina);
+
+    /** Un gasto confirmado con los productos de su ticket (al desplegar una fila de la tabla). */
+    @EntityGraph(attributePaths = {"items"})
+    @Query("""
+            select m from Movimiento m
+            where m.id = :id
+              and m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
+              and m.tipo = ar.gastito.movimiento.TipoMovimiento.GASTO""")
+    Optional<Movimiento> gastoConItems(@Param("id") long id);
 
     /** Gastos e ingresos confirmados, para el CSV. */
     @EntityGraph(attributePaths = {"categoria", "medioPago", "cuenta", "tarjeta"})

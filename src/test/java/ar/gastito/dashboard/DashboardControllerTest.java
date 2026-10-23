@@ -19,6 +19,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -29,6 +31,7 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -152,7 +155,7 @@ class DashboardControllerTest {
     void movimientosPasaLosFiltrosYLaPagina() throws Exception {
         when(movimientos.buscar(any(), anyInt(), anyInt())).thenReturn(new ConsultaMovimientos.Pagina(List.of(
                 new ConsultaMovimientos.Fila(7L, LocalDateTime.of(2026, 10, 21, 16, 42), "Pan de pancho y papas", 2L,
-                        "Supermercado", "🛒", "Efectivo", false, "AUDIO", pesos("3700"))), 1, 10, 11, 2));
+                        "Supermercado", "🛒", "Efectivo", false, "AUDIO", pesos("3700"), false, false)), 1, 10, 11, 2));
 
         mvc.perform(get("/api/movimientos").param("mes", "2026-10").param("categoria", "2").param("medioPago", "1")
                 .param("origen", "AUDIO").param("q", "pan").param("pagina", "1").param("tamanio", "10"))
@@ -282,5 +285,59 @@ class DashboardControllerTest {
         mvc.perform(get("/api/ingresos/por-mes")).andExpect(status().isOk());
         mvc.perform(get("/api/ingresos/por-mes").param("meses", "99")).andExpect(status().isBadRequest());
         verify(dashboard).ingresosPorMes(OCTUBRE, 6);
+    }
+
+    // --- Tickets ---
+
+    @Test
+    void losProductosDeUnTicket() throws Exception {
+        when(movimientos.items(7L)).thenReturn(new ConsultaMovimientos.DetalleTicket(7L, "Supermercado Día", List.of(
+                new ConsultaMovimientos.ItemDelTicket("Leche 1 L", new BigDecimal("2"), pesos("1450"), pesos("2900"),
+                        false),
+                new ConsultaMovimientos.ItemDelTicket("2x1", null, null, pesos("-250"), true)),
+                pesos("2650"), pesos("2650"), true, true));
+
+        mvc.perform(get("/api/movimientos/7/items"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.comercio").value("Supermercado Día"))
+                .andExpect(jsonPath("$.items[0].descripcion").value("Leche 1 L"))
+                .andExpect(jsonPath("$.items[0].cantidad").value(2))
+                .andExpect(jsonPath("$.items[0].subtotal").value(2900.00))
+                .andExpect(jsonPath("$.items[1].descuento").value(true))
+                .andExpect(jsonPath("$.items[1].subtotal").value(-250.00))
+                .andExpect(jsonPath("$.sumaItems").value(2650.00))
+                .andExpect(jsonPath("$.coincide").value(true))
+                .andExpect(jsonPath("$.foto").value(true));
+    }
+
+    @Test
+    void losProductosDeAlgoQueNoEsUnGastoGuardadoSon404() throws Exception {
+        when(movimientos.items(8L)).thenThrow(new NoSuchElementException("No existe el gasto 8"));
+
+        mvc.perform(get("/api/movimientos/8/items")).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("No existe"));
+        mvc.perform(get("/api/movimientos/abc/items")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void laFotoSeSirveComoJpeg(@TempDir Path carpeta) throws Exception {
+        byte[] jpeg = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 1, 2, 3};
+        Path foto = Files.write(carpeta.resolve("7.jpg"), jpeg);
+        when(movimientos.foto(7L)).thenReturn(Optional.of(foto));
+
+        mvc.perform(get("/api/movimientos/7/foto"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "image/jpeg"))
+                .andExpect(header().string("Content-Disposition", containsString("inline")))
+                .andExpect(header().string("Cache-Control", "private, max-age=86400"))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(content().bytes(jpeg));
+    }
+
+    @Test
+    void sinFotoEs404() throws Exception {
+        when(movimientos.foto(9L)).thenReturn(Optional.empty());
+
+        mvc.perform(get("/api/movimientos/9/foto")).andExpect(status().isNotFound());
     }
 }

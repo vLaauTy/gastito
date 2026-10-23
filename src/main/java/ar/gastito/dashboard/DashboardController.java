@@ -3,12 +3,16 @@ package ar.gastito.dashboard;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Arrays;
 import java.util.List;
+import java.util.NoSuchElementException;
 
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -91,6 +95,26 @@ public class DashboardController {
             @RequestParam(defaultValue = "20") int tamanio) {
         return movimientos.buscar(new ConsultaMovimientos.Filtros(mesOActual(mes), categoria, medioPago, origen, q),
                 pagina, tamanio);
+    }
+
+    /** Los productos y descuentos del ticket de un gasto guardado. */
+    @GetMapping("/movimientos/{id}/items")
+    public ConsultaMovimientos.DetalleTicket items(@PathVariable long id) {
+        return movimientos.items(id);
+    }
+
+    /** La foto del ticket, tal como se guardó (achicada, en JPEG). Solo la ve quien puede ver el dashboard. */
+    @GetMapping("/movimientos/{id}/foto")
+    public ResponseEntity<Resource> foto(@PathVariable long id) {
+        Path archivo = movimientos.foto(id)
+                .orElseThrow(() -> new NoSuchElementException("El gasto " + id + " no tiene foto"));
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_JPEG)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline().filename("ticket-" + id + ".jpg").build().toString())
+                .header(HttpHeaders.CACHE_CONTROL, "private, max-age=86400")
+                .header("X-Content-Type-Options", "nosniff")
+                .body(new FileSystemResource(archivo));
     }
 
     @GetMapping("/movimientos.csv")

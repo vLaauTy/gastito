@@ -3,6 +3,7 @@ package ar.gastito.dashboard;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.text.Normalizer;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -10,6 +11,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.NoSuchElementException;
+import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -26,6 +29,8 @@ import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.Origen;
 import ar.gastito.movimiento.Periodo;
 import ar.gastito.movimiento.TipoMovimiento;
+import ar.gastito.ticket.FotosTicket;
+import ar.gastito.ticket.ValidadorTicket;
 
 /** La tabla de movimientos del dashboard (gastos confirmados, con filtros y páginas) y el CSV del mes. */
 @Service
@@ -41,9 +46,53 @@ public class ConsultaMovimientos {
     private static final DateTimeFormatter HORA_CSV = DateTimeFormatter.ofPattern("HH:mm");
 
     private final DashboardRepository consultas;
+    private final FotosTicket fotos;
 
-    public ConsultaMovimientos(DashboardRepository consultas) {
+    public ConsultaMovimientos(DashboardRepository consultas, FotosTicket fotos) {
         this.consultas = consultas;
+        this.fotos = fotos;
+    }
+
+    /** Un renglón del ticket. Un descuento viene con subtotal negativo. */
+    public record ItemDelTicket(String descripcion, BigDecimal cantidad, BigDecimal precioUnitario,
+            BigDecimal subtotal, boolean descuento) {
+    }
+
+    /**
+     * Lo que se ve al desplegar una fila con ticket.
+     *
+     * @param sumaItems los productos menos los descuentos, o null si no se leyó ninguno
+     * @param coincide  si la suma y el total difieren en hasta $10 (o no hay productos con qué comparar)
+     * @param foto      si la foto está en disco y se puede pedir a /api/movimientos/{id}/foto
+     */
+    public record DetalleTicket(Long id, String comercio, List<ItemDelTicket> items, BigDecimal sumaItems,
+            BigDecimal total, boolean coincide, boolean foto) {
+    }
+
+    /** @throws NoSuchElementException si no es un gasto guardado */
+    @Transactional(readOnly = true)
+    public DetalleTicket items(long id) {
+        Movimiento m = consultas.gastoConItems(id)
+                .orElseThrow(() -> new NoSuchElementException("No existe el gasto " + id));
+        List<ItemDelTicket> items = m.getItems().stream()
+                .map(i -> new ItemDelTicket(i.getDescripcion(), i.getCantidad(), dosDecimales(i.getPrecioUnitario()),
+                        dosDecimales(i.getSubtotal()), i.isDescuento()))
+                .toList();
+        BigDecimal suma = items.isEmpty() ? null
+                : items.stream().map(ItemDelTicket::subtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal total = dosDecimales(m.getMonto());
+        return new DetalleTicket(m.getId(), m.getComercio(), items, suma, total,
+                suma == null || ValidadorTicket.coinciden(suma, total), fotos.archivo(m.getFotoTicket()).isPresent());
+    }
+
+    /** La foto del ticket de un gasto guardado, si está en disco. */
+    @Transactional(readOnly = true)
+    public Optional<Path> foto(long id) {
+        return consultas.gastoConItems(id).flatMap(m -> fotos.archivo(m.getFotoTicket()));
+    }
+
+    private static BigDecimal dosDecimales(BigDecimal monto) {
+        return monto == null ? null : monto.setScale(2, RoundingMode.HALF_UP);
     }
 
     /** Todos opcionales menos el mes. {@code q} busca en la descripción, sin distinguir tildes ni mayúsculas. */
@@ -53,9 +102,12 @@ public class ConsultaMovimientos {
     /**
      * @param medio            para la columna Medio: "QR · Mercado Pago", "Efectivo", "Sin especificar"…
      * @param sinEspecificar   si no se sabe con qué se pagó (se muestra en gris, para corregirlo)
+     * @param ticket           si vino de la foto de un ticket (la fila se despliega con los productos)
+     * @param foto             si guardó la foto del ticket
      */
     public record Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
-            String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto) {
+            String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
+            boolean foto) {
     }
 
     public record Pagina(List<Fila> elementos, int pagina, int tamanio, long totalElementos, int totalPaginas) {
@@ -155,7 +207,8 @@ public class ConsultaMovimientos {
                 m.getCategoria() == null ? null : m.getCategoria().getNombre(),
                 m.getCategoria() == null ? null : m.getCategoria().getEmoji(),
                 medio(m), sinEspecificar(m), m.getOrigen().name(),
-                m.getMonto().setScale(2, RoundingMode.HALF_UP));
+                m.getMonto().setScale(2, RoundingMode.HALF_UP), m.getOrigen() == Origen.TICKET,
+                m.getFotoTicket() != null);
     }
 
     private static boolean sinEspecificar(Movimiento m) {

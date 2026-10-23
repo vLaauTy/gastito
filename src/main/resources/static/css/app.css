@@ -4,7 +4,7 @@
   --bg: #F4F6F2; --surface: #FFFFFF; --border: #D5DBD2; --fg: #17201B; --muted: #55615A;
   --accent: #1F7A4D; --accent-soft: #E3EFE7; --accent-fg: #145637;
   --warn: #8A3B0F; --warn-soft: #FFF1E3; --ok: #145637;
-  --info: #1B3F8F; --info-soft: #E5ECFA;
+  --info: #1B3F8F; --info-soft: #E5ECFA; --ticket: #5B3E8C; --ticket-soft: #EEE7F7;
   --nav: #17201B; --nav-fg: #E6ECE7; --nav-muted: #B8C4BC; --nav-active: #2C3A33; --nav-box: #24302A;
   --dark-card: #17201B; --dark-card-fg: #FFFFFF; --dark-card-muted: #C9D3CC; --dark-track: #3A463F; --dark-fill: #6FD39A;
   --track: #E3E8E1; --row: #EDF0EB; --button-border: #B9C3BB; --input-bg: #F4F6F2;
@@ -19,7 +19,7 @@
     --bg: #101612; --surface: #18201B; --border: #2C3832; --fg: #E6ECE7; --muted: #9AA69E;
     --accent: #3FA470; --accent-soft: #1E3328; --accent-fg: #8FDDB2;
     --warn: #F0A06A; --warn-soft: #3A2414; --ok: #8FDDB2;
-    --info: #9DB8F5; --info-soft: #1C2740;
+    --info: #9DB8F5; --info-soft: #1C2740; --ticket: #C9B5EE; --ticket-soft: #2A2238;
     --nav: #0B100D; --nav-fg: #E6ECE7; --nav-muted: #9AA69E; --nav-active: #1F2A24; --nav-box: #151D18;
     --dark-card: #0B100D; --dark-card-fg: #E6ECE7; --dark-card-muted: #9AA69E; --dark-track: #2C3832; --dark-fill: #6FD39A;
     --track: #26302A; --row: #222C26; --button-border: #3A463F; --input-bg: #101612;
@@ -119,6 +119,16 @@ td.mensaje { color: var(--muted); text-align: center; padding: 24px 8px; }
 .chip { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 8px; background: var(--accent-soft); color: var(--accent-fg); white-space: nowrap; }
 .chip.audio, .chip.extra { background: var(--info-soft); color: var(--info); }
 .chip.aguinaldo { background: var(--warn-soft); color: var(--warn); }
+.chip.ticket { background: var(--ticket-soft); color: var(--ticket); }
+button.desplegar { margin-left: 8px; vertical-align: middle; }
+
+/* Fila desplegada con los productos de un ticket */
+tr.detalle-ticket td { background: var(--input-bg); padding: 12px 16px 16px; }
+.productos { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-width: 520px; }
+.productos li { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.productos li.descuento { color: var(--ok); }
+.pie-ticket { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; margin-top: 10px; font-size: 13px; max-width: 520px; justify-content: space-between; }
+.pie-ticket .ver-todos { margin-left: 0; }
 .ver-todos { font-size: 13px; font-weight: 600; color: var(--accent); margin-left: 8px; text-decoration: none; }
 
 .filters { display: flex; gap: 8px; flex-wrap: wrap; }

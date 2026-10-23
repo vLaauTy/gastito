@@ -376,14 +376,63 @@
       filaMensaje(tbody, 6, sinResultados);
       return;
     }
-    tbody.replaceChildren(...pagina.elementos.map((m) => h('tr', {},
+    tbody.replaceChildren(...pagina.elementos.map(filaMovimiento));
+  }
+
+  function filaMovimiento(m) {
+    const boton = m.ticket
+      ? h('button', { class: 'mini desplegar', type: 'button', 'aria-expanded': 'false' }, '🧾 Productos')
+      : null;
+    const fila = h('tr', {},
       h('td', { class: 'date' }, fechaCorta(m.fechaHora)),
-      h('td', {}, h('b', {}, m.descripcion || '—')),
+      h('td', {}, h('b', {}, m.descripcion || '—'), boton),
       h('td', {}, m.categoria ? `${m.emoji ? m.emoji + ' ' : ''}${m.categoria}` : '—'),
       h('td', { class: m.sinEspecificar ? 'sin-especificar' : null }, m.medio),
-      h('td', {}, h('span', { class: `chip ${m.origen === 'AUDIO' ? 'audio' : ''}` }, origenTexto(m.origen))),
+      h('td', {}, h('span', { class: `chip ${m.origen.toLowerCase()}` }, origenTexto(m.origen))),
       h('td', { class: 'amt' }, pesos(m.monto)),
-    )));
+    );
+    if (boton) boton.addEventListener('click', () => desplegarTicket(boton, fila, m.id));
+    return fila;
+  }
+
+  /** Abre (o cierra) debajo de la fila los productos del ticket. Se piden a la API recién al abrir. */
+  async function desplegarTicket(boton, fila, id) {
+    const abierta = fila.nextElementSibling;
+    if (abierta && abierta.classList.contains('detalle-ticket')) {
+      abierta.remove();
+      boton.setAttribute('aria-expanded', 'false');
+      return;
+    }
+    boton.disabled = true;
+    try {
+      const detalle = await api(`/api/movimientos/${id}/items`);
+      fila.after(h('tr', { class: 'detalle-ticket' }, h('td', { colspan: 6 }, contenidoTicket(detalle))));
+      boton.setAttribute('aria-expanded', 'true');
+    } catch (error) {
+      mostrarAviso(`No pude cargar el ticket: ${error.message}`);
+    } finally {
+      boton.disabled = false;
+    }
+  }
+
+  const cantidades = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
+
+  function contenidoTicket(d) {
+    const productos = d.items.length
+      ? h('ul', { class: 'productos' }, ...d.items.map((i) => h('li', { class: i.descuento ? 'descuento' : null },
+        h('span', {}, i.descripcion,
+          i.cantidad != null && Number(i.cantidad) !== 1 ? h('span', { class: 'note' }, ` ×${cantidades.format(i.cantidad)}`) : null),
+        h('span', { class: 'money' }, pesos(i.subtotal)),
+      )))
+      : h('p', { class: 'note' }, 'No se leyeron los productos de este ticket.');
+    const suma = d.sumaItems == null ? null
+      : d.coincide
+        ? h('span', { class: 'note' }, `Los productos suman ${pesos(d.sumaItems)}.`)
+        : h('span', { class: 'up' }, `⚠️ Los productos suman ${pesos(d.sumaItems)} y el total es ${pesos(d.total)}.`);
+    const foto = d.foto
+      ? h('a', { class: 'ver-todos', href: `/api/movimientos/${d.id}/foto`, target: '_blank', rel: 'noopener' }, 'Ver foto')
+      : h('span', { class: 'note' }, 'Sin foto');
+    return [productos, h('div', { class: 'pie-ticket' }, suma, foto)];
   }
 
   async function ultimosMovimientos() {
