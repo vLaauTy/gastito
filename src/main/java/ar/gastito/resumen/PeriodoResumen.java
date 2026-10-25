@@ -72,6 +72,9 @@ public record PeriodoResumen(TipoResumen tipo, LocalDate desde, LocalDate hasta)
      * hasta hoy si está en curso (resumen parcial).
      */
     public LocalDate hastaParaDatos(LocalDate hoy) {
+        if (hoy.isBefore(desde)) {
+            throw new IllegalArgumentException("El período " + this + " todavía no empezó (hoy es " + hoy + ")");
+        }
         return hoy.isBefore(hasta) ? hoy : hasta;
     }
 
