@@ -159,7 +159,8 @@ La base de prueba puede quedar para seguir probando cambios con `iniciar.bat pru
 El 25/10/2026 la base `gastito` se vació (tenía las primeras pruebas, cargadas antes de separar las bases). Antes
 se guardó un backup en `data/backups/gastito-2026-10-25.dump` (fuera del repo, como todo `data/`), hecho desde
 Windows con `ssh devbox "docker exec gastito-db pg_dump -U gastito -d gastito --format=custom" > ...`. Para ver
-qué tiene, o restaurarlo en una base aparte sin tocar `gastito` (desde Git Bash, en la raíz del proyecto):
+qué tiene, o restaurarlo en una base aparte sin tocar `gastito` (desde Git Bash, en la raíz del proyecto;
+`devbox` es el alias SSH de la VM en `~/.ssh/config`, con el puerto 22 de la VM reenviado al 2222 de Windows):
 
 ```bash
 ssh devbox "docker exec -i gastito-db pg_restore --list" < data/backups/gastito-2026-10-25.dump
