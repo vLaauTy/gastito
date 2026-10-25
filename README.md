@@ -74,6 +74,8 @@ Otros ajustes, en `src/main/resources/application.yml`:
 - `gastito.resumenes.umbral-hormiga` y `categorias-hormiga`: qué cuenta como gasto hormiga (por defecto, menos de
   $3.000 en Kiosco o Comida afuera / delivery).
 - `gastito.resumenes.modelo-semanal`, `modelo-mensual` y `max-tokens`: el modelo que redacta cada resumen.
+- `gastito.resumenes.minimo-semanal` y `minimo-mensual` (`gastos` y `dias`): con menos datos, el resumen no lleva
+  consejo ni escenarios de ahorro (por defecto 5 gastos en 3 días, y 15 gastos en 7 días).
 - `gastito.consultas.modelo`, `max-tokens` y `max-llamadas`: el modelo que responde preguntas y cuántas
   herramientas puede usar por pregunta (por defecto 3).
 - `gastito.zona-horaria`: por defecto `America/Argentina/Buenos_Aires`.
@@ -241,6 +243,17 @@ grande, gastos hormiga, días sin gastos, ingresos y tres escenarios de ahorro (
 categoría que más subió de vuelta a su nivel anterior y la categoría más grande con un 10% menos). Haiku solo
 redacta "lo que noté" y un consejo; cada número que escribe se compara con los que calculó Java y, si alguno no
 aparece, se descarta el texto y quedan solo los números.
+
+- **Lo que noté** son de 0 a 3 observaciones que aportan algo nuevo: un patrón, una relación entre datos, el cambio
+  de una categoría. Si una repite un número que ya está arriba (total, cantidad, variación, días sin gastos,
+  hormiga), Java la saca.
+- **Con pocos datos no hay consejo:** con menos de 5 gastos, o con gastos en menos de 3 días distintos (15 gastos
+  y 7 días en el mensual), no se calculan escenarios y en lugar del consejo va "Todavía hay pocos datos para darte
+  un consejo. Seguí cargando tus gastos."
+- **Proyecciones:** en el semanal, un ahorro se lleva a "por mes" solo si la categoría tiene gastos de al menos 2
+  semanas; si no, se dice por semana.
+- Lo que todavía no se calcula (por ejemplo, lo que te devuelven de una juntada) no lo menciona la IA: va como nota
+  al pie, y solo si en el período hay algún gasto así.
 
 Si la PC estaba apagada, al prenderla llega el resumen pendiente más reciente de cada tipo, con un botón **Ver
 anteriores** si quedaron otros sin ver. La primera vez que corre no manda nada de antes.
