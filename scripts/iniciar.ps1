@@ -1,6 +1,7 @@
 ﻿# Arranca Gastito: revisa que esté todo listo, compila si cambió el código y deja el bot corriendo en esta ventana.
-# Se usa desde iniciar.bat (doble clic). Perfil por defecto: postgres. "iniciar.bat dev" arranca con H2.
-param([ValidateSet('postgres', 'dev')][string]$Perfil = 'postgres')
+# Se usa desde iniciar.bat (doble clic). Perfil por defecto: prueba (la base gastito_prueba, con datos de prueba).
+# "iniciar.bat postgres" arranca con la base real y "iniciar.bat dev" con H2.
+param([ValidateSet('prueba', 'postgres', 'dev')][string]$Perfil = 'prueba')
 
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -41,7 +42,7 @@ foreach ($linea in Get-Content .env -Encoding UTF8) {
     if ($linea -match '^\s*([A-Z_]+)\s*=\s*(.*?)\s*$') { $variables[$Matches[1]] = $Matches[2] }
 }
 $necesarias = @('TELEGRAM_BOT_TOKEN', 'TELEGRAM_BOT_USERNAME', 'TELEGRAM_ALLOWED_USER_ID', 'ANTHROPIC_API_KEY')
-if ($Perfil -eq 'postgres') { $necesarias += 'DB_URL', 'DB_USER', 'DB_PASSWORD' }
+if ($Perfil -ne 'dev') { $necesarias += 'DB_URL', 'DB_USER', 'DB_PASSWORD' }
 $faltan = @($necesarias | Where-Object { -not $variables[$_] })
 if ($faltan.Count -gt 0) { Falla "En el .env faltan valores para: $($faltan -join ', ')" }
 Ok "Completo"
@@ -61,8 +62,8 @@ if ($otros.Count -gt 0) {
     Ok "Ninguno"
 }
 
-# 4. PostgreSQL (la VM de Ubuntu puede estar todavía arrancando)
-if ($Perfil -eq 'postgres') {
+# 4. PostgreSQL (la VM de Ubuntu puede estar todavía arrancando). Las dos bases están en el mismo servidor.
+if ($Perfil -ne 'dev') {
     if ($variables['DB_URL'] -notmatch '^jdbc:postgresql://([^:/]+)(?::(\d+))?/') {
         Falla "DB_URL tiene que tener la forma jdbc:postgresql://servidor:puerto/base"
     }
@@ -116,6 +117,11 @@ if (-not $jar -or $jar.LastWriteTime -lt $ultimoCambio) {
 # 7. Arrancar
 Write-Host ""
 Write-Host "Arrancando Gastito con el perfil $Perfil." -ForegroundColor Green
+if ($Perfil -eq 'prueba') {
+    Write-Host "Base de PRUEBA (gastito_prueba): lo que cargues acá no va a la base real." -ForegroundColor Yellow
+} elseif ($Perfil -eq 'postgres') {
+    Write-Host "Base REAL (gastito)." -ForegroundColor Yellow
+}
 Write-Host "Cuando aparezca 'Bot de Telegram conectado y escuchando mensajes', ya lo podés usar."
 Write-Host "Para apagarlo, cerrá esta ventana."
 Write-Host ""

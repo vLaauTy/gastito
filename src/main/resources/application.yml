@@ -112,3 +112,19 @@ spring:
     url: ${DB_URL}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prueba
+  # La base de prueba, en el mismo PostgreSQL que la real (mismo usuario y contraseña del .env). Todo lo que se
+  # carga acá es de prueba: el generador de datos solo corre con este perfil.
+  datasource:
+    url: ${DB_PRUEBA_URL:jdbc:postgresql://localhost:5432/gastito_prueba}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+gastito:
+  ticket:
+    # Fotos aparte: los ids de las dos bases se repiten.
+    carpeta-datos: data/prueba
