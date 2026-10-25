@@ -57,7 +57,15 @@ public class ClienteIa implements DisposableBean {
 
     /** Un mensaje de texto (o la transcripción de un audio). */
     public <T> Respuesta<T> extraer(String instrucciones, String mensaje, Class<T> tipo, PropositoIa proposito) {
-        return llamar(instrucciones, List.of(texto(mensaje)), config.maxTokens(), tipo, proposito);
+        return llamar(config.modelo(), instrucciones, List.of(texto(mensaje)), config.maxTokens(), tipo, proposito);
+    }
+
+    /**
+     * Un texto con otro modelo y otro tope que los de la configuración (por ejemplo, para redactar un resumen).
+     */
+    public <T> Respuesta<T> extraer(String modelo, long maxTokens, String instrucciones, String mensaje,
+            Class<T> tipo, PropositoIa proposito) {
+        return llamar(modelo, instrucciones, List.of(texto(mensaje)), maxTokens, tipo, proposito);
     }
 
     /**
@@ -71,16 +79,16 @@ public class ClienteIa implements DisposableBean {
                 .mediaType(Base64ImageSource.MediaType.IMAGE_JPEG)
                 .data(Base64.getEncoder().encodeToString(jpeg))
                 .build());
-        return llamar(instrucciones, List.of(imagen, texto(mensaje)), maxTokens, tipo, proposito);
+        return llamar(config.modelo(), instrucciones, List.of(imagen, texto(mensaje)), maxTokens, tipo, proposito);
     }
 
-    private <T> Respuesta<T> llamar(String instrucciones, List<ContentBlockParam> contenido, long maxTokens,
-            Class<T> tipo, PropositoIa proposito) {
+    private <T> Respuesta<T> llamar(String modelo, String instrucciones, List<ContentBlockParam> contenido,
+            long maxTokens, Class<T> tipo, PropositoIa proposito) {
         if (client == null) {
             throw new IaNoDisponibleException("Falta configurar ANTHROPIC_API_KEY", null);
         }
         StructuredMessageCreateParams<T> params = MessageCreateParams.builder()
-                .model(config.modelo())
+                .model(modelo)
                 .maxTokens(maxTokens)
                 // Extracción simple: sin razonamiento extendido, que se cobra como salida.
                 .thinking(ThinkingConfigDisabled.builder().build())
@@ -98,7 +106,7 @@ public class ClienteIa implements DisposableBean {
             throw new IaNoDisponibleException("No pude consultar a la IA", e);
         }
 
-        UsoIa uso = registro.registrar(config.modelo(), respuesta.usage().inputTokens(),
+        UsoIa uso = registro.registrar(modelo, respuesta.usage().inputTokens(),
                 respuesta.usage().outputTokens(), proposito);
 
         Optional<StopReason> stop = respuesta.stopReason();
