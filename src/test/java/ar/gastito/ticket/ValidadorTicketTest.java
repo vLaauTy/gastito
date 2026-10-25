@@ -2,6 +2,7 @@ package ar.gastito.ticket;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -93,17 +94,17 @@ class ValidadorTicketTest {
     // --- Productos y descuentos ---
 
     @Test
-    void losDescuentosVanAlFinalEnNegativoYRestanDeLaSuma() {
+    void losDescuentosQuedanEnElOrdenImpresoEnNegativoYRestanDeLaSuma() {
         ValidadorTicket.Valido v = valido(ticket()
-                .items(List.of(item("Leche 1 L", "2", "1450", "2900"), item("Galletitas", "", "", "1250")))
-                .descuentos(List.of(new LecturaTicketIa.Descuento("2x1 Galletitas", "250")))
-                .total("3900")
+                .items(List.of(item("Leche 1 L", "2", "1450", "2900"), item("Galletitas", "", "", "1250"),
+                        descuento("2x1 Galletitas", "250"), item("Pan", "", "", "500")))
+                .total("4400")
                 .build());
 
-        assertThat(v.items()).hasSize(3);
-        assertThat(v.items().get(2).descripcion()).isEqualTo("2x1 Galletitas");
+        assertThat(v.items()).extracting(ItemTicket::descripcion)
+                .containsExactly("Leche 1 L", "Galletitas", "2x1 Galletitas", "Pan");
         assertThat(v.items().get(2).subtotal()).isEqualByComparingTo("-250");
-        assertThat(v.sumaItems()).isEqualByComparingTo("3900");
+        assertThat(v.sumaItems()).isEqualByComparingTo("4400");
         assertThat(v.coincide()).isTrue();
     }
 
@@ -121,12 +122,84 @@ class ValidadorTicketTest {
     @Test
     void unDescuentoConSignoMenosNoSeDuplicaElSigno() {
         ValidadorTicket.Valido v = valido(ticket()
-                .items(List.of(item("Galletitas", "", "", "1250")))
-                .descuentos(List.of(new LecturaTicketIa.Descuento("Desc.", "-250")))
+                .items(List.of(item("Galletitas", "", "", "1250"), descuento("Desc.", "-250")))
                 .total("1000")
                 .build());
 
         assertThat(v.items().get(1).subtotal()).isEqualByComparingTo("-250");
+    }
+
+    // --- Los tres controles ---
+
+    @Test
+    void conSubtotalYDescuentosImpresosLasTresCuentasDan() {
+        ValidadorTicket.Valido v = valido(ticket()
+                .items(List.of(item("Galletitas", "2", "2250", "4500"), descuento("20% ClubDía", "900")))
+                .subtotal("4.500,00").descuentos("-900,00").total("3600.00")
+                .build());
+
+        assertThat(v.coincide()).isTrue();
+        assertThat(v.ticket().subtotalImpreso()).isEqualByComparingTo("4500");
+        assertThat(v.ticket().descuentosImpresos()).isEqualByComparingTo("-900");
+    }
+
+    @Test
+    void unProductoMalLeidoQuedaComoDiferenciaYConLaLineaQueNoSeLeyo() {
+        ValidadorTicket.Valido v = valido(ticket()
+                .items(List.of(item("Galletitas", "", "", "4300"), descuento("20% ClubDía", "900")))
+                .subtotal("4500").descuentos("900").total("3600")
+                .lineasIlegibles(List.of("renglón 1, Galletitas: el importe está doblado"))
+                .build());
+
+        assertThat(v.coincide()).isFalse();
+        assertThat(v.diferencias()).extracting(ControlesTicket.Diferencia::control)
+                .containsExactly(ControlesTicket.Control.PRODUCTOS_Y_SUBTOTAL);
+        assertThat(v.ticket().lineasIlegibles()).containsExactly("Renglón 1, Galletitas: el importe está doblado");
+        assertThat(v.movimiento().monto()).isEqualByComparingTo("3600"); // el monto sigue siendo el total impreso
+    }
+
+    @Test
+    void losDosFormatosDeNumeroEnElMismoTicket() {
+        ValidadorTicket.Valido v = valido(ticket()
+                .items(List.of(item("Premezcla brownies", "1", "5.460,00", "5.460,00"),
+                        descuento("20% ClubDía", "1.092,00"), item("Pasta mac & cheese", "1", "4488,00", "4488,00"),
+                        descuento("20% ClubDía", "897,60")))
+                .subtotal("9.948,00").total("7958.40")
+                .build());
+
+        assertThat(v.items()).extracting(ItemTicket::subtotal)
+                .usingElementComparator(BigDecimal::compareTo)
+                .containsExactly(new BigDecimal("5460"), new BigDecimal("-1092"), new BigDecimal("4488"),
+                        new BigDecimal("-897.60"));
+        assertThat(v.movimiento().monto()).isEqualByComparingTo("7958.40");
+        assertThat(v.coincide()).isTrue();
+    }
+
+    // --- Código de barras, descripción original y sucursal ---
+
+    @Test
+    void elCodigoDeBarrasSeGuardaSoloSiEsUnEanValido() {
+        ValidadorTicket.Valido v = valido(ticket()
+                .items(List.of(
+                        new LecturaTicketIa.Item("Galletitas cracker queso", "GALLET CRACKER QSO", "7792180145444",
+                                "2", "2250", "4500", false),
+                        new LecturaTicketIa.Item("Premezcla", "PREMEZ BROWNIE", "7790070432859", "", "", "5460", false),
+                        new LecturaTicketIa.Item("20% ClubDía", "20% ClubDia", "7792180145444", "", "", "900", true)))
+                .total("9060")
+                .build());
+
+        assertThat(v.items().get(0).codigoBarras()).isEqualTo("7792180145444");
+        assertThat(v.items().get(0).descripcionOriginal()).isEqualTo("GALLET CRACKER QSO");
+        assertThat(v.items().get(0).descripcion()).isEqualTo("Galletitas cracker queso");
+        assertThat(v.items().get(1).codigoBarras()).isNull(); // dígito verificador mal leído
+        assertThat(v.items().get(2).codigoBarras()).isNull(); // un descuento no tiene código
+    }
+
+    @Test
+    void laSucursalQuedaComoTextoCorto() {
+        assertThat(valido(ticket().sucursal(" Suc. 5601 ").build()).ticket().sucursal()).isEqualTo("Suc 5601");
+        assertThat(valido(ticket().sucursal("5601").build()).ticket().sucursal()).isEqualTo("5601");
+        assertThat(valido(ticket().sucursal("").build()).ticket().sucursal()).isNull();
     }
 
     @Test
@@ -218,22 +291,26 @@ class ValidadorTicketTest {
     // --- Privacidad ---
 
     @Test
-    void borraNumerosLargosYTarjetasEnmascaradas() {
+    void enLosTextosLibresBorraTarjetasYCuitPeroNoNumerosPorSuLargo() {
         ValidadorTicket.Valido v = valido(ticket()
                 .comercio("Supermercado Día CUIT 30-68731043-4")
                 .items(List.of(item("Leche 7790080001234", "", "", "2900"), item("Remera XXL", "", "", "3900"),
                         item("Pago **** 1234", "", "", "1250"), item("4509 9535 6623 3704", "", "", "1")))
+                .lineasIlegibles(List.of("Línea del pago con tarjeta 4509-9535-6623-3704", "**** 1234"))
                 .total("8051")
                 .build());
 
         assertThat(v.comercio()).isEqualTo("Supermercado Día CUIT");
         assertThat(v.items()).extracting(ItemTicket::descripcion)
-                .containsExactly("Leche", "Remera XXL", "Pago", "Producto");
+                .containsExactly("Leche 7790080001234", "Remera XXL", "Pago", "Producto");
+        assertThat(v.ticket().lineasIlegibles()).containsExactly("Línea del pago con tarjeta");
     }
 
     @Test
     void limpiarDejaLoQueNoEsSensible() {
-        assertThat(ValidadorTicket.limpiar("  agua 1.500 ml  ")).isEqualTo("Agua 1.500 ml");
+        assertThat(ValidadorTicket.limpiar("  agua 1.500 ml  ")).isEqualTo("agua 1.500 ml");
+        assertThat(ValidadorTicket.limpiar("Cod 7792180145444")).isEqualTo("Cod 7792180145444");
+        assertThat(ValidadorTicket.limpiar("CUIT 20123456789")).isEqualTo("CUIT");
         assertThat(ValidadorTicket.limpiar("XXXX-1234")).isNull();
         assertThat(ValidadorTicket.limpiar(null)).isNull();
     }
@@ -247,7 +324,11 @@ class ValidadorTicketTest {
     }
 
     private static LecturaTicketIa.Item item(String descripcion, String cantidad, String precio, String subtotal) {
-        return new LecturaTicketIa.Item(descripcion, cantidad, precio, subtotal);
+        return new LecturaTicketIa.Item(descripcion, "", "", cantidad, precio, subtotal, false);
+    }
+
+    private static LecturaTicketIa.Item descuento(String descripcion, String monto) {
+        return new LecturaTicketIa.Item(descripcion, "", "", "", "", monto, true);
     }
 
     /** El ticket del pedido: Supermercado Día, sábado 18/10 17:20, tres productos, $8.050 con débito. */
@@ -264,7 +345,10 @@ class ValidadorTicketTest {
                 item("Leche 1 L", "2", "1450", "2900"),
                 item("Yerba 500 g", "", "", "3900"),
                 item("Galletitas", "", "", "1250"));
-        private List<LecturaTicketIa.Descuento> descuentos = List.of();
+        private String sucursal = "";
+        private String subtotal = "";
+        private String descuentos = "";
+        private List<String> lineasIlegibles = List.of();
         private String total = "8050";
         private String medioPago = "Débito";
         private String cuenta = "";
@@ -276,7 +360,10 @@ class ValidadorTicketTest {
         Constructor fecha(String v) { fecha = v; return this; }
         Constructor hora(String v) { hora = v; return this; }
         Constructor items(List<LecturaTicketIa.Item> v) { items = v; return this; }
-        Constructor descuentos(List<LecturaTicketIa.Descuento> v) { descuentos = v; return this; }
+        Constructor sucursal(String v) { sucursal = v; return this; }
+        Constructor subtotal(String v) { subtotal = v; return this; }
+        Constructor descuentos(String v) { descuentos = v; return this; }
+        Constructor lineasIlegibles(List<String> v) { lineasIlegibles = v; return this; }
         Constructor total(String v) { total = v; return this; }
         Constructor medioPago(String v) { medioPago = v; return this; }
         Constructor cuenta(String v) { cuenta = v; return this; }
@@ -284,8 +371,8 @@ class ValidadorTicketTest {
         Constructor confianza(String v) { confianza = v; return this; }
 
         LecturaTicketIa build() {
-            return new LecturaTicketIa(problema, comercio, fecha, hora, items, descuentos, total, medioPago, cuenta,
-                    categorias, confianza);
+            return new LecturaTicketIa(problema, comercio, sucursal, fecha, hora, items, subtotal, descuentos, total,
+                    medioPago, cuenta, categorias, confianza, lineasIlegibles);
         }
     }
 }

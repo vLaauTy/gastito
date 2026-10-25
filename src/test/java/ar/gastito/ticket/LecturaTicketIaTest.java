@@ -30,6 +30,6 @@ class LecturaTicketIaTest {
                 "categorias", "- Supermercado", "mediosPago", "- Débito", "cuentas", "- Galicia",
                 "ejemplos", "(todavía no hay)", "hoy", "jueves 22/10/2026"));
 
-        assertThat(prompt).doesNotContain("{{").contains("- Supermercado").contains("\"18/10/26\" es el 18 de octubre");
+        assertThat(prompt).doesNotContain("{{").contains("- Supermercado").contains("\"22/09/26\" es el 22 de septiembre");
     }
 }

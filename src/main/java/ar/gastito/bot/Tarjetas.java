@@ -16,7 +16,7 @@ import ar.gastito.movimiento.EstadoMovimiento;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoItem;
 import ar.gastito.movimiento.Origen;
-import ar.gastito.ticket.ValidadorTicket;
+import ar.gastito.ticket.ControlesTicket;
 
 /**
  * La tarjeta de un gasto: un mensaje con un dato por línea que se va editando en el lugar
@@ -226,7 +226,7 @@ public class Tarjetas {
         }
         BigDecimal suma = m.getItems().stream().map(MovimientoItem::getSubtotal).reduce(BigDecimal.ZERO,
                 BigDecimal::add);
-        if (ValidadorTicket.coinciden(suma, m.getMonto())) {
+        if (ControlesTicket.revisar(m).isEmpty()) {
             return "";
         }
         return "\n\n⚠️ Los productos suman <b>" + formato.pesos(suma) + "</b> y el total dice <b>"

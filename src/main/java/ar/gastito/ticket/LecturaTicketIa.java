@@ -7,7 +7,8 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 /**
  * Lo que devuelve la IA al leer la foto de un ticket (el schema JSON se genera desde este record).
  * Todo viene como texto y lo controla {@link ValidadorTicket}: la IA puede leer mal.
- * A propósito no hay campos para la tarjeta, el CUIT ni el cajero: no se guardan.
+ * A propósito solo hay campos para lo que se guarda: el CUIT, la cajera, la caja, el número de tarjeta o de
+ * cliente (ClubDía) no tienen dónde ir.
  */
 public record LecturaTicketIa(
         @JsonPropertyDescription("Vacío si la foto es un ticket o factura de compra y se lee bien. Si no: "
@@ -16,29 +17,37 @@ public record LecturaTicketIa(
         String problema,
 
         @JsonPropertyDescription("Nombre del comercio como lo conoce la gente, con mayúsculas normales. "
-                + "Ejemplo: Supermercado Día. Si solo figura la razón social, esa, sin S.A. ni S.R.L.")
+                + "Ejemplo: Día. Si solo figura la razón social, esa, sin S.A. ni S.R.L.")
         String comercio,
 
+        @JsonPropertyDescription("Número o nombre de la sucursal si figura, sin la palabra sucursal. Ejemplo: 5601. "
+                + "Vacío si no figura.")
+        String sucursal,
+
         @JsonPropertyDescription("Fecha de la compra copiada como está impresa, en formato dd/mm/aa o dd/mm/aaaa. "
-                + "Ejemplo: 18/10/26. Vacío si no se lee.")
+                + "Ejemplo: 22/09/26. Vacío si no se lee.")
         String fecha,
 
         @JsonPropertyDescription("Hora de la compra en formato HH:mm. Vacío si no se lee.")
         String hora,
 
-        @JsonPropertyDescription("Los productos, en el orden del ticket. Sin las líneas de IVA, subtotal, total, "
-                + "pago, vuelto ni descuentos.")
+        @JsonPropertyDescription("Los productos y los descuentos, en el orden en que están impresos (un descuento "
+                + "va justo debajo del producto al que se aplica). Sin las líneas de IVA, subtotal, total, pago, "
+                + "vuelto ni ahorro informativo.")
         List<Item> items,
 
-        @JsonPropertyDescription("Promociones, 2x1, descuentos con tarjeta o bonificaciones que restan del total.")
-        List<Descuento> descuentos,
+        @JsonPropertyDescription("El SUBTOTAL impreso (antes de los descuentos), en pesos. Vacío si no figura.")
+        String subtotal,
 
-        @JsonPropertyDescription("El TOTAL impreso, en pesos, solo dígitos y punto decimal, sin separador de "
-                + "miles. Ejemplo: 8050 o 8050.50. Vacío si no se lee.")
+        @JsonPropertyDescription("El total de descuentos impreso como una línea propia (por ejemplo \"Descuentos\"), "
+                + "en pesos. Vacío si no figura esa línea; no lo sumes vos.")
+        String descuentos,
+
+        @JsonPropertyDescription("El TOTAL impreso, en pesos. Vacío si no se lee.")
         String total,
 
         @JsonPropertyDescription("Exactamente uno de los nombres de la lista de medios de pago, o vacío si el "
-                + "ticket y el texto del usuario no lo dicen")
+                + "ticket y el texto del usuario no lo dicen con seguridad")
         String medioPago,
 
         @JsonPropertyDescription("Exactamente uno de los nombres de la lista de cuentas, o vacío")
@@ -49,29 +58,35 @@ public record LecturaTicketIa(
         List<String> categorias,
 
         @JsonPropertyDescription("Qué tan segura es la primera categoría: alta, media o baja")
-        String confianza) {
+        String confianza,
+
+        @JsonPropertyDescription("Las líneas que no se pudieron leer bien (ticket arrugado, doblado, tapado o "
+                + "gastado), una por elemento, diciendo cuál es y qué falta. Ejemplo: \"Renglón 7, debajo de "
+                + "Premezcla brownies: el importe está tapado por un pliegue\". Vacía si se lee todo.")
+        List<String> lineasIlegibles) {
 
     public record Item(
-            @JsonPropertyDescription("Qué es, corto y legible, con mayúscula inicial. Ejemplo: Leche 1 L. "
-                    + "Sin códigos de barras ni números de artículo.")
+            @JsonPropertyDescription("Qué es, legible, con mayúscula inicial y sin abreviaturas. "
+                    + "Ejemplo: Galletitas cracker queso. En un descuento, cómo figura: 20% ClubDía.")
             String descripcion,
 
-            @JsonPropertyDescription("Cantidad o peso, solo dígitos y punto decimal (2, 0.532). Vacío si no figura.")
+            @JsonPropertyDescription("La descripción copiada tal como está impresa. Ejemplo: GALLET CRACKER QSO")
+            String descripcionOriginal,
+
+            @JsonPropertyDescription("El código de barras del producto si está impreso (8 o 13 dígitos), solo "
+                    + "dígitos. Vacío si no figura o en un descuento.")
+            String codigoBarras,
+
+            @JsonPropertyDescription("Cantidad o peso (2, 0,532). Vacío si no figura.")
             String cantidad,
 
-            @JsonPropertyDescription("Precio por unidad o por kilo, en pesos, solo dígitos y punto decimal. "
-                    + "Vacío si no figura.")
+            @JsonPropertyDescription("Precio por unidad o por kilo, en pesos. Vacío si no figura.")
             String precioUnitario,
 
-            @JsonPropertyDescription("Lo que se pagó por ese renglón, en pesos, solo dígitos y punto decimal")
-            String subtotal) {
-    }
+            @JsonPropertyDescription("Lo que se pagó por ese renglón, en pesos. En un descuento, lo que resta.")
+            String subtotal,
 
-    public record Descuento(
-            @JsonPropertyDescription("Cómo figura el descuento. Ejemplo: 2x1 Galletitas, 10% débito Galicia")
-            String descripcion,
-
-            @JsonPropertyDescription("Cuánto resta, en pesos, en positivo, solo dígitos y punto decimal")
-            String monto) {
+            @JsonPropertyDescription("true si el renglón es un descuento, promoción o bonificación")
+            boolean esDescuento) {
     }
 }

@@ -103,6 +103,8 @@ class TicketServiceTest {
         assertThat(interpretado.getValue().fechaHora()).isEqualTo(LocalDateTime.of(2026, 10, 18, 17, 20));
         assertThat(leido.getValue().comercio()).isEqualTo("Supermercado Día");
         assertThat(leido.getValue().items()).hasSize(3);
+        assertThat(leido.getValue().sucursal()).isEqualTo("5601");
+        assertThat(leido.getValue().items().get(0).descripcionOriginal()).isEqualTo("LECHE ENT 1L");
         verify(usoIa).asociarMovimiento(USO_IA, ID);
 
         // La foto queda en tickets/AAAA/MM/<id>.jpg según la fecha del ticket, achicada.
@@ -150,7 +152,8 @@ class TicketServiceTest {
 
     @Test
     void unaFotoQueNoEsTicketNoGuardaNada() throws IOException {
-        laIaLee(new LecturaTicketIa("no_es_ticket", "", "", "", List.of(), List.of(), "", "", "", List.of(), ""));
+        laIaLee(new LecturaTicketIa("no_es_ticket", "", "", "", "", List.of(), "", "", "", "", "", List.of(), "",
+                List.of()));
 
         assertThat(service.leer(jpeg(800, 600), null)).isInstanceOf(TicketService.NoEsTicket.class);
         verify(movimientos, never()).crearPendienteDeTicket(any(), any(), any());
@@ -214,11 +217,11 @@ class TicketServiceTest {
     }
 
     private static LecturaTicketIa ticket(String total) {
-        return new LecturaTicketIa("", "Supermercado Día", "18/10/26", "17:20",
-                List.of(new LecturaTicketIa.Item("Leche 1 L", "2", "1450", "2900"),
-                        new LecturaTicketIa.Item("Yerba 500 g", "", "", "3900"),
-                        new LecturaTicketIa.Item("Galletitas", "", "", "1250")),
-                List.of(), total, "Débito", "", List.of("Supermercado"), "alta");
+        return new LecturaTicketIa("", "Supermercado Día", "5601", "18/10/26", "17:20",
+                List.of(new LecturaTicketIa.Item("Leche 1 L", "LECHE ENT 1L", "", "2", "1450", "2900", false),
+                        new LecturaTicketIa.Item("Yerba 500 g", "", "", "", "", "3900", false),
+                        new LecturaTicketIa.Item("Galletitas", "", "", "", "", "1250", false)),
+                "", "", total, "Débito", "", List.of("Supermercado"), "alta", List.of());
     }
 
     private static byte[] jpeg(int ancho, int alto) throws IOException {

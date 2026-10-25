@@ -30,7 +30,7 @@ import ar.gastito.movimiento.Origen;
 import ar.gastito.movimiento.Periodo;
 import ar.gastito.movimiento.TipoMovimiento;
 import ar.gastito.ticket.FotosTicket;
-import ar.gastito.ticket.ValidadorTicket;
+import ar.gastito.ticket.ControlesTicket;
 
 /** La tabla de movimientos del dashboard (gastos confirmados, con filtros y páginas) y el CSV del mes. */
 @Service
@@ -82,7 +82,7 @@ public class ConsultaMovimientos {
                 : items.stream().map(ItemDelTicket::subtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal total = dosDecimales(m.getMonto());
         return new DetalleTicket(m.getId(), m.getComercio(), items, suma, total,
-                suma == null || ValidadorTicket.coinciden(suma, total), fotos.archivo(m.getFotoTicket()).isPresent());
+                ControlesTicket.revisar(m).isEmpty(), fotos.archivo(m.getFotoTicket()).isPresent());
     }
 
     /** La foto del ticket de un gasto guardado, si está en disco. */

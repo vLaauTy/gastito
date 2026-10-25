@@ -17,7 +17,6 @@ import ar.gastito.config.GastitoProperties;
 import ar.gastito.ia.ClienteIa;
 import ar.gastito.ia.RegistroUsoIa;
 import ar.gastito.interpretacion.HistorialCategorias;
-import ar.gastito.movimiento.DatosTicket;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
 import ar.gastito.movimiento.MovimientoService;
@@ -110,7 +109,7 @@ public class TicketService {
             interpretado = interpretado.conCategoriaElegida(aprendido.get().categoria());
         }
         String texto = pista == null || pista.isBlank() ? null : pista.strip();
-        Movimiento m = movimientos.crearPendienteDeTicket(interpretado, DatosTicket.de(v.comercio(), v.items()), texto);
+        Movimiento m = movimientos.crearPendienteDeTicket(interpretado, v.ticket(), texto);
         if (usoIaId != null) {
             usoIa.asociarMovimiento(usoIaId, m.getId());
         }
