@@ -115,6 +115,7 @@ public class ProcesadorMensajes {
     private final TranscripcionService transcripciones;
     private final TicketService tickets;
     private final ResumenService resumenes;
+    private final ConversacionRepetidos repetidos;
     private final FormatoResumen formatoResumen;
     private final ConsultaService consultas;
     private final FormatoConsulta formatoConsulta;
@@ -171,7 +172,9 @@ public class ProcesadorMensajes {
             FormatoMensajes formato, GraficoMes grafico, ComandosIngreso comandosIngreso,
             TranscripcionService transcripciones, TicketService tickets, ResumenService resumenes,
             FormatoResumen formatoResumen, ConsultaService consultas, FormatoConsulta formatoConsulta,
-            GastitoProperties properties, DashboardProperties dashboard, Clock clock) {
+            ConversacionRepetidos repetidos, GastitoProperties properties, DashboardProperties dashboard,
+            Clock clock) {
+        this.repetidos = repetidos;
         this.consultas = consultas;
         this.formatoConsulta = formatoConsulta;
         this.tickets = tickets;
@@ -319,10 +322,7 @@ public class ProcesadorMensajes {
                     .formatted(html(e.getMessage())));
         }
         return switch (resultado) {
-            case TicketService.Leido l -> {
-                Movimiento m = l.movimiento();
-                yield Accion.Enviar.tarjeta(tarjetas.pendiente(m), tarjetas.principal(m), m.getId());
-            }
+            case TicketService.Leido l -> tarjetaNueva(l.movimiento());
             case TicketService.NoEsTicket n -> Accion.Enviar.texto("""
                     Esa foto no parece un ticket 🤔
                     Mandame la foto de un ticket o una factura de compra, o escribime el gasto ("super 8050").""");
@@ -409,7 +409,7 @@ public class ProcesadorMensajes {
                     esperas.put(chatId, new Espera(m.getId(), Campo.MONTO, null));
                     yield Accion.Enviar.tarjeta(tarjetas.pidiendoMontoFaltante(m), tarjetas.principal(m), m.getId());
                 }
-                yield Accion.Enviar.tarjeta(tarjetas.pendiente(m), tarjetas.principal(m), m.getId());
+                yield tarjetaNueva(m);
             }
             case InterpretadorService.Pregunta _ -> Accion.Enviar.conMenu(responderPregunta(texto, audio));
             case InterpretadorService.Dudoso d -> {
@@ -458,7 +458,14 @@ public class ProcesadorMensajes {
             return List.of(new Accion.Avisar("Ese mensaje ya no está pendiente"));
         }
         Movimiento m = crearGasto(dudoso.gasto(), dudoso.origen(), dudoso.texto());
-        return List.of(principal(chatId, mensajeId, m));
+        return List.of(m.getMonto() == null ? principal(chatId, mensajeId, m)
+                : repetidos.siEsRepetido(m, mensajeId).orElseGet(() -> principal(chatId, mensajeId, m)));
+    }
+
+    /** La tarjeta de un gasto recién creado con monto: la de siempre, o la de "¿ya lo tenías registrado?". */
+    private Accion.Enviar tarjetaNueva(Movimiento m) {
+        return repetidos.siEsRepetido(m)
+                .orElseGet(() -> Accion.Enviar.tarjeta(tarjetas.pendiente(m), tarjetas.principal(m), m.getId()));
     }
 
     /** "Es una pregunta": la respuesta reemplaza a los botones. */
@@ -610,6 +617,9 @@ public class ProcesadorMensajes {
             case Tarjetas.EDITAR_MONTO -> pedir(chatId, mensajeId, id, Campo.MONTO);
             case Tarjetas.EDITAR_FECHA -> pedir(chatId, mensajeId, id, Campo.FECHA);
             case Tarjetas.EDITAR_DESCRIPCION -> pedir(chatId, mensajeId, id, Campo.DESCRIPCION);
+            case Tarjetas.UNIR -> repetidos.unir(mensajeId, id, requerido(elegido));
+            case Tarjetas.DE_NUEVO -> repetidos.deNuevo(mensajeId, id)
+                    .orElseGet(() -> List.of(principal(chatId, mensajeId, pendiente(id))));
             case ES_GASTO -> esUnGasto(chatId, mensajeId, id);
             case ES_PREGUNTA -> esUnaPregunta(mensajeId, id);
             default -> List.of(new Accion.Avisar("Botón inválido"));

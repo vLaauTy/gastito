@@ -38,6 +38,9 @@ public class Tarjetas {
     static final String EDITAR_FECHA = "ef";
     static final String EDITAR_DESCRIPCION = "ed";
     static final String APLICAR = "a";
+    /** Compras repetidas: unir el nuevo con el que ya estaba, o guardar los dos. */
+    static final String UNIR = "ru";
+    static final String DE_NUEVO = "rd";
     /** Id de medio de pago que significa "sin medio de pago". */
     static final long SIN_MEDIO = 0;
 
@@ -117,6 +120,54 @@ public class Tarjetas {
 
     public String cancelado(Movimiento m) {
         return conTitulo(m, "❌ <b>Cancelado</b>");
+    }
+
+    // --- Compras repetidas ---
+
+    /** El nuevo y el que ya estaba, lado a lado, para decir si son la misma compra. */
+    public String repetido(Movimiento existente, Movimiento nuevo) {
+        boolean cobroDeFijo = existente.getGastoFijoId() != null && existente.isPendiente();
+        return "🔁 <b>¿Ya lo tenías registrado?</b>\n"
+                + (cobroDeFijo ? "Se parece al cobro de un gasto fijo que estaba esperando:"
+                        : "Encontré un gasto muy parecido:")
+                + "\n\n<b>" + (cobroDeFijo ? "Cobro esperado" : "Ya registrado") + "</b> · " + origen(existente)
+                + "\n" + resumenCorto(existente)
+                + "\n\n<b>Nuevo</b> · " + origen(nuevo) + "\n" + resumenCorto(nuevo);
+    }
+
+    /** Cómo queda la tarjeta después de unir los dos. */
+    public String unidos(Movimiento m) {
+        return conTitulo(m, "🔗 <b>Unidos: quedó uno solo</b>");
+    }
+
+    private String resumenCorto(Movimiento m) {
+        Categoria c = m.getCategoria();
+        String linea = "💰 <b>" + formato.pesos(m.getMonto()) + "</b>"
+                + (m.getDescripcion() == null ? "" : " · " + html(m.getDescripcion()))
+                + "\n" + (c == null ? "🏷 Sin categoría" : html(c.getNombreConEmoji()))
+                + " · 💳 " + html(FormatoMensajes.medio(m.getMedioPago(), m.getCuenta()))
+                + "\n📅 " + formato.fecha(m.getFechaHora());
+        int productos = (int) m.getItems().stream().filter(i -> !i.isDescuento()).count();
+        return productos == 0 ? linea : linea + " · " + productos + (productos == 1 ? " producto" : " productos");
+    }
+
+    private static String origen(Movimiento m) {
+        return switch (m.getOrigen()) {
+            case TICKET -> "📷 ticket";
+            case AUDIO -> "🎙 audio";
+            case AVISO -> "🔔 aviso";
+            case DASHBOARD -> "🖥 dashboard";
+            case AUTOMATICO -> m.getGastoFijoId() != null ? "📌 gasto fijo" : "⚙️ automático";
+            case TEXTO, RESUMEN -> "✍️ texto";
+        };
+    }
+
+    /** "Es la misma" (ru:nuevo:existente) o "Compré de nuevo" (rd:nuevo). */
+    public Teclado repetido(long nuevoId, long existenteId) {
+        return Teclado.constructor()
+                .fila(new Teclado.Boton("🔗 Es la misma: uní los datos", UNIR + ":" + nuevoId + ":" + existenteId))
+                .fila(new Teclado.Boton("➕ Compré de nuevo: guardá las dos", DE_NUEVO + ":" + nuevoId))
+                .build();
     }
 
     /** Cómo queda la tarjeta de un gasto que ya no está pendiente. */

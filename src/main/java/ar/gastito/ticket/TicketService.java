@@ -132,4 +132,9 @@ public class TicketService {
         fotos.borrar(m.getFotoTicket());
         movimientos.quitarFotoTicket(m.getId());
     }
+
+    /** La foto de un ticket que ya no tiene movimiento (se unió a otro que ya tenía la suya). */
+    public void borrarArchivoDeFoto(String ruta) {
+        fotos.borrar(ruta);
+    }
 }

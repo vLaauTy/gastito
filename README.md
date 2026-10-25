@@ -76,6 +76,7 @@ Otros ajustes, en `src/main/resources/application.yml`:
 - `gastito.resumenes.modelo-semanal`, `modelo-mensual` y `max-tokens`: el modelo que redacta cada resumen.
 - `gastito.resumenes.minimo-semanal` y `minimo-mensual` (`gastos` y `dias`): con menos datos, el resumen no lleva
   consejo ni escenarios de ahorro (por defecto 5 gastos en 3 días, y 15 gastos en 7 días).
+- `gastito.repetidos.ventana`: cuánto antes o después de un gasto nuevo se busca otro igual (por defecto `3h`).
 - `gastito.consultas.modelo`, `max-tokens` y `max-llamadas`: el modelo que responde preguntas y cuántas
   herramientas puede usar por pregunta (por defecto 3).
 - `gastito.zona-horaria`: por defecto `America/Argentina/Buenos_Aires`.
@@ -283,6 +284,30 @@ foto viaja a la API de Anthropic.
 Lo que guardás le enseña al bot: la próxima vez que cargues algo parecido usa la misma categoría, y tus últimas
 20 confirmaciones van como ejemplos en el prompt de la IA. Con los tickets, la categoría que le diste a un
 comercio manda sobre la que propone la IA.
+
+### Compras repetidas
+
+Si un gasto nuevo (por texto, audio o ticket) se parece mucho a uno que ya estaba, en lugar de la tarjeta de
+siempre llegan los dos lado a lado, **Ya registrado** y **Nuevo**. Se parecen si tienen:
+
+- el mismo monto, con una tolerancia del 1% o $50, lo que sea mayor;
+- a no más de 3 horas de diferencia (`gastito.repetidos.ventana`);
+- y la misma categoría o el mismo comercio, si los dos los tienen (el comercio se compara sin la sucursal:
+  `DIA TIENDA 5601` = `Dia Tienda`).
+
+Se compara contra los gastos confirmados (las cuotas futuras no) y contra los cobros pendientes de los gastos
+fijos del mes, sin mirar la hora. En una juntada se compara el total pagado, no la parte de uno. Lo que genera
+Gastito (cobros de fijos, cuotas) no se compara al crearse.
+
+- **Es la misma: uní los datos.** Queda el que ya estaba, con lo mejor de los dos: los productos y la foto del
+  ticket, la descripción dicha por texto o audio, el monto y la hora del ticket, y el medio de pago más completo.
+  Si era el cobro pendiente de un fijo, se confirma con lo que se cargó. El otro se borra, y lo que aportó (su
+  origen, monto, hora y texto) queda en la tabla `movimiento_union`.
+- **Compré de nuevo: guardá las dos.** Se guarda el nuevo. Si le falta algo, o es un ticket, vuelve la tarjeta de
+  siempre para revisarlo.
+
+La detección (`RepetidosService`, sobre una `Huella`: fecha, monto, categoría y comercio) está pensada para usarse
+también con los avisos del banco y el resumen de la tarjeta de la etapa 7.
 
 ### Ingresos
 

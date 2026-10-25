@@ -56,6 +56,11 @@ public class MovimientoItem {
         this.subtotal = item.subtotal();
     }
 
+    /** El renglón como lo leyó el ticket, para copiarlo a otro movimiento. */
+    ItemTicket comoTicket() {
+        return new ItemTicket(descripcion, descripcionOriginal, codigoBarras, cantidad, precioUnitario, subtotal);
+    }
+
     public boolean isDescuento() {
         return subtotal.signum() < 0;
     }

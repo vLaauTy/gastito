@@ -1,6 +1,7 @@
 package ar.gastito.movimiento;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -117,6 +118,20 @@ public class Movimiento {
     @OneToMany(mappedBy = "movimiento", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orden")
     private List<MovimientoItem> items = new ArrayList<>();
+
+    /** El cobro de un gasto fijo (el id, para no atar el movimiento al paquete de los fijos), o null. */
+    private Long gastoFijoId;
+
+    /** Con gastoFijoId: el mes (día 1) al que corresponde el cobro. */
+    private LocalDate fijoPeriodo;
+
+    /** Una cuota de una compra en cuotas, o null. */
+    private Long planCuotasId;
+
+    /** Solo en ENTRE_CUENTAS: la cuenta a la que fue la plata (cuenta es la de origen). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cuenta_destino_id")
+    private Cuenta cuentaDestino;
 
     /** El largo de la columna texto_original: un mensaje o una transcripción más larga se recorta. */
     static final int LARGO_MAXIMO_TEXTO_ORIGINAL = 1000;
@@ -288,6 +303,85 @@ public class Movimiento {
         this.fotoTicket = null;
     }
 
+    // --- Compras repetidas ---
+
+    /**
+     * Qué tan confiable es un dato según de dónde vino: el ticket trae el total y la hora impresos; un aviso del
+     * banco, el monto exacto; lo dicho a mano, lo que uno recuerda; lo generado por Gastito, solo lo esperado.
+     */
+    static int precision(Origen origen) {
+        return switch (origen) {
+            case TICKET -> 3;
+            case AVISO -> 2;
+            case TEXTO, AUDIO, DASHBOARD -> 1;
+            case AUTOMATICO, RESUMEN -> 0;
+        };
+    }
+
+    /** Qué tan completo está el medio de pago: con cuenta o tarjeta, solo el medio, o nada. */
+    private int completitudMedio() {
+        return cuenta != null || tarjeta != null ? 2 : medioPago != null ? 1 : 0;
+    }
+
+    /**
+     * Une a este movimiento otro que es la misma compra, quedándose con lo mejor de cada uno (este queda; el otro se
+     * borra después):
+     * <ul>
+     * <li>los productos, la foto y los datos del ticket, si el otro es un ticket y este no;</li>
+     * <li>la descripción dicha a mano (texto o audio), que es la que el usuario reconoce;</li>
+     * <li>el monto y la hora del más preciso (el ticket gana). Si este es el cobro esperado de un fijo, el monto y
+     * la hora que se cargaron;</li>
+     * <li>el medio de pago más completo, y la categoría si este no tiene;</li>
+     * <li>el origen del más preciso.</li>
+     * </ul>
+     * Si este es el cobro pendiente de un fijo, queda listo para confirmar con lo cargado.
+     */
+    public void absorber(Movimiento otro) {
+        boolean otroMasPreciso = precision(otro.origen) > precision(origen);
+        boolean esteAMano = origen == Origen.TEXTO || origen == Origen.AUDIO;
+        boolean otroAMano = otro.origen == Origen.TEXTO || otro.origen == Origen.AUDIO;
+
+        if ((otroAMano && !esteAMano && otro.descripcion != null) || descripcion == null) {
+            descripcion = otro.descripcion;
+        }
+        if (otroMasPreciso && otro.monto != null) {
+            monto = otro.monto;
+            fechaHora = otro.fechaHora;
+        }
+        if (otro.completitudMedio() > completitudMedio()) {
+            medioPago = otro.medioPago;
+            cuenta = otro.cuenta;
+            tarjeta = otro.tarjeta;
+        }
+        if (categoria == null && otro.categoria != null) {
+            categoria = otro.categoria;
+            candidatas.clear();
+        }
+        if (otro.origen == Origen.TICKET && origen != Origen.TICKET) {
+            items.clear();
+            for (MovimientoItem item : otro.items) {
+                items.add(new MovimientoItem(this, items.size(), item.comoTicket()));
+            }
+            otro.items.clear();
+            sucursal = otro.sucursal;
+            subtotalImpreso = otro.subtotalImpreso;
+            descuentosImpresos = otro.descuentosImpresos;
+            lineasIlegibles = otro.lineasIlegibles;
+            fotoTicket = otro.fotoTicket;
+            otro.fotoTicket = null;
+        }
+        if (comercio == null) {
+            comercio = otro.comercio;
+        }
+        if (textoOriginal == null) {
+            textoOriginal = otro.textoOriginal;
+        }
+        juntada = juntada || otro.juntada;
+        if (otroMasPreciso) {
+            origen = otro.origen;
+        }
+    }
+
     public Long getId() {
         return id;
     }
@@ -390,5 +484,21 @@ public class Movimiento {
 
     public List<MovimientoItem> getItems() {
         return Collections.unmodifiableList(items);
+    }
+
+    public Long getGastoFijoId() {
+        return gastoFijoId;
+    }
+
+    public LocalDate getFijoPeriodo() {
+        return fijoPeriodo;
+    }
+
+    public Long getPlanCuotasId() {
+        return planCuotasId;
+    }
+
+    public Cuenta getCuentaDestino() {
+        return cuentaDestino;
     }
 }

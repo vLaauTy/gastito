@@ -85,6 +85,9 @@ gastito:
     minimo-mensual:
       gastos: 15
       dias: 7
+  repetidos:
+    # Un gasto nuevo se compara con los de esta ventana, antes y después (mismo monto con 1% o $50 de tolerancia).
+    ventana: 3h
   consultas:
     modelo: claude-haiku-5-5
     max-tokens: 1024

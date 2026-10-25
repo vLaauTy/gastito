@@ -1,6 +1,7 @@
 package ar.gastito.movimiento;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -8,6 +9,7 @@ import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -20,6 +22,32 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
     // Sin "items": junto con las candidatas, el JOIN repetiría cada producto una vez por candidata.
     @EntityGraph(attributePaths = {"categoria", "medioPago", "cuenta", "tarjeta", "candidatas"})
     Optional<Movimiento> findConDetalleById(Long id);
+
+    /**
+     * Los gastos contra los que se busca una compra repetida, como huellas (id, fecha, monto, categoría, comercio y 1
+     * si es el cobro pendiente de un fijo):
+     * los confirmados entre desde y hasta que ya ocurrieron (las cuotas futuras no), y los cobros pendientes de
+     * gastos fijos del mes. El monto de una juntada es el total pagado, no mi parte.
+     */
+    @Query(nativeQuery = true, value = """
+            SELECT m.id, m.fecha_hora, COALESCE(j.total_pagado, m.monto), m.categoria_id, m.comercio,
+                   CASE WHEN m.estado = 'PENDIENTE' THEN 1 ELSE 0 END
+            FROM movimiento m LEFT JOIN juntada j ON j.movimiento_id = m.id
+            WHERE m.tipo = 'GASTO' AND m.id <> :excepto AND m.monto IS NOT NULL
+              AND ((m.estado = 'CONFIRMADO' AND m.fecha_hora BETWEEN :desde AND :hasta AND m.fecha_hora <= :ahora)
+                OR (m.estado = 'PENDIENTE' AND m.gasto_fijo_id IS NOT NULL AND m.fijo_periodo = :periodo))""")
+    List<Object[]> huellasCandidatas(@Param("excepto") Long excepto, @Param("desde") LocalDateTime desde,
+            @Param("hasta") LocalDateTime hasta, @Param("ahora") LocalDateTime ahora,
+            @Param("periodo") LocalDate periodo);
+
+    /** El total que pagué en la juntada de este movimiento, o null si no es una juntada. */
+    @Query(nativeQuery = true, value = "SELECT total_pagado FROM juntada WHERE movimiento_id = :id")
+    BigDecimal totalDeJuntada(@Param("id") Long id);
+
+    /** Al unir dos movimientos, el uso de la IA del que se borra pasa al que queda. */
+    @Modifying
+    @Query(nativeQuery = true, value = "UPDATE uso_ia SET movimiento_id = :a WHERE movimiento_id = :de")
+    int pasarUsoIa(@Param("de") Long de, @Param("a") Long a);
 
     /** La fecha del primer movimiento confirmado, de cualquier tipo: antes de eso no hay datos. Null si no hay. */
     @Query("""

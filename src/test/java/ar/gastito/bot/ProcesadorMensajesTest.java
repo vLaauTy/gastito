@@ -87,6 +87,7 @@ class ProcesadorMensajesTest {
     private final TicketService tickets = mock(TicketService.class);
     private final ResumenService resumenes = mock(ResumenService.class);
     private final ConsultaService consultas = mock(ConsultaService.class);
+    private final ConversacionRepetidos repetidos = mock(ConversacionRepetidos.class);
     private ProcesadorMensajes procesador;
 
     @BeforeEach
@@ -102,7 +103,7 @@ class ProcesadorMensajesTest {
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
                 tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, resumenes,
                 new FormatoResumen(formato, new GraficoMes(formato), dashboard), consultas, new FormatoConsulta(formato),
-                properties, dashboard, RELOJ);
+                repetidos, properties, dashboard, RELOJ);
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));
         when(tickets.tamanioMaximo()).thenReturn(DataSize.ofMegabytes(10));
     }
@@ -1079,5 +1080,29 @@ class ProcesadorMensajesTest {
         assertThat(r.html()).isEqualTo("💬 En kiosco llevás $14.800.");
         assertThat(r.teclado().isVacio()).isTrue();
         verify(movimientos, never()).crearPendiente(any(), any(), any());
+    }
+
+    // --- Compras repetidas ---
+
+    @Test
+    void unGastoParecidoAUnoQueYaEstabaMuestraLosDosLadoALado() {
+        Movimiento pendiente = conCategoria("1500", KIOSCO);
+        Accion.Enviar comparacion = Accion.Enviar.tarjeta("🔁 repetido", Teclado.NINGUNO, ID);
+        when(repetidos.siEsRepetido(pendiente)).thenReturn(Optional.of(comparacion));
+
+        Accion.Enviar tarjeta = mandarGasto("kiosco 1500", pendiente, Confianza.ALTA, null);
+
+        assertThat(tarjeta).isSameAs(comparacion);
+    }
+
+    @Test
+    void losBotonesDeRepetidosVanALaConversacionDeRepetidos() {
+        when(repetidos.unir(TARJETA, ID, 7L)).thenReturn(List.of(new Accion.Avisar("🔗 Unidos")));
+        assertThat(tocar("ru:" + ID + ":7")).containsExactly(new Accion.Avisar("🔗 Unidos"));
+
+        // "Compré de nuevo" de algo que no se puede guardar así: vuelve la tarjeta de siempre.
+        when(repetidos.deNuevo(TARJETA, ID)).thenReturn(Optional.empty());
+        when(movimientos.buscar(ID)).thenReturn(conCategoria("1500", KIOSCO));
+        assertThat(edicion(tocar("rd:" + ID)).html()).startsWith("🧾 <b>Nuevo gasto</b>");
     }
 }
