@@ -260,6 +260,35 @@ class TarjetasTest {
     }
 
     @Test
+    void siLasCuentasNoCierranNombraElRenglonDondeCantidadPorPrecioNoDaElImporte() {
+        // Como con la foto real de Día: el pliegue hizo leer $4.463,90 donde dice $4.488.
+        MovimientoInterpretado interpretado = new MovimientoInterpretado(new BigDecimal("8238"), "Día", SUPER,
+                List.of(), null, null, null, DatosDePrueba.FECHA_TICKET);
+        Movimiento m = Movimiento.deTicket(interpretado, new DatosTicket("Día", "5601", new BigDecimal("8238"), null,
+                List.of(), List.of(
+                        new ItemTicket("Pasta mac & cheese", new BigDecimal("1"), new BigDecimal("4488"),
+                                new BigDecimal("4463.90")),
+                        new ItemTicket("Queso", new BigDecimal("0.625"), new BigDecimal("6000"), new BigDecimal("3750")))),
+                null, DatosDePrueba.AHORA);
+
+        assertThat(tarjetas.pendiente(m)).contains("""
+                ⚠️ Los productos suman <b>$8.213,90</b> y el subtotal dice <b>$8.238</b>.
+                ⚠️ Pasta mac &amp; cheese: 1 × $4.488 da <b>$4.488</b>, pero el renglón dice <b>$4.463,90</b>.
+                Revisalo antes de guardar.""");
+    }
+
+    @Test
+    void siLasCuentasCierranNoNombraRenglones() {
+        // Un renglón que no da (una promo por cantidad, por ejemplo) no se muestra si las cuentas del ticket cierran.
+        MovimientoInterpretado interpretado = new MovimientoInterpretado(new BigDecimal("4000"), "Día", SUPER,
+                List.of(), null, null, null, DatosDePrueba.FECHA_TICKET);
+        Movimiento m = Movimiento.deTicket(interpretado, DatosTicket.de("Día", List.of(new ItemTicket("Agua x 6",
+                new BigDecimal("6"), new BigDecimal("800"), new BigDecimal("4000")))), null, DatosDePrueba.AHORA);
+
+        assertThat(tarjetas.pendiente(m)).doesNotContain("⚠️");
+    }
+
+    @Test
     void cadaControlTieneSuFrase() {
         assertThat(tarjetas.diferencia(new ControlesTicket.Diferencia(ControlesTicket.Control.DESCUENTOS,
                 new BigDecimal("-6574.60"), new BigDecimal("-7666.60"))))

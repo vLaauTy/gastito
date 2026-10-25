@@ -17,15 +17,16 @@ public record LecturaTicketIa(
         String problema,
 
         @JsonPropertyDescription("Nombre del comercio como lo conoce la gente, con mayúsculas normales. "
-                + "Ejemplo: Día. Si solo figura la razón social, esa, sin S.A. ni S.R.L.")
+                + "Ejemplo: Día. Si dice \"a cuenta y orden de X\", es X, nunca el franquiciado. Si solo figura la "
+                + "razón social de una empresa, esa, sin S.A. ni S.R.L.")
         String comercio,
 
         @JsonPropertyDescription("Número o nombre de la sucursal si figura, sin la palabra sucursal. Ejemplo: 5601. "
                 + "Vacío si no figura.")
         String sucursal,
 
-        @JsonPropertyDescription("Fecha de la compra copiada como está impresa, en formato dd/mm/aa o dd/mm/aaaa. "
-                + "Ejemplo: 22/09/26. Vacío si no se lee.")
+        @JsonPropertyDescription("Fecha de la compra copiada como está impresa, sin la hora: dd/mm/aa, dd/mm/aaaa "
+                + "o dd-mm-aaaa. Ejemplos: 22/09/26, 22-09-2026. Vacío si no se lee.")
         String fecha,
 
         @JsonPropertyDescription("Hora de la compra en formato HH:mm. Vacío si no se lee.")
@@ -45,6 +46,10 @@ public record LecturaTicketIa(
 
         @JsonPropertyDescription("El TOTAL impreso, en pesos. Vacío si no se lee.")
         String total,
+
+        @JsonPropertyDescription("La forma de pago copiada tal como está impresa, sin números de tarjeta. "
+                + "Ejemplos: TARJETA, DEBITO VISA, EFECTIVO, MERCADO PAGO. Vacío si no figura.")
+        String medioPagoImpreso,
 
         @JsonPropertyDescription("Exactamente uno de los nombres de la lista de medios de pago, o vacío si el "
                 + "ticket y el texto del usuario no lo dicen con seguridad")
@@ -70,7 +75,8 @@ public record LecturaTicketIa(
                     + "Ejemplo: Galletitas cracker queso. En un descuento, cómo figura: 20% ClubDía.")
             String descripcion,
 
-            @JsonPropertyDescription("La descripción copiada tal como está impresa. Ejemplo: GALLET CRACKER QSO")
+            @JsonPropertyDescription("La descripción copiada tal como está impresa, sin la alícuota de IVA entre "
+                    + "paréntesis ni el importe. Ejemplo: GALLET CRACKER QSO")
             String descripcionOriginal,
 
             @JsonPropertyDescription("El código de barras del producto si está impreso (8 o 13 dígitos), solo "

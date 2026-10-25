@@ -439,6 +439,8 @@
       : h('p', { class: 'note' }, 'No se leyeron los productos de este ticket.');
     const avisos = d.coincide ? null : h('div', { class: 'avisos-ticket' },
       ...d.diferencias.map((dif) => h('p', { class: 'up' }, `⚠️ ${diferenciaTicket(dif)}`)),
+      ...d.renglonesDudosos.map((r) => h('p', { class: 'up' },
+        `⚠️ ${r.descripcion}: ${cantidades.format(r.cantidad)} × ${pesos(r.precioUnitario)} da ${pesos(r.calculado)}, pero el renglón dice ${pesos(r.impreso)}.`)),
       d.lineasIlegibles.length ? h('p', { class: 'note' }, '🔍 No se pudo leer bien:') : null,
       d.lineasIlegibles.length ? h('ul', { class: 'ilegibles' }, ...d.lineasIlegibles.map((l) => h('li', {}, l))) : null);
     const suma = d.sumaItems != null && d.coincide

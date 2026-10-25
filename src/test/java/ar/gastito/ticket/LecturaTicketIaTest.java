@@ -30,6 +30,20 @@ class LecturaTicketIaTest {
                 "categorias", "- Supermercado", "mediosPago", "- Débito", "cuentas", "- Galicia",
                 "ejemplos", "(todavía no hay)", "hoy", "jueves 22/10/2026"));
 
-        assertThat(prompt).doesNotContain("{{").contains("- Supermercado").contains("\"22/09/26\" es el 22 de septiembre");
+        assertThat(prompt).doesNotContain("{{").contains("- Supermercado");
+    }
+
+    @Test
+    void elPromptExplicaLoQueAprendimosDelTicketDeDia() {
+        String prompt = new Prompts().cargar(LectorTicket.PROMPT, Map.of());
+
+        assertThat(prompt)
+                .as("comercio de una franquicia").contains("Si aparece \"a cuenta y orden de X\", el comercio es X")
+                .as("fechas con guiones").contains("\"22-09-2026 17:44:28\"")
+                .as("producto en tres renglones").contains("cada producto ocupa tres renglones")
+                .as("la alícuota de IVA no es un precio").contains("alícuota de IVA")
+                .as("el ahorro no se resta de nuevo").contains("\"Ahorro ClubDía\"")
+                .as("tarjeta sin aclarar").contains("Si solo dice \"Tarjeta\"")
+                .as("número de cliente").contains("número de cliente (por ejemplo de ClubDía)");
     }
 }

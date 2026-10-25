@@ -2,6 +2,7 @@ package ar.gastito.ticket;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.Normalizer;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -62,6 +63,13 @@ public class ValidadorTicket {
     private static final Pattern CUIT =
             Pattern.compile("\\b(?:20|23|24|27|30|33|34)[-\\s.]?\\d{8}[-\\s.]?\\d\\b");
 
+    /** Lo que dice si una tarjeta es de débito o de crédito (o su marca, que en el catálogo es crédito). */
+    private static final Pattern ACLARA_LA_TARJETA = Pattern.compile(
+            "DEBITO|CREDITO|VISA|MASTER|MAESTRO|ELECTRON|AMEX|AMERICAN|NARANJA|CABAL|DINERS|NATIVA|ARGENCARD");
+
+    /** La alícuota de IVA entre paréntesis: "(21,00)", "(10,50)", "(21%)". */
+    private static final Pattern ALICUOTA_IVA = Pattern.compile("\\(\\s*\\d{1,2}(?:[.,]\\d{1,2})?\\s*%?\\s*\\)");
+
     /** La hora al final de la fecha: "22-09-2026 17:44:28". */
     private static final Pattern HORA_PEGADA = Pattern.compile("\\s(\\d{1,2}:\\d{2}(?::\\d{2})?)$");
 
@@ -112,7 +120,16 @@ public class ValidadorTicket {
         SIN_TOTAL
     }
 
+    /** Sin texto del usuario junto a la foto. */
     public Resultado validar(LecturaTicketIa ia, Catalogo catalogo, LocalDateTime ahora) {
+        return validar(ia, catalogo, ahora, false);
+    }
+
+    /**
+     * @param conTextoDelUsuario si el usuario escribió algo con la foto: lo que dice manda sobre lo impreso, así
+     *                           que una tarjeta sin aclarar en el ticket no anula el medio que eligió la IA
+     */
+    public Resultado validar(LecturaTicketIa ia, Catalogo catalogo, LocalDateTime ahora, boolean conTextoDelUsuario) {
         if (ia == null) {
             return new Ilegible(Motivo.BORROSA);
         }
@@ -143,6 +160,10 @@ public class ValidadorTicket {
         // Solo el nombre exacto: un ticket que dice "TARJETA" puede ser débito o crédito, y la palabra clave
         // "tarjeta" lo llevaría a crédito. Sin aclarar, queda sin medio de pago y lo elige el usuario.
         MedioPago medio = ValidadorInterpretacion.buscarPorNombre(ia.medioPago(), catalogo.mediosPago()).orElse(null);
+        // Aunque el prompt lo pide, con el ticket real la IA eligió crédito para un "TARJETA" a secas: lo decide Java.
+        if (!conTextoDelUsuario && tarjetaSinAclarar(ia.medioPagoImpreso())) {
+            medio = null;
+        }
         Cuenta cuenta = ValidadorInterpretacion.buscar(ia.cuenta(), catalogo.cuentas()).orElse(null);
         TarjetaCredito tarjeta = null;
         if (medio != null && medio.esTarjetaDeCredito()) {
@@ -186,8 +207,8 @@ public class ValidadorTicket {
             }
             boolean descuento = item.esDescuento() || leido.get().signum() < 0;
             BigDecimal subtotal = descuento ? leido.get().abs().negate() : leido.get();
-            String descripcion = descripcion(item.descripcion(), descuento ? "Descuento" : "Producto");
-            String original = recortar(limpiar(item.descripcionOriginal()), LARGO_MAXIMO_DESCRIPCION);
+            String descripcion = descripcion(sinAlicuota(item.descripcion()), descuento ? "Descuento" : "Producto");
+            String original = recortar(limpiar(sinAlicuota(item.descripcionOriginal())), LARGO_MAXIMO_DESCRIPCION);
             String codigo = descuento ? null : CodigoBarras.validar(item.codigoBarras()).orElse(null);
             items.add(new ItemTicket(descripcion, original, codigo, cantidad.orElse(null), precio.orElse(null),
                     subtotal));
@@ -214,6 +235,18 @@ public class ValidadorTicket {
         return resuelta;
     }
 
+    /**
+     * "TARJETA" impreso sin decir si es débito o crédito ni la marca: no se puede saber cuál de las dos fue.
+     * "TARJETA DEBITO", "VISA", "MASTERCARD"… sí se pueden saber.
+     */
+    static boolean tarjetaSinAclarar(String impreso) {
+        if (impreso == null) {
+            return false;
+        }
+        String t = Normalizer.normalize(impreso, Normalizer.Form.NFD).replaceAll("\\p{M}", "").toUpperCase(Locale.ROOT);
+        return t.contains("TARJETA") && !ACLARA_LA_TARJETA.matcher(t).find();
+    }
+
     // --- Textos ---
 
     /**
@@ -229,6 +262,11 @@ public class ValidadorTicket {
         limpio = CUIT.matcher(limpio).replaceAll(" ");
         limpio = limpio.replaceAll("\\s+", " ").strip().replaceAll("^[\\s\\-:#*.,]+|[\\s\\-:#*,]+$", "");
         return limpio.isEmpty() ? null : limpio;
+    }
+
+    /** Sin la alícuota de IVA que Día imprime junto a cada producto: "GALLET CRACKER QSO (21,00)". */
+    static String sinAlicuota(String texto) {
+        return texto == null ? null : ALICUOTA_IVA.matcher(texto).replaceAll(" ");
     }
 
     private static String descripcion(String texto, String porDefecto) {

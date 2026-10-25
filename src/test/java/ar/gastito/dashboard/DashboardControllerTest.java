@@ -299,6 +299,8 @@ class DashboardControllerTest {
                 pesos("2320"), pesos("2900"), pesos("-580"), pesos("2420"), false,
                 List.of(new ConsultaMovimientos.DiferenciaDelTicket(ControlesTicket.Control.SUBTOTAL_Y_TOTAL,
                         pesos("2320"), pesos("2420"))),
+                List.of(new ConsultaMovimientos.RenglonDudosoDelTicket(0, "Leche 1 L", new BigDecimal("2"), pesos("1450"),
+                        pesos("2900"), pesos("2850"))),
                 List.of("Renglón 3: el total está tapado"), true));
 
         mvc.perform(get("/api/movimientos/7/items"))
@@ -319,6 +321,9 @@ class DashboardControllerTest {
                 .andExpect(jsonPath("$.diferencias[0].control").value("SUBTOTAL_Y_TOTAL"))
                 .andExpect(jsonPath("$.diferencias[0].calculado").value(2320.00))
                 .andExpect(jsonPath("$.diferencias[0].impreso").value(2420.00))
+                .andExpect(jsonPath("$.renglonesDudosos[0].descripcion").value("Leche 1 L"))
+                .andExpect(jsonPath("$.renglonesDudosos[0].calculado").value(2900.00))
+                .andExpect(jsonPath("$.renglonesDudosos[0].impreso").value(2850.00))
                 .andExpect(jsonPath("$.lineasIlegibles[0]").value("Renglón 3: el total está tapado"))
                 .andExpect(jsonPath("$.foto").value(true));
     }

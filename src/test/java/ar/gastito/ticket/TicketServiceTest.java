@@ -152,7 +152,7 @@ class TicketServiceTest {
 
     @Test
     void unaFotoQueNoEsTicketNoGuardaNada() throws IOException {
-        laIaLee(new LecturaTicketIa("no_es_ticket", "", "", "", "", List.of(), "", "", "", "", "", List.of(), "",
+        laIaLee(new LecturaTicketIa("no_es_ticket", "", "", "", "", List.of(), "", "", "", "", "", "", List.of(), "",
                 List.of()));
 
         assertThat(service.leer(jpeg(800, 600), null)).isInstanceOf(TicketService.NoEsTicket.class);
@@ -221,7 +221,7 @@ class TicketServiceTest {
                 List.of(new LecturaTicketIa.Item("Leche 1 L", "LECHE ENT 1L", "", "2", "1450", "2900", false),
                         new LecturaTicketIa.Item("Yerba 500 g", "", "", "", "", "3900", false),
                         new LecturaTicketIa.Item("Galletitas", "", "", "", "", "1250", false)),
-                "", "", total, "Débito", "", List.of("Supermercado"), "alta", List.of());
+                "", "", total, "DEBITO", "Débito", "", List.of("Supermercado"), "alta", List.of());
     }
 
     private static byte[] jpeg(int ancho, int alto) throws IOException {

@@ -19,22 +19,27 @@ Hoy es {{hoy}}.
 
 Cómo son los tickets argentinos:
 - Los importes suelen usar punto para los miles y coma para los decimales ("$ 8.050,00", "897,60"), pero en un mismo ticket el TOTAL puede venir con punto decimal ("30666.40"). Devolvé los importes solo con dígitos y punto decimal, sin separador de miles (8050, 897.60, 30666.40). Si no estás seguro de cuál es el decimal en una línea, copiala como está impresa.
-- Las fechas son día/mes/año, con el año en dos o cuatro cifras: "22/09/26" es el 22 de septiembre de 2026, nunca otra cosa. Copiá la fecha como está impresa.
+- Las fechas son día/mes/año, con barras o guiones y el año en dos o cuatro cifras: "22/09/26", "22/09/2026" y "22-09-2026 17:44:28" son el 22 de septiembre de 2026, nunca otra cosa. Copiá la fecha como está impresa, sin la hora, y la hora aparte.
 - Arriba suele estar el comercio (nombre de fantasía y razón social), la sucursal, el CUIT, la dirección y el tipo de comprobante ("Factura B", "Factura C", "Tique", "Ticket Factura A"). Nada de eso es un producto.
+- En las franquicias, el primer renglón es la razón social del franquiciado, muchas veces el nombre de una persona ("PEREZ JUAN CARLOS"), y debajo dice "A CUENTA Y ORDEN DE DIA ARG. SA". Si aparece "a cuenta y orden de X", el comercio es X (en ese caso, "Día"), nunca el franquiciado.
 - Las líneas de IVA ("IVA 21%", "IVA contenido", "Régimen de Transparencia Fiscal al Consumidor", "Otros impuestos nacionales indirectos", "Otros tributos nacionales indirectos"), "Subtotal", "Total", "Su pago", "Vuelto", "Cambio" y los datos del pago no son productos.
-- Cada producto suele traer su código de barras (8 o 13 dígitos) y una descripción abreviada en mayúsculas ("GALLET CRACKER QSO"). El código va en codigoBarras, no en la descripción.
-- Un producto puede ocupar dos líneas: la cantidad y el precio unitario arriba ("2 x 2.250,00") y la descripción con el subtotal abajo, o al revés. Juntalas en un solo producto.
+- En los supermercados como Día, cada producto ocupa tres renglones, y los tres son un solo producto:
+  1. La cantidad por el precio unitario: "2 X 2.250,00".
+  2. La descripción abreviada en mayúsculas, un número entre paréntesis y el importe del renglón: "GALLET CRACKER QSO (21,00) 4.500,00". El número entre paréntesis es la alícuota de IVA (21,00 o 10,50 por ciento): no es un precio ni un importe, no lo copies en ningún campo.
+  3. El código de barras (8 o 13 dígitos): "7792180145444". Va en codigoBarras, no en la descripción.
+  Debajo puede venir el descuento de ese producto ("20% ClubDía -900,00"), que es un renglón aparte.
+- En otros tickets un producto ocupa una o dos líneas (la cantidad y el precio arriba, la descripción y el importe abajo, o al revés). Juntalas en un solo producto.
 - Los productos por peso traen el peso y el precio por kilo ("0,532 kg x 5.990,00"): la cantidad es el peso.
 - Promociones, "2x1", "3x2", "Desc.", "Bonif." y los descuentos con tarjeta, banco o programa de clientes son descuentos, aunque estén impresos con signo menos. Cada línea de descuento es un renglón propio con esDescuento en true, en el lugar donde está impresa: en Día, el "20% ClubDía" va justo debajo de cada producto.
 - Las líneas que resumen lo que ya se descontó ("Ahorro ClubDía", "Usted ahorró", "Total ahorro") son informativas: no son un renglón ni van en descuentos, porque restarlas de nuevo contaría dos veces lo mismo.
 
 Cómo completar cada dato:
 - problema: vacío si es un ticket o factura de compra y se leen los productos y el total. "no_es_ticket" si la foto es otra cosa (una persona, un paisaje, una captura de pantalla que no es un comprobante). "borrosa" si no se pueden leer los productos o los importes. "cortada" si falta una parte del ticket, por ejemplo el total.
-- comercio: el nombre de fantasía con mayúsculas normales ("Día", "Farmacity", "Kiosco El Paso"). Si solo está la razón social, usala sin "S.A." ni "S.R.L.".
+- comercio: el nombre de fantasía con mayúsculas normales ("Día", "Farmacity", "Kiosco El Paso"). Si dice "a cuenta y orden de X", es X. Si solo está la razón social de una empresa, usala sin "S.A." ni "S.R.L."; el nombre de una persona (el franquiciado) nunca es el comercio.
 - sucursal: el número o nombre de la sucursal si está impreso ("5601"). Si no, vacío.
 - items: cada producto y cada descuento, en el orden impreso.
   - descripcion: legible, con las abreviaturas desarmadas ("GALLET CRACKER QSO" es "Galletitas cracker queso").
-  - descripcionOriginal: copiada tal como está impresa.
+  - descripcionOriginal: la descripción copiada tal como está impresa ("GALLET CRACKER QSO"), sin la alícuota entre paréntesis ni el importe.
   - codigoBarras: solo los dígitos del código de barras si está impreso; en un descuento, vacío.
   - subtotal: lo que se pagó por ese renglón; en un descuento, lo que resta.
 - subtotal: el SUBTOTAL impreso, antes de los descuentos. Vacío si no figura.

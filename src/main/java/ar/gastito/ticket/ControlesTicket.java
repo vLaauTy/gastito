@@ -1,6 +1,7 @@
 package ar.gastito.ticket;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,7 +42,41 @@ public final class ControlesTicket {
     public record Diferencia(Control control, BigDecimal calculado, BigDecimal impreso) {
     }
 
+    /** En un renglón, cantidad × precio unitario puede diferir del importe por redondeo: hasta un peso. */
+    public static final BigDecimal TOLERANCIA_RENGLON = BigDecimal.ONE;
+
+    /**
+     * Un producto donde la cantidad por el precio unitario no da el importe del renglón: casi siempre, un número
+     * mal leído (un pliegue, un dígito gastado). Ayuda a encontrar la línea cuando una cuenta no cierra.
+     *
+     * @param renglon   desde 0, en el orden impreso
+     * @param calculado cantidad × precio unitario
+     * @param impreso   el importe del renglón
+     */
+    public record RenglonDudoso(int renglon, String descripcion, BigDecimal cantidad, BigDecimal precioUnitario,
+            BigDecimal calculado, BigDecimal impreso) {
+    }
+
     private ControlesTicket() {
+    }
+
+    /** Los productos con cantidad y precio unitario cuyo producto no da el importe del renglón. */
+    public static List<RenglonDudoso> renglonesDudosos(Movimiento m) {
+        List<RenglonDudoso> dudosos = new ArrayList<>();
+        List<MovimientoItem> items = m.getItems();
+        for (int i = 0; i < items.size(); i++) {
+            MovimientoItem item = items.get(i);
+            if (item.isDescuento() || item.getCantidad() == null || item.getPrecioUnitario() == null) {
+                continue;
+            }
+            BigDecimal calculado = item.getCantidad().multiply(item.getPrecioUnitario())
+                    .setScale(2, RoundingMode.HALF_UP);
+            if (calculado.subtract(item.getSubtotal()).abs().compareTo(TOLERANCIA_RENGLON) > 0) {
+                dudosos.add(new RenglonDudoso(i, item.getDescripcion(), item.getCantidad(), item.getPrecioUnitario(),
+                        calculado, item.getSubtotal()));
+            }
+        }
+        return dudosos;
     }
 
     /**

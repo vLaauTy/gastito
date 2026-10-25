@@ -328,6 +328,13 @@ class ConsultaMovimientosTest {
             assertThat(d.impreso()).isEqualByComparingTo("4500");
         });
         assertThat(detalle.lineasIlegibles()).containsExactly("Renglón 1: el subtotal está sobre un pliegue");
+        // 2 × $2.250 da $4.500, no los $4.300 que se leyeron: Java encuentra el renglón por su cuenta.
+        assertThat(detalle.renglonesDudosos()).singleElement().satisfies(r -> {
+            assertThat(r.renglon()).isZero();
+            assertThat(r.descripcion()).isEqualTo("Galletitas cracker queso");
+            assertThat(r.calculado()).isEqualByComparingTo("4500");
+            assertThat(r.impreso()).isEqualByComparingTo("4300");
+        });
     }
 
     @Test

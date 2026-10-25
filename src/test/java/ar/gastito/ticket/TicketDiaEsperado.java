@@ -81,7 +81,7 @@ final class TicketDiaEsperado {
         String impresa = fecha.substring(8, 10) + "/" + fecha.substring(5, 7) + "/" + fecha.substring(2, 4);
         return new LecturaTicketIa("", comercio, sucursal, impresa, json.get("hora").asText(), items,
                 conComa(subtotal), conComa(descuentos), total.setScale(2, RoundingMode.UNNECESSARY).toPlainString(),
-                "", "", List.of("Supermercado"), "alta", List.of());
+                "TARJETA", "", "", List.of("Supermercado"), "alta", List.of());
     }
 
     /** "4.500,00", "-897,60". */

@@ -93,7 +93,8 @@ public class TicketService {
         LocalDateTime ahora = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MINUTES);
         ClienteIa.Respuesta<LecturaTicketIa> respuesta = lector.leer(imagen.jpeg(), pista, catalogo, ahora);
 
-        return switch (validador.validar(respuesta.valor(), catalogo, ahora)) {
+        boolean conTexto = pista != null && !pista.isBlank();
+        return switch (validador.validar(respuesta.valor(), catalogo, ahora, conTexto)) {
             case ValidadorTicket.Valido v -> new Leido(guardar(v, imagen, pista, respuesta.usoIaId(), catalogo));
             case ValidadorTicket.NoEsTicket n -> new NoEsTicket();
             case ValidadorTicket.Ilegible i -> new Ilegible(i.motivo());

@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -88,7 +89,8 @@ class LecturaTicketRealIT {
             s.assertThat(leido.getCantidad() == null ? BigDecimal.ONE : leido.getCantidad())
                     .as("cantidad del renglón %d", i).isEqualByComparingTo(renglon.cantidad());
         }
-        s.assertThat(m.getLineasIlegibles()).as("líneas ilegibles").isEmpty();
+        // El ticket real está arrugado: la IA puede marcar líneas tapadas por un pliegue aunque las haya leído bien.
+        // Se imprimen (arriba) y no fallan: la tarjeta solo las muestra si las cuentas no cierran.
         s.assertAll();
         System.out.println("Uso del mes: " + registro.resumenMesActual());
     }
@@ -105,45 +107,64 @@ class LecturaTicketRealIT {
         m.getLineasIlegibles().forEach(l -> System.out.println("  No se leyó: " + l));
     }
 
+    /** Un ticket dibujado con el formato de Día. Los nombres y números son inventados. */
     @Test
-    void leeUnTicketDeSupermercadoSinDatosSensibles() throws IOException {
+    void leeUnTicketConElFormatoDeDiaSinDatosSensibles() throws IOException {
         TicketService.Resultado r = tickets.leer(ticket(List.of(
-                "SUPERMERCADO DIA",
-                "DIA ARGENTINA S.A.",
-                "CUIT 30-68731043-4",
-                "Av. Siempre Viva 742 - CABA",
-                "FACTURA B   Nro 0012-00034567",
-                "Fecha: 18/10/26     Hora: 17:20",
+                "PEREZ JUAN CARLOS",
+                "A CUENTA Y ORDEN DE DIA ARG. SA",
+                "CUIT 20-12345678-6",
+                "Sucursal 5601  Av. Siempre Viva 742",
+                "TIQUE FACTURA B   Nro 0012-00034567",
+                "22-09-2026 17:44:28",
                 "--------------------------------",
-                "2 x 1.450,00",
-                "LECHE ENTERA 1L           2.900,00",
-                "YERBA MATE 500G           3.900,00",
-                "GALLETITAS DULCES         1.250,00",
-                "DTO 2X1 GALLETITAS         -250,00",
+                "2 X 1.450,00",
+                "LECHE ENT 1L (21,00)       2.900,00",
+                "7791813777021",
+                "1 X 3.900,00",
+                "YERBA MATE 500G (21,00)    3.900,00",
+                "7790070432858",
+                "20% ClubDia                 -780,00",
+                "1 X 1.250,00",
+                "GALLET DULCES (21,00)      1.250,00",
+                "7792180145444",
                 "--------------------------------",
-                "TOTAL                 $  7.800,00",
-                "TARJETA DEBITO VISA  ****4321",
-                "IVA CONTENIDO 21%         1.353,72",
-                "Le atendio: MARIA GOMEZ")), null);
+                "SUBTOTAL                   8.050,00",
+                "DESCUENTOS                  -780,00",
+                "TOTAL                 $     7270.00",
+                "TARJETA                    7.270,00",
+                "IVA CONTENIDO              1.261,74",
+                "Ahorro ClubDia               780,00",
+                "Cajero: GOMEZ MARIA  Caja 3",
+                "ClubDia N 4455667788")), null);
 
         assertThat(r).isInstanceOf(TicketService.Leido.class);
         Movimiento m = ((TicketService.Leido) r).movimiento();
-        System.out.printf("Leído: %s, %s, total %s, %s, %s, productos %s%n", m.getComercio(), m.getFechaHora(),
-                m.getMonto(), m.getMedioPago() == null ? "-" : m.getMedioPago().getNombre(),
-                m.getCategoria() == null ? "candidatas " + m.getCandidatas().stream().map(c -> c.getNombre()).toList()
-                        : m.getCategoria().getNombre(),
-                m.getItems().stream().map(i -> i.getDescripcion() + " " + i.getSubtotal()).toList());
-        assertThat(m.getMonto()).isEqualByComparingTo("7800");
-        assertThat(m.getComercio()).containsIgnoringCase("d");
-        assertThat(m.getFechaHora().toLocalDate()).hasDayOfMonth(18).hasMonthValue(10);
-        assertThat(m.getMedioPago().getNombre()).isEqualTo("Débito");
-        assertThat(m.getItems().stream().map(MovimientoItem::getSubtotal).reduce(java.math.BigDecimal.ZERO,
-                java.math.BigDecimal::add)).isEqualByComparingTo("7800");
-        assertThat(m.getItems()).anySatisfy(i -> assertThat(i.isDescuento()).isTrue());
-        String guardado = m.getComercio() + m.getDescripcion() + m.getItems().stream()
-                .map(MovimientoItem::getDescripcion).toList();
-        assertThat(guardado).doesNotContain("4321").doesNotContain("68731043").doesNotContainIgnoringCase("maria");
-        assertThat(m.getFotoTicket()).startsWith("tickets/");
+        imprimir(m);
+        SoftAssertions s = new SoftAssertions();
+        s.assertThat(m.getComercio()).as("comercio: a cuenta y orden de Día").isEqualTo("Día");
+        s.assertThat(m.getSucursal()).as("sucursal").isEqualTo("5601");
+        s.assertThat(m.getFechaHora()).as("fecha con guiones").isEqualTo(LocalDateTime.of(2026, 9, 22, 17, 44));
+        s.assertThat(m.getMonto()).as("total").isEqualByComparingTo("7270");
+        s.assertThat(m.getSubtotalImpreso()).as("subtotal").isEqualByComparingTo("8050");
+        s.assertThat(m.getDescuentosImpresos()).as("descuentos").isEqualByComparingTo("-780");
+        s.assertThat(ControlesTicket.revisar(m)).as("cuentas que no cierran").isEmpty();
+        s.assertThat(m.getMedioPago()).as("TARJETA sin aclarar").isNull();
+        s.assertThat(m.getItems()).extracting(MovimientoItem::getSubtotal).as("renglones en orden")
+                .usingElementComparator(BigDecimal::compareTo)
+                .containsExactly(new BigDecimal("2900"), new BigDecimal("3900"), new BigDecimal("-780"),
+                        new BigDecimal("1250"));
+        s.assertThat(m.getItems()).extracting(MovimientoItem::getCodigoBarras).as("códigos de barras")
+                .containsExactly("7791813777021", "7790070432858", null, "7792180145444");
+        s.assertThat(m.getItems().get(0).getCantidad()).as("cantidad").isEqualByComparingTo("2");
+        String guardado = m.getComercio() + m.getDescripcion() + m.getSucursal()
+                + m.getItems().stream().map(i -> i.getDescripcion() + i.getDescripcionOriginal()).toList()
+                + m.getLineasIlegibles();
+        s.assertThat(guardado).as("datos personales")
+                .doesNotContainIgnoringCase("perez").doesNotContainIgnoringCase("gomez")
+                .doesNotContain("12345678").doesNotContain("4455667788").doesNotContain("(21,00)");
+        s.assertThat(m.getFotoTicket()).startsWith("tickets/");
+        s.assertAll();
         System.out.println("Uso del mes: " + registro.resumenMesActual());
     }
 

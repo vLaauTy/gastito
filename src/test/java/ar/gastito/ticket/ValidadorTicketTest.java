@@ -196,6 +196,20 @@ class ValidadorTicketTest {
     }
 
     @Test
+    void laAlicuotaDeIvaNoQuedaEnLasDescripciones() {
+        ValidadorTicket.Valido v = valido(ticket()
+                .items(List.of(new LecturaTicketIa.Item("Galletitas cracker queso (21,00)", "GALLET CRACKER QSO (21,00)",
+                        "", "2", "2250", "4500", false)))
+                .total("4500")
+                .build());
+
+        assertThat(v.items().get(0).descripcion()).isEqualTo("Galletitas cracker queso");
+        assertThat(v.items().get(0).descripcionOriginal()).isEqualTo("GALLET CRACKER QSO");
+        assertThat(ValidadorTicket.sinAlicuota("LECHE (10,50) X")).isEqualTo("LECHE   X");
+        assertThat(ValidadorTicket.sinAlicuota("PACK (6 U)")).isEqualTo("PACK (6 U)");
+    }
+
+    @Test
     void laSucursalQuedaComoTextoCorto() {
         assertThat(valido(ticket().sucursal(" Suc. 5601 ").build()).ticket().sucursal()).isEqualTo("Suc 5601");
         assertThat(valido(ticket().sucursal("5601").build()).ticket().sucursal()).isEqualTo("5601");
@@ -273,6 +287,14 @@ class ValidadorTicketTest {
         assertThat(v.movimiento().categoria()).isNull();
         assertThat(v.movimiento().candidatas()).containsExactly(CatalogoDePrueba.SUPER, CatalogoDePrueba.KIOSCO);
         assertThat(v.confianza()).isEqualTo(Confianza.MEDIA);
+    }
+
+    @Test
+    void siElTicketDiceSoloTarjetaElMedioQuedaVacioAunqueLaIaElija() {
+        assertThat(valido(ticket().medioPagoImpreso("TARJETA").medioPago("Tarjeta de crédito").build())
+                .movimiento().medioPago()).isNull();
+        assertThat(valido(ticket().medioPagoImpreso("TARJETA DE DEBITO").medioPago("Débito").build())
+                .movimiento().medioPago()).isEqualTo(CatalogoDePrueba.DEBITO);
     }
 
     @Test
@@ -361,6 +383,7 @@ class ValidadorTicketTest {
         private String descuentos = "";
         private List<String> lineasIlegibles = List.of();
         private String total = "8050";
+        private String medioPagoImpreso = "";
         private String medioPago = "Débito";
         private String cuenta = "";
         private List<String> categorias = List.of("Supermercado");
@@ -376,6 +399,7 @@ class ValidadorTicketTest {
         Constructor descuentos(String v) { descuentos = v; return this; }
         Constructor lineasIlegibles(List<String> v) { lineasIlegibles = v; return this; }
         Constructor total(String v) { total = v; return this; }
+        Constructor medioPagoImpreso(String v) { medioPagoImpreso = v; return this; }
         Constructor medioPago(String v) { medioPago = v; return this; }
         Constructor cuenta(String v) { cuenta = v; return this; }
         Constructor categorias(List<String> v) { categorias = v; return this; }
@@ -383,7 +407,7 @@ class ValidadorTicketTest {
 
         LecturaTicketIa build() {
             return new LecturaTicketIa(problema, comercio, sucursal, fecha, hora, items, subtotal, descuentos, total,
-                    medioPago, cuenta, categorias, confianza, lineasIlegibles);
+                    medioPagoImpreso, medioPago, cuenta, categorias, confianza, lineasIlegibles);
         }
     }
 }

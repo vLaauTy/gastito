@@ -83,7 +83,13 @@ public class ConsultaMovimientos {
      */
     public record DetalleTicket(Long id, String comercio, String sucursal, List<ItemDelTicket> items,
             BigDecimal sumaItems, BigDecimal subtotalImpreso, BigDecimal descuentosImpresos, BigDecimal total,
-            boolean coincide, List<DiferenciaDelTicket> diferencias, List<String> lineasIlegibles, boolean foto) {
+            boolean coincide, List<DiferenciaDelTicket> diferencias, List<RenglonDudosoDelTicket> renglonesDudosos,
+            List<String> lineasIlegibles, boolean foto) {
+    }
+
+    /** Un producto donde cantidad × precio unitario no da el importe (ver {@link ControlesTicket#renglonesDudosos}). */
+    public record RenglonDudosoDelTicket(int renglon, String descripcion, BigDecimal cantidad,
+            BigDecimal precioUnitario, BigDecimal calculado, BigDecimal impreso) {
     }
 
     /** @throws NoSuchElementException si no es un gasto guardado */
@@ -101,9 +107,15 @@ public class ConsultaMovimientos {
         List<DiferenciaDelTicket> diferencias = ControlesTicket.revisar(m).stream()
                 .map(d -> new DiferenciaDelTicket(d.control(), dosDecimales(d.calculado()), dosDecimales(d.impreso())))
                 .toList();
+        // Los renglones dudosos y las líneas ilegibles solo importan si alguna cuenta no cierra.
+        List<RenglonDudosoDelTicket> dudosos = diferencias.isEmpty() ? List.of()
+                : ControlesTicket.renglonesDudosos(m).stream()
+                        .map(r -> new RenglonDudosoDelTicket(r.renglon(), r.descripcion(), r.cantidad(),
+                                dosDecimales(r.precioUnitario()), dosDecimales(r.calculado()), dosDecimales(r.impreso())))
+                        .toList();
         return new DetalleTicket(m.getId(), m.getComercio(), m.getSucursal(), items, suma,
                 dosDecimales(m.getSubtotalImpreso()), dosDecimales(m.getDescuentosImpresos()),
-                dosDecimales(m.getMonto()), diferencias.isEmpty(), diferencias,
+                dosDecimales(m.getMonto()), diferencias.isEmpty(), diferencias, dudosos,
                 diferencias.isEmpty() ? List.of() : m.getLineasIlegibles(),
                 fotos.archivo(m.getFotoTicket()).isPresent());
     }

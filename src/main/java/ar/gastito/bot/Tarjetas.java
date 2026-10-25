@@ -235,12 +235,23 @@ public class Tarjetas {
         for (ControlesTicket.Diferencia d : diferencias) {
             aviso.append("\n⚠️ ").append(diferencia(d));
         }
+        for (ControlesTicket.RenglonDudoso r : ControlesTicket.renglonesDudosos(m)) {
+            aviso.append("\n⚠️ ").append(renglonDudoso(r));
+        }
         List<String> ilegibles = m.getLineasIlegibles();
         if (!ilegibles.isEmpty()) {
             aviso.append("\n🔍 No pude leer bien:");
             ilegibles.forEach(linea -> aviso.append("\n• ").append(html(linea)));
         }
         return aviso.append("\nRevisalo antes de guardar.").toString();
+    }
+
+    /** "Pasta mac &amp; cheese: 1 × $4.488 da $4.488, pero el renglón dice $4.463,90." */
+    String renglonDudoso(ControlesTicket.RenglonDudoso r) {
+        String cantidad = r.cantidad().stripTrailingZeros().toPlainString().replace('.', ',');
+        return html(r.descripcion()) + ": " + cantidad + " × " + formato.pesos(r.precioUnitario()) + " da <b>"
+                + formato.pesos(r.calculado()) + "</b>, pero el renglón dice <b>" + formato.pesos(r.impreso())
+                + "</b>.";
     }
 
     /** "Los productos suman $38.133 y el subtotal dice $38.333." Los descuentos, en positivo. */

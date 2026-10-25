@@ -76,13 +76,38 @@ class TicketRealDiaTest {
 
     @Test
     void unaTarjetaSinAclararDebitoOCreditoQuedaSinMedioDePago() {
-        // Lo impreso es "TARJETA". Si la IA lo devolviera tal cual, no se toma como crédito por la palabra clave.
-        LecturaTicketIa lectura = dia.comoLaLeeriaLaIa();
-        LecturaTicketIa conTarjeta = new LecturaTicketIa(lectura.problema(), lectura.comercio(), lectura.sucursal(),
-                lectura.fecha(), lectura.hora(), lectura.items(), lectura.subtotal(), lectura.descuentos(),
-                lectura.total(), "Tarjeta", "", lectura.categorias(), lectura.confianza(), List.of());
+        // Lo impreso es "TARJETA". Con la foto real, la IA igual eligió crédito: Java lo anula.
+        assertThat(validar(conMedio("TARJETA", "Tarjeta de crédito")).movimiento().medioPago()).isNull();
+        // Y si devolviera "Tarjeta" tal cual, tampoco se toma como crédito por la palabra clave.
+        assertThat(validar(conMedio("TARJETA", "Tarjeta")).movimiento().medioPago()).isNull();
+    }
 
-        assertThat(validar(conTarjeta).movimiento().medioPago()).isNull();
+    @Test
+    void conTextoDelUsuarioMandaLoQueEscribio() {
+        // "con la de crédito" junto a la foto: la IA elige crédito y el TARJETA impreso no lo anula.
+        ValidadorTicket.Resultado r = validador.validar(conMedio("TARJETA", "Tarjeta de crédito"),
+                CatalogoDePrueba.crear(), AHORA, true);
+
+        assertThat(((ValidadorTicket.Valido) r).movimiento().medioPago()).isEqualTo(CatalogoDePrueba.CREDITO);
+    }
+
+    @Test
+    void unaTarjetaAclaradaSeRespeta() {
+        assertThat(validar(conMedio("TARJETA DEBITO", "Débito")).movimiento().medioPago())
+                .isEqualTo(CatalogoDePrueba.DEBITO);
+        assertThat(validar(conMedio("VISA", "Tarjeta de crédito")).movimiento().medioPago())
+                .isEqualTo(CatalogoDePrueba.CREDITO);
+        assertThat(ValidadorTicket.tarjetaSinAclarar("Tarjeta de Débito")).isFalse();
+        assertThat(ValidadorTicket.tarjetaSinAclarar("TARJETA MASTERCARD")).isFalse();
+        assertThat(ValidadorTicket.tarjetaSinAclarar("tarjeta")).isTrue();
+        assertThat(ValidadorTicket.tarjetaSinAclarar("EFECTIVO")).isFalse();
+        assertThat(ValidadorTicket.tarjetaSinAclarar(null)).isFalse();
+    }
+
+    private LecturaTicketIa conMedio(String impreso, String medio) {
+        LecturaTicketIa l = dia.comoLaLeeriaLaIa();
+        return new LecturaTicketIa(l.problema(), l.comercio(), l.sucursal(), l.fecha(), l.hora(), l.items(),
+                l.subtotal(), l.descuentos(), l.total(), impreso, medio, "", l.categorias(), l.confianza(), List.of());
     }
 
     @Test
@@ -93,7 +118,8 @@ class TicketRealDiaTest {
         items.set(0, new LecturaTicketIa.Item(galletitas.descripcion(), "", galletitas.codigoBarras(), "2", "2.250,00",
                 "4.300,00", false)); // el pliegue tapa un dígito
         LecturaTicketIa arrugado = new LecturaTicketIa("", bien.comercio(), bien.sucursal(), bien.fecha(), bien.hora(),
-                items, bien.subtotal(), bien.descuentos(), bien.total(), "", "", bien.categorias(), bien.confianza(),
+                items, bien.subtotal(), bien.descuentos(), bien.total(), bien.medioPagoImpreso(), "", "",
+                bien.categorias(), bien.confianza(),
                 List.of("Renglón 1, Galletitas cracker queso: el subtotal está sobre un pliegue"));
 
         ValidadorTicket.Valido v = validar(arrugado);
