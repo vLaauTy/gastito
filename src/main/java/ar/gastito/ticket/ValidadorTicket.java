@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Component;
@@ -60,6 +61,9 @@ public class ValidadorTicket {
     /** Un CUIT o CUIL: "30-68731043-4", "20 12345678 9" (los once dígitos juntos, también). */
     private static final Pattern CUIT =
             Pattern.compile("\\b(?:20|23|24|27|30|33|34)[-\\s.]?\\d{8}[-\\s.]?\\d\\b");
+
+    /** La hora al final de la fecha: "22-09-2026 17:44:28". */
+    private static final Pattern HORA_PEGADA = Pattern.compile("\\s(\\d{1,2}:\\d{2}(?::\\d{2})?)$");
 
     private final ResolvedorFechas fechas;
 
@@ -191,7 +195,17 @@ public class ValidadorTicket {
         return items;
     }
 
+    /**
+     * La fecha puede venir como dd-mm-aaaa, dd/mm/aaaa o dd/mm/aa. Si la IA copia la hora pegada a la fecha
+     * ("22-09-2026 17:44:28") y no la pone aparte, se usa esa.
+     */
     private LocalDateTime fechaHora(String fecha, String hora, LocalDateTime ahora) {
+        if ((hora == null || hora.isBlank()) && fecha != null) {
+            Matcher pegada = HORA_PEGADA.matcher(fecha.strip());
+            if (pegada.find()) {
+                hora = pegada.group(1);
+            }
+        }
         LocalDateTime resuelta = fechas.resolver(fecha, hora, ahora);
         LocalDateTime minimo = ahora.toLocalDate().minusDays(DIAS_MAXIMOS_ATRAS).atStartOfDay();
         if (resuelta.isAfter(ahora) || resuelta.isBefore(minimo)) {

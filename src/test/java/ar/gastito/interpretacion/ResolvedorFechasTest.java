@@ -46,7 +46,13 @@ class ResolvedorFechasTest {
             "20/12, 2025-12-20", // todavía no llegó este año: el año pasado
             "12/10/2026, 2026-10-12",
             "12/10/25, 2025-10-12",
-            "2026-09-30, 2026-09-30"
+            "2026-09-30, 2026-09-30",
+            // Como en los tickets: dd-mm-aaaa (Día), dd/mm/aaaa y dd/mm/aa, a veces con la hora pegada.
+            "22-09-2026, 2026-09-22",
+            "22/09/2026, 2026-09-22",
+            "22/09/26, 2026-09-22",
+            "22-09-26, 2026-09-22",
+            "22-09-2026 17:44:28, 2026-09-22"
     })
     void resuelveFechasRelativasYExplicitas(String fecha, String esperado) {
         assertThat(resolver(fecha, "").toLocalDate()).isEqualTo(esperado);
@@ -58,7 +64,7 @@ class ResolvedorFechasTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"21:30, 21, 30", "9:05, 9, 5", "21, 21, 0", "21hs, 21, 0", "8.15, 8, 15"})
+    @CsvSource({"21:30, 21, 30", "9:05, 9, 5", "21, 21, 0", "21hs, 21, 0", "8.15, 8, 15", "17:44:28, 17, 44"})
     void usaLaHoraSiLaDice(String hora, int h, int m) {
         assertThat(resolver("ayer", hora)).isEqualTo(LocalDateTime.of(2026, 10, 12, h, m));
     }

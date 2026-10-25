@@ -41,7 +41,8 @@ public class ResolvedorFechas {
 
     private static final Pattern DD_MM = Pattern.compile("(\\d{1,2})[/-](\\d{1,2})(?:[/-](\\d{4}|\\d{2}))?");
     private static final Pattern ISO = Pattern.compile("(\\d{4})-(\\d{1,2})-(\\d{1,2})");
-    private static final Pattern HORA = Pattern.compile("(\\d{1,2})(?:[:.](\\d{2}))?\\s*(?:h|hs)?");
+    /** "21:30", "9.05", "21hs" o, como en los tickets, con segundos: "17:44:28" (los segundos no se usan). */
+    private static final Pattern HORA = Pattern.compile("(\\d{1,2})(?:[:.](\\d{2})(?::\\d{2})?)?\\s*(?:h|hs)?");
 
     public LocalDateTime resolver(String fecha, String hora, LocalDateTime ahora) {
         LocalDate hoy = ahora.toLocalDate();

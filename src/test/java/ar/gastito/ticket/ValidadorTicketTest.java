@@ -238,6 +238,17 @@ class ValidadorTicketTest {
     }
 
     @Test
+    void laFechaDeDiaConGuionesYSegundos() {
+        // Como la imprime Día: 22-09-2026 17:44:28.
+        assertThat(valido(ticket().fecha("22-09-2026").hora("17:44:28").build()).movimiento().fechaHora())
+                .isEqualTo(LocalDateTime.of(2026, 9, 22, 17, 44));
+        assertThat(valido(ticket().fecha("22-09-2026 17:44:28").hora("").build()).movimiento().fechaHora())
+                .isEqualTo(LocalDateTime.of(2026, 9, 22, 17, 44));
+        assertThat(valido(ticket().fecha("22/09/26").hora("17:44").build()).movimiento().fechaHora())
+                .isEqualTo(LocalDateTime.of(2026, 9, 22, 17, 44));
+    }
+
+    @Test
     void conLaFechaDeHoyOSinFechaQuedaAhora() {
         assertThat(valido(ticket().fecha("22/10/26").hora("").build()).movimiento().fechaHora()).isEqualTo(AHORA);
         assertThat(valido(ticket().fecha("").hora("").build()).movimiento().fechaHora()).isEqualTo(AHORA);
