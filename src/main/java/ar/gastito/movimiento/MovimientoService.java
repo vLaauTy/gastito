@@ -138,8 +138,11 @@ public class MovimientoService {
 
     @Transactional(readOnly = true)
     public Movimiento buscar(Long id) {
-        return movimientos.findConDetalleById(id)
+        Movimiento m = movimientos.findConDetalleById(id)
                 .orElseThrow(() -> new NoSuchElementException("No existe el movimiento " + id));
+        // Los productos de un ticket, en una consulta aparte (en el mismo JOIN que las candidatas se repetirían).
+        m.getItems().size();
+        return m;
     }
 
     @Transactional(readOnly = true)

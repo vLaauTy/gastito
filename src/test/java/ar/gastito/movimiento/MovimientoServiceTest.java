@@ -256,6 +256,27 @@ class MovimientoServiceTest {
     }
 
     @Test
+    void unTicketConCategoriasCandidatasNoRepiteLosProductos() {
+        // Con la foto real: tres candidatas y 22 renglones daban 66 (el JOIN multiplicaba candidatas × productos).
+        MovimientoInterpretado dudoso = new MovimientoInterpretado(new BigDecimal("4400"), "Día", null,
+                List.of(categoria("Supermercado"), categoria("Kiosco"), categoria("Productos para la casa")), null, null,
+                null, AHORA);
+        List<ItemTicket> items = List.of(
+                new ItemTicket("Galletitas", null, null, new BigDecimal("4500")),
+                new ItemTicket("20% ClubDía", null, null, new BigDecimal("-900")),
+                new ItemTicket("Bolsa", null, null, new BigDecimal("800")));
+
+        Movimiento m = service.crearPendienteDeTicket(dudoso, DatosTicket.de("Día", items), null);
+        entityManager.flush();
+        entityManager.clear();
+
+        Movimiento leido = service.buscar(m.getId());
+        assertThat(leido.getCandidatas()).hasSize(3);
+        assertThat(leido.getItems()).extracting(MovimientoItem::getDescripcion)
+                .containsExactly("Galletitas", "20% ClubDía", "Bolsa");
+    }
+
+    @Test
     void unTicketSinDatosExtraNoTieneLineasIlegibles() {
         MovimientoInterpretado interpretado = MovimientoInterpretado.conCategoria(new BigDecimal("1500"),
                 "Kiosco", categoria("Kiosco"), null, null, null, AHORA);

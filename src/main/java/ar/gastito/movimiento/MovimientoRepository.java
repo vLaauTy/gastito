@@ -17,7 +17,8 @@ import org.springframework.data.repository.query.Param;
  */
 public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
 
-    @EntityGraph(attributePaths = {"categoria", "medioPago", "cuenta", "tarjeta", "candidatas", "items"})
+    // Sin "items": junto con las candidatas, el JOIN repetiría cada producto una vez por candidata.
+    @EntityGraph(attributePaths = {"categoria", "medioPago", "cuenta", "tarjeta", "candidatas"})
     Optional<Movimiento> findConDetalleById(Long id);
 
     /** Últimos gastos confirmados, del más nuevo al más viejo (ejemplos para la IA). */
