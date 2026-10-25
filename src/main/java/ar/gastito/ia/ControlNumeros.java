@@ -71,6 +71,22 @@ public final class ControlNumeros {
         return revisar(String.join("\n", textos), permitidos);
     }
 
+    /**
+     * Si el texto repite un número que ya se muestra: alguno coincide con {@code mostrados} y con ningún otro dato.
+     * Si además coincide con otro ("Kiosco subió 12%" cuando el total también subió 12%), no se sabe cuál cita y
+     * no cuenta como repetido.
+     *
+     * @param otros          los números del resto de los datos (sacando los campos que ya se muestran, no sus valores:
+     *                       el mismo número puede estar en los dos lados)
+     * @param otrosSinFechas los mismos sin el año, el mes y el día de las fechas: con estos se comparan los
+     *                       porcentajes, porque un "12%" nunca cita el día 12
+     */
+    public static boolean repite(String texto, Collection<BigDecimal> mostrados, Collection<BigDecimal> otros,
+            Collection<BigDecimal> otrosSinFechas) {
+        return numeros(texto).stream().anyMatch(n -> mostrados.stream().anyMatch(m -> coincide(n, m))
+                && (n.porcentaje() ? otrosSinFechas : otros).stream().noneMatch(o -> coincide(n, o)));
+    }
+
     static List<Numero> numeros(String texto) {
         List<Numero> numeros = new ArrayList<>();
         if (texto == null) {
@@ -112,12 +128,17 @@ public final class ControlNumeros {
      * menos") y el año, el mes y el día de las fechas.
      */
     public static Set<BigDecimal> numerosDe(JsonNode json) {
+        return numerosDe(json, true);
+    }
+
+    /** @param conFechas false para no incluir el año, el mes y el día de las fechas */
+    public static Set<BigDecimal> numerosDe(JsonNode json, boolean conFechas) {
         Set<BigDecimal> numeros = new HashSet<>();
-        juntar(json, numeros);
+        juntar(json, numeros, conFechas);
         return numeros;
     }
 
-    private static void juntar(JsonNode nodo, Set<BigDecimal> numeros) {
+    private static void juntar(JsonNode nodo, Set<BigDecimal> numeros, boolean conFechas) {
         if (nodo == null || nodo.isNull()) {
             return;
         }
@@ -126,7 +147,7 @@ public final class ControlNumeros {
         } else if (nodo.isTextual()) {
             String texto = nodo.asText();
             Matcher fecha = FECHA_ISO.matcher(texto);
-            while (fecha.find()) {
+            while (conFechas && fecha.find()) {
                 try {
                     LocalDate dia = LocalDate.parse(fecha.group());
                     numeros.add(BigDecimal.valueOf(dia.getYear()));
@@ -138,7 +159,7 @@ public final class ControlNumeros {
             }
             numeros(FECHA_ISO.matcher(texto).replaceAll(" ")).forEach(n -> numeros.add(n.valor()));
         } else {
-            nodo.forEach(hijo -> juntar(hijo, numeros));
+            nodo.forEach(hijo -> juntar(hijo, numeros, conFechas));
         }
     }
 }

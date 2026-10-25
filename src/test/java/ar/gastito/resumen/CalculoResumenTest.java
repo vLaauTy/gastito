@@ -15,6 +15,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -67,7 +68,8 @@ class CalculoResumenTest {
                             new GastitoProperties.Precio(new BigDecimal("0.10"), new BigDecimal("0.50")))),
                     null, null,
                     new GastitoProperties.Resumenes(LocalTime.of(21, 0), LocalTime.of(9, 0), "claude-haiku-5-5",
-                            "claude-haiku-5-5", 1024, new BigDecimal("3000"), List.of("Kiosco", "Comida afuera / delivery")),
+                            "claude-haiku-5-5", 1024, new BigDecimal("3000"), List.of("Kiosco", "Comida afuera / delivery"),
+                            new GastitoProperties.Minimo(5, 3), new GastitoProperties.Minimo(15, 7)),
                     null);
         }
     }
@@ -139,8 +141,9 @@ class CalculoResumenTest {
         // La semana anterior, de lunes a miércoles: solo el kiosco de 1.000.
         assertThat(d.comparacion().hasta()).isEqualTo(LocalDate.of(2026, 10, 7));
         assertThat(d.comparacion().total()).isEqualByComparingTo("1000");
-        assertThat(d.aclaraciones()).anySatisfy(a -> assertThat(a).startsWith("Período parcial: los datos llegan "
-                + "hasta el miércoles 14."));
+        // 5 gastos en 3 días: justo el mínimo, así que hay escenarios.
+        assertThat(d.pocosDatos()).isFalse();
+        assertThat(d.escenariosAhorro()).isNotEmpty();
     }
 
     @Test
@@ -200,10 +203,47 @@ class CalculoResumenTest {
     }
 
     @Test
-    void aclaraLoQueNoSePuedeCalcularBien() {
-        assertThat(semana().aclaraciones())
-                .contains("1 gasto sin medio de pago (Sin especificar): no se pueden repartir por billetera.")
-                .anySatisfy(a -> assertThat(a).contains("juntadas"));
+    void conPocosDatosNoHayEscenarios() {
+        // La semana anterior: 2 gastos en 2 días.
+        DatosResumen d = calculo.calcular(PeriodoResumen.semanaDe(LocalDate.of(2026, 10, 6)), LUNES);
+
+        assertThat(d.cantidadGastos()).isEqualTo(2);
+        assertThat(d.pocosDatos()).isTrue();
+        assertThat(d.escenariosAhorro()).isEmpty();
+    }
+
+    @Test
+    void unaCategoriaSinSemanasAnterioresNoSeLlevaAlMes() {
+        gasto("Ropa", "50000", LUNES.plusDays(3), true);
+
+        assertThat(semana().escenariosAhorro())
+                .extracting(DatosResumen.Escenario::tipo, DatosResumen.Escenario::categoria,
+                        e -> e.ahorroPeriodo().toPlainString(), e -> String.valueOf(e.ahorroMensual()))
+                .containsExactly(
+                        // Kiosco tiene gastos de la semana anterior: se lleva al mes.
+                        tuple("HORMIGA", null, "2050.00", "8900.00"),
+                        // Ropa es la primera semana: el ahorro queda por semana.
+                        tuple("CATEGORIA_QUE_MAS_SUBIO", "Ropa", "50000.00", "null"),
+                        tuple("CATEGORIA_MAS_GRANDE", "Ropa", "5000.00", "null"));
+    }
+
+    @Test
+    void lasNotasAlPieSoloSiHayJuntadas() {
+        Movimiento comun = Movimiento.pendiente(interpretado("Salidas", "9000", LUNES), Origen.TEXTO, "x",
+                LUNES.atStartOfDay());
+        Movimiento juntada = Movimiento.pendiente(interpretado("Salidas", "12000", LUNES), Origen.TEXTO, "x",
+                LUNES.atStartOfDay());
+        ReflectionTestUtils.setField(juntada, "juntada", true);
+
+        assertThat(CalculoResumen.notas(List.of(comun))).isEmpty();
+        assertThat(CalculoResumen.notas(List.of(comun, juntada))).containsExactly(
+                "1 gasto es de una juntada: lo que te devuelvan todavía no se descuenta del total.");
+    }
+
+    @Test
+    void sinJuntadasNoHayNotasAlPie() {
+        assertThat(semana().notas()).isEmpty();
+        assertThat(semana().pocosDatos()).isFalse();
         assertThat(semana().sinEspecificar().cantidad()).isEqualTo(1);
         assertThat(semana().sinEspecificar().total()).isEqualByComparingTo("3000");
         assertThat(semana().ingresos()).isNull(); // solo en el mensual

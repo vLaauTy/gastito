@@ -1,13 +1,11 @@
 package ar.gastito.resumen;
 
-import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,9 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import ar.gastito.config.GastitoProperties;
-import ar.gastito.ia.ControlNumeros;
 
 /**
  * Arma los resúmenes (Java calcula, la IA redacta) y lleva la cuenta de los envíos automáticos: cuál período ya
@@ -80,8 +78,11 @@ public class ResumenService {
         LocalDate hoy = LocalDate.now(clock);
         DatosResumen datos = calculo.calcular(periodo, hoy);
         String datosJson = aJson(datos);
-        Set<BigDecimal> permitidos = ControlNumeros.numerosDe(json.valueToTree(datos));
-        RedactorResumen.Redaccion texto = redactor.redactar(periodo.tipo(), datosJson, permitidos);
+        // La IA no ve las notas al pie: lo que todavía no se puede calcular no va en su texto.
+        ObjectNode paraIa = json.valueToTree(datos);
+        paraIa.remove("notas");
+        RedactorResumen.Redaccion texto = redactor.redactar(
+                RedactorResumen.Pedido.de(periodo.tipo(), paraIa, !datos.pocosDatos()));
         Resumen resumen = resumenes.save(new Resumen(periodo.tipo(), periodo.desde(), datos.periodo().hasta(),
                 datos.periodo().parcial(), automatico, datosJson, texto.observaciones(), texto.consejo(),
                 texto.descartado(), texto.usoIaId(), LocalDateTime.now(clock)));

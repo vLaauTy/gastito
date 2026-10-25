@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -13,6 +12,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -37,7 +37,6 @@ public class CalculoResumen {
     private static final BigDecimal DIAS_POR_MES = new BigDecimal("30.4");
     private static final BigDecimal CIEN = new BigDecimal("100");
     private static final Locale ES_AR = Locale.forLanguageTag("es-AR");
-    private static final DateTimeFormatter DIA = DateTimeFormatter.ofPattern("EEEE d", ES_AR);
 
     private final ResumenConsultas consultas;
     private final IngresoService ingresos;
@@ -69,6 +68,15 @@ public class CalculoResumen {
         BigDecimal totalAnterior = suma(gastosAnteriores);
         List<DatosResumen.Categoria> categorias = porCategoria(gastos, gastosAnteriores);
         DatosResumen.Hormiga hormiga = hormiga(gastos, dias);
+        int diasSinGastos = diasSinGastos(gastos, periodo.desde(), hasta);
+        boolean semanal = periodo.tipo() == TipoResumen.SEMANAL;
+        boolean pocosDatos = pocosDatos(gastos.size(), dias - diasSinGastos, config.minimo(semanal));
+        // En el semanal, llevar un ahorro a un mes pide al menos 2 semanas con gastos en la categoría: esta y alguna
+        // anterior. El mensual ya es un mes.
+        Predicate<List<String>> alMes = semanal
+                ? cats -> consultas.hayGastosAntes(cats.stream().map(c -> c.toLowerCase(ES_AR)).toList(),
+                        periodo.desde().atStartOfDay())
+                : cats -> true;
 
         DatosResumen.Ingresos ingresosDelMes = null;
         BigDecimal costoIa = null;
@@ -90,13 +98,14 @@ public class CalculoResumen {
                 categorias,
                 gastoMasGrande(gastos),
                 hormiga,
-                diasSinGastos(gastos, periodo.desde(), hasta),
+                diasSinGastos,
                 sinEspecificar(gastos),
                 productos(periodo.desde(), hasta),
-                escenarios(categorias, hormiga, dias),
+                pocosDatos ? List.of() : escenarios(categorias, hormiga, dias, alMes),
                 ingresosDelMes,
                 costoIa,
-                aclaraciones(gastos, parcial, hasta));
+                pocosDatos,
+                notas(gastos));
     }
 
     // --- Categorías y gasto más grande ---
@@ -191,9 +200,11 @@ public class CalculoResumen {
     /**
      * Hasta tres ahorros posibles, con los números ya hechos: los gastos hormiga a 3 por semana, la categoría que más
      * subió de vuelta al nivel del período anterior y la categoría más grande con un 10% menos.
+     *
+     * @param alMes si los ahorros de esas categorías se pueden llevar a un mes; si no, ahorroMensual queda null
      */
     static List<DatosResumen.Escenario> escenarios(List<DatosResumen.Categoria> categorias,
-            DatosResumen.Hormiga hormiga, int dias) {
+            DatosResumen.Hormiga hormiga, int dias, Predicate<List<String>> alMes) {
         List<DatosResumen.Escenario> escenarios = new ArrayList<>();
         if (hormiga.porSemana().compareTo(HORMIGA_OBJETIVO_POR_SEMANA) > 0) {
             BigDecimal semanas = BigDecimal.valueOf(dias).divide(BigDecimal.valueOf(7), 4, RoundingMode.HALF_UP);
@@ -202,7 +213,7 @@ public class CalculoResumen {
             escenarios.add(new DatosResumen.Escenario("HORMIGA",
                     "Bajar los gastos hormiga a " + HORMIGA_OBJETIVO_POR_SEMANA + " por semana", null,
                     hormiga.porSemana(), HORMIGA_OBJETIVO_POR_SEMANA, redondear(ahorro),
-                    alMes(ahorro, dias)));
+                    alMes.test(hormiga.categorias()) ? alMes(ahorro, dias) : null));
         }
         categorias.stream()
                 .filter(c -> c.total().compareTo(c.totalAnterior()) > 0)
@@ -211,14 +222,16 @@ public class CalculoResumen {
                     BigDecimal ahorro = c.total().subtract(c.totalAnterior());
                     escenarios.add(new DatosResumen.Escenario("CATEGORIA_QUE_MAS_SUBIO",
                             "Volver al gasto del período anterior en " + c.nombre(), c.nombre(), c.total(),
-                            c.totalAnterior(), redondear(ahorro), alMes(ahorro, dias)));
+                            c.totalAnterior(), redondear(ahorro),
+                            alMes.test(List.of(c.nombre())) ? alMes(ahorro, dias) : null));
                 });
         if (!categorias.isEmpty()) {
             DatosResumen.Categoria mayor = categorias.get(0);
             BigDecimal ahorro = mayor.total().multiply(RECORTE_CATEGORIA_MAS_GRANDE);
             escenarios.add(new DatosResumen.Escenario("CATEGORIA_MAS_GRANDE",
                     "Gastar un 10% menos en " + mayor.nombre(), mayor.nombre(), mayor.total(),
-                    pesos(mayor.total().subtract(ahorro)), redondear(ahorro), alMes(ahorro, dias)));
+                    pesos(mayor.total().subtract(ahorro)), redondear(ahorro),
+                    alMes.test(List.of(mayor.nombre())) ? alMes(ahorro, dias) : null));
         }
         return escenarios;
     }
@@ -234,21 +247,25 @@ public class CalculoResumen {
         return monto.setScale(0, RoundingMode.HALF_UP).setScale(2);
     }
 
-    // --- Aclaraciones ---
+    // --- Datos mínimos y notas ---
 
-    /** Lo que no se puede calcular bien todavía: se dice, no se inventa. */
-    private static List<String> aclaraciones(List<Movimiento> gastos, boolean parcial, LocalDate hasta) {
-        List<String> aclaraciones = new ArrayList<>();
-        if (parcial) {
-            aclaraciones.add("Período parcial: los datos llegan hasta el " + DIA.format(hasta) + ".");
+    /** Con menos gastos, o con gastos en menos días distintos, que el mínimo, no se da consejo. */
+    static boolean pocosDatos(int gastos, int diasConGastos, GastitoProperties.Minimo minimo) {
+        return gastos < minimo.gastos() || diasConGastos < minimo.dias();
+    }
+
+    /**
+     * Notas al pie, solo sobre datos que existen en el período: lo que todavía no se puede calcular no se menciona
+     * si no hay nada de eso.
+     */
+    static List<String> notas(List<Movimiento> gastos) {
+        List<String> notas = new ArrayList<>();
+        long juntadas = gastos.stream().filter(Movimiento::isJuntada).count();
+        if (juntadas > 0) {
+            notas.add(juntadas + (juntadas == 1 ? " gasto es de una juntada" : " gastos son de juntadas")
+                    + ": lo que te devuelvan todavía no se descuenta del total.");
         }
-        int sinMedio = sinEspecificar(gastos).cantidad();
-        if (sinMedio > 0) {
-            aclaraciones.add(sinMedio + (sinMedio == 1 ? " gasto" : " gastos")
-                    + " sin medio de pago (Sin especificar): no se pueden repartir por billetera.");
-        }
-        aclaraciones.add("La plata que te deben de juntadas todavía no se registra: llega en la etapa 6.");
-        return aclaraciones;
+        return notas;
     }
 
     private static DatosResumen.SinEspecificar sinEspecificar(List<Movimiento> gastos) {

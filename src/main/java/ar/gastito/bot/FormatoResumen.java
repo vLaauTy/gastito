@@ -115,6 +115,9 @@ public class FormatoResumen {
         if (d.costoIaUsd() != null) {
             datos.add("🤖 La IA costó " + formato.dolares(d.costoIaUsd()) + " en el mes.");
         }
+        if (d.notas() != null) {
+            d.notas().forEach(n -> datos.add("<i>ℹ️ " + html(n) + "</i>"));
+        }
         if (!datos.isEmpty()) {
             partes.add(String.join("\n", datos));
         }
@@ -126,6 +129,9 @@ public class FormatoResumen {
                 ia.append("\n👉 <b>Consejo:</b> ").append(html(r.getConsejo()));
             }
             partes.add(ia.toString());
+        }
+        if (d.pocosDatos()) {
+            partes.add("👉 " + DatosResumen.POCOS_DATOS);
         }
 
         String pie = "🖥 Más detalle en el dashboard: <a href=\"" + html(urlDashboard) + "\">" + html(urlDashboard)

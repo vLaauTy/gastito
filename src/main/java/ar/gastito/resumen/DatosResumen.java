@@ -10,7 +10,10 @@ import java.util.List;
  *
  * @param ingresos      solo en el mensual; null en el semanal
  * @param costoIaUsd    solo en el mensual
- * @param aclaraciones  lo que todavía no se puede calcular bien, dicho en vez de inventado
+ * @param pocosDatos    menos gastos o días con gastos que el mínimo: no hay escenarios ni consejo, sino
+ *                      {@link #POCOS_DATOS}
+ * @param notas         notas al pie del resumen numérico, solo sobre datos que existen en el período (por ejemplo,
+ *                      gastos de juntadas cuya devolución todavía no se descuenta). No se le mandan a la IA.
  */
 public record DatosResumen(
         Periodo periodo,
@@ -26,7 +29,20 @@ public record DatosResumen(
         List<Escenario> escenariosAhorro,
         Ingresos ingresos,
         BigDecimal costoIaUsd,
-        List<String> aclaraciones) {
+        boolean pocosDatos,
+        List<String> notas) {
+
+    /** Lo que va en lugar del consejo cuando hay pocos datos. */
+    public static final String POCOS_DATOS = "Todavía hay pocos datos para darte un consejo. Seguí cargando tus gastos.";
+
+    /**
+     * Los campos (rutas JSON) que ya muestra la parte numérica del resumen: total, cantidad, variación (y el total
+     * anterior del que sale), días sin gastos, gastos hormiga y, en el mensual, ingresos y costo de la IA. Las
+     * observaciones de la IA no los repiten.
+     */
+    public static final List<String> MOSTRADOS = List.of("/totalGastado", "/cantidadGastos", "/comparacion/total",
+            "/comparacion/variacionPorcentaje", "/diasSinGastos", "/hormiga/cantidad", "/hormiga/total",
+            "/ingresos/total", "/ingresos/disponible", "/ingresos/porcentajeGastado", "/costoIaUsd");
 
     /**
      * @param hasta último día con datos: en un resumen parcial, hoy
@@ -78,7 +94,8 @@ public record DatosResumen(
      * @param tipo         HORMIGA, CATEGORIA_QUE_MAS_SUBIO o CATEGORIA_MAS_GRANDE
      * @param descripcion  qué cambiaría, en palabras
      * @param ahorroPeriodo cuánto se habría ahorrado en este período
-     * @param ahorroMensual lo mismo llevado a un mes (redondeado a la centena)
+     * @param ahorroMensual lo mismo llevado a un mes (redondeado a la centena). En el semanal, solo si la categoría
+     *                      tiene gastos de al menos 2 semanas; si no, null y el escenario se dice por semana
      */
     public record Escenario(String tipo, String descripcion, String categoria, BigDecimal valorActual,
             BigDecimal valorObjetivo, BigDecimal ahorroPeriodo, BigDecimal ahorroMensual) {

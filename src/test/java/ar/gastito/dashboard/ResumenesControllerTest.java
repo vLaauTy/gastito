@@ -51,7 +51,7 @@ class ResumenesControllerTest {
                 false, null, LocalDateTime.of(2026, 10, 22, 10, 0));
         DatosResumen d = new DatosResumen(new DatosResumen.Periodo("SEMANAL", lunes, LocalDate.of(2026, 10, 22),
                 LocalDate.of(2026, 10, 25), true, 4), BigDecimal.TEN, 1, null, List.of(), null, null, 3, null, null,
-                List.of(), null, null, List.of());
+                List.of(), null, null, true, List.of("1 gasto es de una juntada."));
         when(resumenes.ultimo()).thenReturn(Optional.of(new ResumenService.Armado(r, d)));
 
         mvc.perform(get("/api/resumenes/ultimo"))
@@ -63,6 +63,9 @@ class ResumenesControllerTest {
                 .andExpect(jsonPath("$.parcial").value(true))
                 .andExpect(jsonPath("$.observaciones.length()").value(2))
                 .andExpect(jsonPath("$.consejo").value("Si bajás el kiosco, ahorrás $8.900."))
+                .andExpect(jsonPath("$.iaRespondio").value(false))
+                .andExpect(jsonPath("$.sinConsejo").value(DatosResumen.POCOS_DATOS))
+                .andExpect(jsonPath("$.notas[0]").value("1 gasto es de una juntada."))
                 .andExpect(jsonPath("$.textoIaDescartado").value(false));
     }
 

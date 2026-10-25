@@ -69,6 +69,27 @@ class FormatoResumenTest {
     }
 
     @Test
+    void conPocosDatosVaLaLineaFijaEnLugarDelConsejoYLasNotasAlPie() {
+        Resumen r = new Resumen(TipoResumen.SEMANAL, LUNES, LUNES.plusDays(6), false, false, "{}",
+                List.of("El súper bajó un 29%."), null, false, 9L, LocalDateTime.now());
+        String html = formatoResumen.mensaje(new ResumenService.Armado(r, datos("SEMANAL", LUNES, LUNES.plusDays(6),
+                false, null, null, true, List.of("1 gasto es de una juntada: lo que te devuelvan todavía no se "
+                        + "descuenta del total."))), 0);
+
+        assertThat(html).contains("""
+                ❔ 1 gasto sin medio de pago ($3.000)
+                <i>ℹ️ 1 gasto es de una juntada: lo que te devuelvan todavía no se descuenta del total.</i>
+
+                💡 <b>Lo que noté</b>
+                • El súper bajó un 29%.
+
+                👉 Todavía hay pocos datos para darte un consejo. Seguí cargando tus gastos.
+
+                🖥""");
+        assertThat(html).doesNotContain("Consejo:").doesNotContain("etapa");
+    }
+
+    @Test
     void elTextoDeLaIaSeEscapa() {
         String html = formatoResumen.mensaje(semana(false, List.of("<b>Ojo</b> & cuidado"), null), 0);
 
@@ -142,6 +163,11 @@ class FormatoResumenTest {
 
     private static DatosResumen datos(String tipo, LocalDate desde, LocalDate hasta, boolean parcial,
             DatosResumen.Ingresos ingresos, BigDecimal costoIa) {
+        return datos(tipo, desde, hasta, parcial, ingresos, costoIa, false, List.of());
+    }
+
+    private static DatosResumen datos(String tipo, LocalDate desde, LocalDate hasta, boolean parcial,
+            DatosResumen.Ingresos ingresos, BigDecimal costoIa, boolean pocosDatos, List<String> notas) {
         LocalDate fin = tipo.equals("SEMANAL") ? desde.plusDays(6) : hasta;
         return new DatosResumen(
                 new DatosResumen.Periodo(tipo, desde, hasta, fin, parcial, 7),
@@ -158,6 +184,6 @@ class FormatoResumenTest {
                 new DatosResumen.SinEspecificar(1, new BigDecimal("3000.00")),
                 new DatosResumen.Productos(List.of(new DatosResumen.Producto("Seven Up lata", new BigDecimal("4"),
                         new BigDecimal("9000.00"))), List.of()),
-                List.of(), ingresos, costoIa, List.of());
+                List.of(), ingresos, costoIa, pocosDatos, notas);
     }
 }

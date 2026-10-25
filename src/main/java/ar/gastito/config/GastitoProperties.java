@@ -60,9 +60,25 @@ public record GastitoProperties(ZoneId zonaHoraria, Telegram telegram, Ia ia, Au
      * @param modeloMensual     el que redacta el mensual (por si conviene uno más potente)
      * @param umbralHormiga     compras por debajo de este monto, en las categorías hormiga, son gastos hormiga
      * @param categoriasHormiga nombres de las categorías donde se cuentan los gastos hormiga
+     * @param minimoSemanal     con menos datos que esto, el semanal no lleva consejo ni escenarios de ahorro
+     * @param minimoMensual     lo mismo para el mensual
      */
     public record Resumenes(LocalTime horaSemanal, LocalTime horaMensual, String modeloSemanal, String modeloMensual,
-            long maxTokens, BigDecimal umbralHormiga, List<String> categoriasHormiga) {
+            long maxTokens, BigDecimal umbralHormiga, List<String> categoriasHormiga, Minimo minimoSemanal,
+            Minimo minimoMensual) {
+
+        public Minimo minimo(boolean semanal) {
+            return semanal ? minimoSemanal : minimoMensual;
+        }
+    }
+
+    /**
+     * Datos mínimos para dar un consejo: hacen falta los dos.
+     *
+     * @param gastos cuántos gastos en el período
+     * @param dias   en cuántos días distintos
+     */
+    public record Minimo(int gastos, int dias) {
     }
 
     /**

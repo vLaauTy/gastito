@@ -3,8 +3,8 @@ package ar.gastito.resumen;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anySet;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -56,7 +56,8 @@ class ResumenServiceTest {
             return new GastitoProperties(ARGENTINA, null,
                     new GastitoProperties.Ia("x", null, "claude-haiku-5-5", 1024, Map.of()), null, null,
                     new GastitoProperties.Resumenes(LocalTime.of(21, 0), LocalTime.of(9, 0), "claude-haiku-5-5",
-                            "claude-haiku-5-5", 1024, new BigDecimal("3000"), List.of("Kiosco")),
+                            "claude-haiku-5-5", 1024, new BigDecimal("3000"), List.of("Kiosco"),
+                            new GastitoProperties.Minimo(5, 3), new GastitoProperties.Minimo(15, 7)),
                     null);
         }
     }
@@ -79,7 +80,7 @@ class ResumenServiceTest {
     @BeforeEach
     void laIaRedacta() {
         reloj.ir(HOY); // el reloj es del contexto: otro test lo pudo haber movido
-        when(redactor.redactar(any(), anyString(), anySet())).thenReturn(new RedactorResumen.Redaccion(
+        when(redactor.redactar(any())).thenReturn(new RedactorResumen.Redaccion(
                 List.of("Una observación."), "Un consejo.", false, null));
     }
 
@@ -103,8 +104,17 @@ class ResumenServiceTest {
     }
 
     @Test
+    void laIaNoVeLasNotasYSinGastosNoHayConsejo() {
+        Resumen r = service.pedido(TipoResumen.SEMANAL).resumen();
+
+        assertThat(r.getDatos()).contains("\"notas\"");
+        verify(redactor).redactar(argThat(p -> !p.datosJson().contains("notas") && p.datosJson().contains("pocosDatos")
+                && !p.conConsejo()));
+    }
+
+    @Test
     void unResumenSinTextoDeLaIaQuedaSoloConLosNumeros() {
-        when(redactor.redactar(any(), anyString(), anySet()))
+        when(redactor.redactar(any()))
                 .thenReturn(new RedactorResumen.Redaccion(List.of(), null, true, null));
 
         Resumen r = service.armar(PeriodoResumen.mesDe(LocalDate.of(2026, 9, 1)), true).resumen();

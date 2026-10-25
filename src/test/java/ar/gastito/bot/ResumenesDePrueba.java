@@ -27,7 +27,7 @@ final class ResumenesDePrueba {
                 new DatosResumen.Comparacion(periodo.anterior().desde(), periodo.anterior().hasta(), cero, null),
                 List.of(), null, new DatosResumen.Hormiga(new BigDecimal("3000.00"), List.of(), 0, cero, cero,
                         BigDecimal.ZERO), 7, new DatosResumen.SinEspecificar(0, cero),
-                new DatosResumen.Productos(List.of(), List.of()), List.of(), null, null, List.of());
+                new DatosResumen.Productos(List.of(), List.of()), List.of(), null, null, false, List.of());
         return new ResumenService.Armado(r, d);
     }
 }

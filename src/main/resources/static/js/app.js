@@ -391,16 +391,23 @@
     texto('#r-ia-periodo', r.parcial
       ? `${periodo} · ${r.tipo === 'SEMANAL' ? 'semana' : 'mes'} parcial, hasta el ${diaSemana.format(fecha(r.hasta))}`
       : periodo);
-    if (!r.observaciones.length && !r.consejo) {
-      lista.replaceChildren(h('p', { class: 'note' }, r.textoIaDescartado
-        ? 'Esta vez la IA escribió un número que no estaba en los datos, así que el resumen salió solo con los números.'
-        : 'Este resumen salió sin el texto de la IA.'));
-      return;
+    const notas = (r.notas || []).map((n) => h('p', { class: 'note' }, `ℹ️ ${n}`));
+    const sinConsejo = r.sinConsejo ? h('p', { class: 'consejo' }, `👉 ${r.sinConsejo}`) : null;
+    let aviso = null;
+    if (r.textoIaDescartado) {
+      aviso = 'Esta vez la IA escribió un número que no estaba en los datos, así que el resumen salió solo con los números.';
+    } else if (!r.iaRespondio) {
+      aviso = 'Este resumen salió sin el texto de la IA.';
+    } else if (!r.observaciones.length && !r.consejo && !r.sinConsejo) {
+      aviso = 'Esta vez no hubo nada nuevo para comentar más allá de los números.';
     }
-    lista.replaceChildren(
-      h('ul', { class: 'observaciones' }, ...r.observaciones.map((o) => h('li', {}, o))),
+    lista.replaceChildren(...[
+      aviso ? h('p', { class: 'note' }, aviso) : null,
+      r.observaciones.length ? h('ul', { class: 'observaciones' }, ...r.observaciones.map((o) => h('li', {}, o))) : null,
       r.consejo ? h('p', { class: 'consejo' }, h('b', {}, '👉 Consejo: '), r.consejo) : null,
-    );
+      sinConsejo,
+      ...notas,
+    ].filter(Boolean));
   }
 
   // --- Tablas de movimientos ---
