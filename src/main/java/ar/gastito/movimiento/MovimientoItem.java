@@ -64,6 +64,10 @@ public class MovimientoItem {
         return id;
     }
 
+    public Movimiento getMovimiento() {
+        return movimiento;
+    }
+
     public int getOrden() {
         return orden;
     }
