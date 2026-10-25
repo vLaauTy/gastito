@@ -53,20 +53,37 @@ public class ConsultaMovimientos {
         this.fotos = fotos;
     }
 
-    /** Un renglón del ticket. Un descuento viene con subtotal negativo. */
-    public record ItemDelTicket(String descripcion, BigDecimal cantidad, BigDecimal precioUnitario,
-            BigDecimal subtotal, boolean descuento) {
+    /**
+     * Un renglón del ticket. Un descuento viene con subtotal negativo.
+     *
+     * @param descripcionOriginal como está impresa, o null
+     * @param codigoBarras        EAN-8 o EAN-13, o null
+     */
+    public record ItemDelTicket(String descripcion, String descripcionOriginal, String codigoBarras,
+            BigDecimal cantidad, BigDecimal precioUnitario, BigDecimal subtotal, boolean descuento) {
+    }
+
+    /**
+     * Un control de las cuentas del ticket que no cierra (ver {@link ControlesTicket}). Los descuentos van en
+     * negativo; el texto lo arma la página según el control.
+     */
+    public record DiferenciaDelTicket(ControlesTicket.Control control, BigDecimal calculado, BigDecimal impreso) {
     }
 
     /**
      * Lo que se ve al desplegar una fila con ticket.
      *
-     * @param sumaItems los productos menos los descuentos, o null si no se leyó ninguno
-     * @param coincide  si la suma y el total difieren en hasta $10 (o no hay productos con qué comparar)
-     * @param foto      si la foto está en disco y se puede pedir a /api/movimientos/{id}/foto
+     * @param sumaItems          los productos menos los descuentos, o null si no se leyó ninguno
+     * @param subtotalImpreso    el SUBTOTAL del ticket, o null
+     * @param descuentosImpresos el total de descuentos impreso (negativo), o null
+     * @param coincide           si todas las cuentas cierran (hasta $10 de diferencia)
+     * @param diferencias        las cuentas que no cierran
+     * @param lineasIlegibles    las líneas que la IA no pudo leer
+     * @param foto               si la foto está en disco y se puede pedir a /api/movimientos/{id}/foto
      */
-    public record DetalleTicket(Long id, String comercio, List<ItemDelTicket> items, BigDecimal sumaItems,
-            BigDecimal total, boolean coincide, boolean foto) {
+    public record DetalleTicket(Long id, String comercio, String sucursal, List<ItemDelTicket> items,
+            BigDecimal sumaItems, BigDecimal subtotalImpreso, BigDecimal descuentosImpresos, BigDecimal total,
+            boolean coincide, List<DiferenciaDelTicket> diferencias, List<String> lineasIlegibles, boolean foto) {
     }
 
     /** @throws NoSuchElementException si no es un gasto guardado */
@@ -75,14 +92,20 @@ public class ConsultaMovimientos {
         Movimiento m = consultas.gastoConItems(id)
                 .orElseThrow(() -> new NoSuchElementException("No existe el gasto " + id));
         List<ItemDelTicket> items = m.getItems().stream()
-                .map(i -> new ItemDelTicket(i.getDescripcion(), i.getCantidad(), dosDecimales(i.getPrecioUnitario()),
-                        dosDecimales(i.getSubtotal()), i.isDescuento()))
+                .map(i -> new ItemDelTicket(i.getDescripcion(), i.getDescripcionOriginal(), i.getCodigoBarras(),
+                        i.getCantidad(), dosDecimales(i.getPrecioUnitario()), dosDecimales(i.getSubtotal()),
+                        i.isDescuento()))
                 .toList();
         BigDecimal suma = items.isEmpty() ? null
                 : items.stream().map(ItemDelTicket::subtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal total = dosDecimales(m.getMonto());
-        return new DetalleTicket(m.getId(), m.getComercio(), items, suma, total,
-                ControlesTicket.revisar(m).isEmpty(), fotos.archivo(m.getFotoTicket()).isPresent());
+        List<DiferenciaDelTicket> diferencias = ControlesTicket.revisar(m).stream()
+                .map(d -> new DiferenciaDelTicket(d.control(), dosDecimales(d.calculado()), dosDecimales(d.impreso())))
+                .toList();
+        return new DetalleTicket(m.getId(), m.getComercio(), m.getSucursal(), items, suma,
+                dosDecimales(m.getSubtotalImpreso()), dosDecimales(m.getDescuentosImpresos()),
+                dosDecimales(m.getMonto()), diferencias.isEmpty(), diferencias,
+                diferencias.isEmpty() ? List.of() : m.getLineasIlegibles(),
+                fotos.archivo(m.getFotoTicket()).isPresent());
     }
 
     /** La foto del ticket de un gasto guardado, si está en disco. */

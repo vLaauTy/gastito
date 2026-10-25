@@ -40,6 +40,7 @@ import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
 import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Origen;
+import ar.gastito.ticket.ControlesTicket;
 import ar.gastito.ticket.FotosTicket;
 
 @DataJpaTest
@@ -299,6 +300,44 @@ class ConsultaMovimientosTest {
         assertThat(sinProductos.items()).isEmpty();
         assertThat(sinProductos.sumaItems()).isNull();
         assertThat(sinProductos.coincide()).isTrue();
+    }
+
+    @Test
+    void elDetalleTraeSucursalControlesYLasLineasQueNoSeLeyeron() {
+        List<ItemTicket> items = List.of(
+                new ItemTicket("Galletitas cracker queso", "GALLET CRACKER QSO", "7792180145444", new BigDecimal("2"),
+                        new BigDecimal("2250"), new BigDecimal("4300")),
+                new ItemTicket("20% ClubDía", null, null, new BigDecimal("-900")));
+        Movimiento m = movimientos.crearPendienteDeTicket(new MovimientoInterpretado(new BigDecimal("3600"), "Día",
+                categoria("Supermercado"), List.of(), null, null, null, LocalDateTime.of(2026, 9, 22, 17, 44)),
+                new DatosTicket("Día", "5601", new BigDecimal("4500"), new BigDecimal("-900"),
+                        List.of("Renglón 1: el subtotal está sobre un pliegue"), items), null);
+        movimientos.confirmar(m.getId());
+
+        ConsultaMovimientos.DetalleTicket detalle = consulta.items(m.getId());
+
+        assertThat(detalle.sucursal()).isEqualTo("5601");
+        assertThat(detalle.items().get(0).descripcionOriginal()).isEqualTo("GALLET CRACKER QSO");
+        assertThat(detalle.items().get(0).codigoBarras()).isEqualTo("7792180145444");
+        assertThat(detalle.subtotalImpreso()).isEqualByComparingTo("4500");
+        assertThat(detalle.descuentosImpresos()).isEqualByComparingTo("-900");
+        assertThat(detalle.coincide()).isFalse();
+        assertThat(detalle.diferencias()).singleElement().satisfies(d -> {
+            assertThat(d.control()).isEqualTo(ControlesTicket.Control.PRODUCTOS_Y_SUBTOTAL);
+            assertThat(d.calculado()).isEqualByComparingTo("4300");
+            assertThat(d.impreso()).isEqualByComparingTo("4500");
+        });
+        assertThat(detalle.lineasIlegibles()).containsExactly("Renglón 1: el subtotal está sobre un pliegue");
+    }
+
+    @Test
+    void siLasCuentasCierranNoSeMuestranLasLineasIlegibles() {
+        Movimiento m = movimientos.crearPendienteDeTicket(new MovimientoInterpretado(new BigDecimal("6550"),
+                "Día", categoria("Supermercado"), List.of(), null, null, null, LocalDateTime.of(2026, 10, 18, 17, 20)),
+                new DatosTicket("Día", null, null, null, List.of("Una mancha arriba, sin importes"), PRODUCTOS), null);
+        movimientos.confirmar(m.getId());
+
+        assertThat(consulta.items(m.getId()).lineasIlegibles()).isEmpty();
     }
 
     @Test

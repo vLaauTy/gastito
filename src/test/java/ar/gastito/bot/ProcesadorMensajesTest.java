@@ -655,7 +655,7 @@ class ProcesadorMensajesTest {
         when(tickets.leer(FOTO, null)).thenReturn(new TicketService.Leido(ticket("9000", SUPER, PRODUCTOS)));
 
         assertThat(mandarFoto(null).html()).endsWith(
-                "⚠️ Los productos suman <b>$8.050</b> y el total dice <b>$9.000</b>. Revisalo antes de guardar.");
+                "⚠️ Los productos suman <b>$8.050</b> y el total dice <b>$9.000</b>.\nRevisalo antes de guardar.");
     }
 
     @Test

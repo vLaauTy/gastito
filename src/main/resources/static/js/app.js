@@ -417,22 +417,38 @@
 
   const cantidades = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
 
+  /** La frase de una cuenta del ticket que no cierra. Los montos vienen calculados; acá solo se formatean. */
+  function diferenciaTicket(dif) {
+    const calculado = pesos(Math.abs(dif.calculado));
+    const impreso = pesos(Math.abs(dif.impreso));
+    switch (dif.control) {
+      case 'PRODUCTOS_Y_SUBTOTAL': return `Los productos suman ${calculado} y el subtotal dice ${impreso}.`;
+      case 'DESCUENTOS': return `Los descuentos suman ${calculado} y el ticket dice ${impreso}.`;
+      case 'SUBTOTAL_Y_TOTAL': return `El subtotal menos los descuentos da ${calculado} y el total dice ${impreso}.`;
+      default: return `Los productos suman ${calculado} y el total dice ${impreso}.`;
+    }
+  }
+
   function contenidoTicket(d) {
     const productos = d.items.length
       ? h('ul', { class: 'productos' }, ...d.items.map((i) => h('li', { class: i.descuento ? 'descuento' : null },
-        h('span', {}, i.descripcion,
+        h('span', { title: [i.descripcionOriginal, i.codigoBarras].filter(Boolean).join(' · ') || null }, i.descripcion,
           i.cantidad != null && Number(i.cantidad) !== 1 ? h('span', { class: 'note' }, ` ×${cantidades.format(i.cantidad)}`) : null),
         h('span', { class: 'money' }, pesos(i.subtotal)),
       )))
       : h('p', { class: 'note' }, 'No se leyeron los productos de este ticket.');
-    const suma = d.sumaItems == null ? null
-      : d.coincide
-        ? h('span', { class: 'note' }, `Los productos suman ${pesos(d.sumaItems)}.`)
-        : h('span', { class: 'up' }, `⚠️ Los productos suman ${pesos(d.sumaItems)} y el total es ${pesos(d.total)}.`);
+    const avisos = d.coincide ? null : h('div', { class: 'avisos-ticket' },
+      ...d.diferencias.map((dif) => h('p', { class: 'up' }, `⚠️ ${diferenciaTicket(dif)}`)),
+      d.lineasIlegibles.length ? h('p', { class: 'note' }, '🔍 No se pudo leer bien:') : null,
+      d.lineasIlegibles.length ? h('ul', { class: 'ilegibles' }, ...d.lineasIlegibles.map((l) => h('li', {}, l))) : null);
+    const suma = d.sumaItems != null && d.coincide
+      ? h('span', { class: 'note' }, `Las cuentas cierran: ${pesos(d.total)}.`)
+      : null;
+    const sucursal = d.sucursal ? h('span', { class: 'note' }, `Sucursal ${d.sucursal}`) : null;
     const foto = d.foto
       ? h('a', { class: 'ver-todos', href: `/api/movimientos/${d.id}/foto`, target: '_blank', rel: 'noopener' }, 'Ver foto')
       : h('span', { class: 'note' }, 'Sin foto');
-    return [productos, h('div', { class: 'pie-ticket' }, suma, foto)];
+    return [productos, avisos, h('div', { class: 'pie-ticket' }, suma, sucursal, foto)];
   }
 
   async function ultimosMovimientos() {

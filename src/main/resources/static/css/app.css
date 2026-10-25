@@ -129,6 +129,9 @@ tr.detalle-ticket td { background: var(--input-bg); padding: 12px 16px 16px; }
 .productos li.descuento { color: var(--ok); }
 .pie-ticket { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; margin-top: 10px; font-size: 13px; max-width: 520px; justify-content: space-between; }
 .pie-ticket .ver-todos { margin-left: 0; }
+.avisos-ticket { margin-top: 10px; max-width: 520px; font-size: 13px; }
+.avisos-ticket p { margin: 0 0 4px; }
+.ilegibles { margin: 0; padding-left: 18px; color: var(--muted); }
 .ver-todos { font-size: 13px; font-weight: 600; color: var(--accent); margin-left: 8px; text-decoration: none; }
 
 .filters { display: flex; gap: 8px; flex-wrap: wrap; }

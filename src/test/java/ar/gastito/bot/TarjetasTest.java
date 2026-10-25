@@ -18,8 +18,11 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
 
+import ar.gastito.movimiento.DatosTicket;
 import ar.gastito.movimiento.ItemTicket;
 import ar.gastito.movimiento.Movimiento;
+import ar.gastito.movimiento.MovimientoInterpretado;
+import ar.gastito.ticket.ControlesTicket;
 
 class TarjetasTest {
 
@@ -235,6 +238,35 @@ class TarjetasTest {
         m.confirmar();
         assertThat(tarjetas.guardado(m, new BigDecimal("9000"))).doesNotContain("⚠️")
                 .startsWith("✅ <b>Guardado</b> · Supermercado Día\n📅");
+    }
+
+    @Test
+    void unTicketArrugadoDiceQueCuentaNoCierraYQueLineaNoSeLeyo() {
+        MovimientoInterpretado interpretado = new MovimientoInterpretado(new BigDecimal("3600"), "Día", SUPER,
+                List.of(), null, null, null, DatosDePrueba.FECHA_TICKET);
+        Movimiento m = Movimiento.deTicket(interpretado, new DatosTicket("Día", "5601", new BigDecimal("4500"),
+                new BigDecimal("-900"), List.of("Renglón 1, Galletitas: el subtotal está sobre un pliegue"),
+                List.of(item("Galletitas", "4300"), item("20% ClubDía", "-900"))), null, DatosDePrueba.AHORA);
+
+        assertThat(tarjetas.pendiente(m)).endsWith("""
+                💰 Total <b>$3.600</b>
+                💳 Sin medio de pago
+                🛒 Supermercado
+
+                ⚠️ Los productos suman <b>$4.300</b> y el subtotal dice <b>$4.500</b>.
+                🔍 No pude leer bien:
+                • Renglón 1, Galletitas: el subtotal está sobre un pliegue
+                Revisalo antes de guardar.""");
+    }
+
+    @Test
+    void cadaControlTieneSuFrase() {
+        assertThat(tarjetas.diferencia(new ControlesTicket.Diferencia(ControlesTicket.Control.DESCUENTOS,
+                new BigDecimal("-6574.60"), new BigDecimal("-7666.60"))))
+                .isEqualTo("Los descuentos suman <b>$6.574,60</b> y el ticket dice <b>$7.666,60</b>.");
+        assertThat(tarjetas.diferencia(new ControlesTicket.Diferencia(ControlesTicket.Control.SUBTOTAL_Y_TOTAL,
+                new BigDecimal("30666.40"), new BigDecimal("36666.40"))))
+                .isEqualTo("El subtotal menos los descuentos da <b>$30.666,40</b> y el total dice <b>$36.666,40</b>.");
     }
 
     @Test

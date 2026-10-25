@@ -53,6 +53,7 @@ import ar.gastito.movimiento.ClaseIngreso;
 import ar.gastito.movimiento.IngresoService;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.Origen;
+import ar.gastito.ticket.ControlesTicket;
 
 @WebMvcTest(DashboardController.class)
 @ActiveProfiles("test")
@@ -291,22 +292,34 @@ class DashboardControllerTest {
 
     @Test
     void losProductosDeUnTicket() throws Exception {
-        when(movimientos.items(7L)).thenReturn(new ConsultaMovimientos.DetalleTicket(7L, "Supermercado Día", List.of(
-                new ConsultaMovimientos.ItemDelTicket("Leche 1 L", new BigDecimal("2"), pesos("1450"), pesos("2900"),
-                        false),
-                new ConsultaMovimientos.ItemDelTicket("2x1", null, null, pesos("-250"), true)),
-                pesos("2650"), pesos("2650"), true, true));
+        when(movimientos.items(7L)).thenReturn(new ConsultaMovimientos.DetalleTicket(7L, "Día", "5601", List.of(
+                new ConsultaMovimientos.ItemDelTicket("Leche 1 L", "LECHE ENT 1L", "7790080001234", new BigDecimal("2"),
+                        pesos("1450"), pesos("2900"), false),
+                new ConsultaMovimientos.ItemDelTicket("20% ClubDía", null, null, null, null, pesos("-580"), true)),
+                pesos("2320"), pesos("2900"), pesos("-580"), pesos("2420"), false,
+                List.of(new ConsultaMovimientos.DiferenciaDelTicket(ControlesTicket.Control.SUBTOTAL_Y_TOTAL,
+                        pesos("2320"), pesos("2420"))),
+                List.of("Renglón 3: el total está tapado"), true));
 
         mvc.perform(get("/api/movimientos/7/items"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.comercio").value("Supermercado Día"))
+                .andExpect(jsonPath("$.comercio").value("Día"))
+                .andExpect(jsonPath("$.sucursal").value("5601"))
                 .andExpect(jsonPath("$.items[0].descripcion").value("Leche 1 L"))
+                .andExpect(jsonPath("$.items[0].descripcionOriginal").value("LECHE ENT 1L"))
+                .andExpect(jsonPath("$.items[0].codigoBarras").value("7790080001234"))
                 .andExpect(jsonPath("$.items[0].cantidad").value(2))
                 .andExpect(jsonPath("$.items[0].subtotal").value(2900.00))
                 .andExpect(jsonPath("$.items[1].descuento").value(true))
-                .andExpect(jsonPath("$.items[1].subtotal").value(-250.00))
-                .andExpect(jsonPath("$.sumaItems").value(2650.00))
-                .andExpect(jsonPath("$.coincide").value(true))
+                .andExpect(jsonPath("$.items[1].subtotal").value(-580.00))
+                .andExpect(jsonPath("$.sumaItems").value(2320.00))
+                .andExpect(jsonPath("$.subtotalImpreso").value(2900.00))
+                .andExpect(jsonPath("$.descuentosImpresos").value(-580.00))
+                .andExpect(jsonPath("$.coincide").value(false))
+                .andExpect(jsonPath("$.diferencias[0].control").value("SUBTOTAL_Y_TOTAL"))
+                .andExpect(jsonPath("$.diferencias[0].calculado").value(2320.00))
+                .andExpect(jsonPath("$.diferencias[0].impreso").value(2420.00))
+                .andExpect(jsonPath("$.lineasIlegibles[0]").value("Renglón 3: el total está tapado"))
                 .andExpect(jsonPath("$.foto").value(true));
     }
 

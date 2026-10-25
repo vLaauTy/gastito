@@ -219,18 +219,41 @@ public class Tarjetas {
         return " ×" + cantidad.stripTrailingZeros().toPlainString().replace('.', ',');
     }
 
-    /** Solo mientras está pendiente: después de guardar ya no hay nada que revisar. */
+    /**
+     * Las cuentas del ticket que no cierran y, si las hay, las líneas que la IA no pudo leer (ticket arrugado).
+     * Solo mientras está pendiente: después de guardar ya no hay nada que revisar.
+     */
     private String avisoDeSuma(Movimiento m) {
-        if (m.getItems().isEmpty() || m.getMonto() == null) {
+        if (m.getMonto() == null) {
             return "";
         }
-        BigDecimal suma = m.getItems().stream().map(MovimientoItem::getSubtotal).reduce(BigDecimal.ZERO,
-                BigDecimal::add);
-        if (ControlesTicket.revisar(m).isEmpty()) {
+        List<ControlesTicket.Diferencia> diferencias = ControlesTicket.revisar(m);
+        if (diferencias.isEmpty()) {
             return "";
         }
-        return "\n\n⚠️ Los productos suman <b>" + formato.pesos(suma) + "</b> y el total dice <b>"
-                + formato.pesos(m.getMonto()) + "</b>. Revisalo antes de guardar.";
+        StringBuilder aviso = new StringBuilder("\n");
+        for (ControlesTicket.Diferencia d : diferencias) {
+            aviso.append("\n⚠️ ").append(diferencia(d));
+        }
+        List<String> ilegibles = m.getLineasIlegibles();
+        if (!ilegibles.isEmpty()) {
+            aviso.append("\n🔍 No pude leer bien:");
+            ilegibles.forEach(linea -> aviso.append("\n• ").append(html(linea)));
+        }
+        return aviso.append("\nRevisalo antes de guardar.").toString();
+    }
+
+    /** "Los productos suman $38.133 y el subtotal dice $38.333." Los descuentos, en positivo. */
+    String diferencia(ControlesTicket.Diferencia d) {
+        String calculado = "<b>" + formato.pesos(d.calculado().abs()) + "</b>";
+        String impreso = "<b>" + formato.pesos(d.impreso().abs()) + "</b>";
+        return switch (d.control()) {
+            case PRODUCTOS_Y_SUBTOTAL -> "Los productos suman " + calculado + " y el subtotal dice " + impreso + ".";
+            case DESCUENTOS -> "Los descuentos suman " + calculado + " y el ticket dice " + impreso + ".";
+            case SUBTOTAL_Y_TOTAL -> "El subtotal menos los descuentos da " + calculado + " y el total dice "
+                    + impreso + ".";
+            case PRODUCTOS_Y_TOTAL -> "Los productos suman " + calculado + " y el total dice " + impreso + ".";
+        };
     }
 
     private String datosIngreso(Movimiento m) {
