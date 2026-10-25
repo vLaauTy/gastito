@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
  * </ul>
  * El signo menos puede ir adelante, atrás ("250-") o entre paréntesis.
  */
-final class Importes {
+public final class Importes {
 
     private static final Pattern NUMERO = Pattern.compile("[0-9]+([.,][0-9]+)*");
 
@@ -25,7 +25,7 @@ final class Importes {
     }
 
     /** Un importe con signo, con dos decimales. */
-    static Optional<BigDecimal> importe(String texto) {
+    public static Optional<BigDecimal> importe(String texto) {
         return numero(texto, false).map(n -> n.setScale(2, RoundingMode.HALF_UP));
     }
 
@@ -33,7 +33,7 @@ final class Importes {
      * Una cantidad o un peso positivo ("2", "0,532", "1.5"). Con un solo separador siempre es decimal: en una
      * cantidad, "1.500" es un kilo y medio.
      */
-    static Optional<BigDecimal> cantidad(String texto) {
+    public static Optional<BigDecimal> cantidad(String texto) {
         return numero(texto, true)
                 .filter(n -> n.signum() > 0 && n.compareTo(new BigDecimal("9999999")) < 0)
                 .map(n -> n.setScale(3, RoundingMode.HALF_UP).stripTrailingZeros());
