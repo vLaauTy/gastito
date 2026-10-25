@@ -20,6 +20,9 @@ Para mirar y analizar hay un **dashboard web** servido por la misma aplicación:
 mes anterior, gasto por día, por categoría y por billetera, movimientos con buscador, e ingresos (sueldo,
 aguinaldo y extras) con lo que queda disponible.
 
+Además te manda **resúmenes**: el domingo a las 21, cómo fue la semana, y el día 1 a las 9, cómo fue el mes. Y le
+podés **preguntar** en lenguaje natural ("¿cuánto gasté en kiosco este mes?"), por escrito o por audio.
+
 Todos los totales se calculan con SQL o Java sobre la base; ni la IA ni el navegador hacen cuentas.
 
 ## Requisitos
@@ -66,6 +69,13 @@ Otros ajustes, en `src/main/resources/application.yml`:
 - `gastito.ticket.tamanio-maximo`: imágenes más pesadas no se procesan (por defecto `10MB`).
 - `gastito.ticket.max-tokens`: tope de la respuesta de la IA al leer un ticket (por defecto `4096`).
 - `gastito.ticket.carpeta-datos`: las fotos quedan en `<carpeta>/tickets/AAAA/MM/<id>.jpg` (por defecto `data`).
+- `gastito.resumenes.hora-semanal` y `hora-mensual`: cuándo se mandan los resúmenes (`21:00` del domingo y `09:00`
+  del día 1).
+- `gastito.resumenes.umbral-hormiga` y `categorias-hormiga`: qué cuenta como gasto hormiga (por defecto, menos de
+  $3.000 en Kiosco o Comida afuera / delivery).
+- `gastito.resumenes.modelo-semanal`, `modelo-mensual` y `max-tokens`: el modelo que redacta cada resumen.
+- `gastito.consultas.modelo`, `max-tokens` y `max-llamadas`: el modelo que responde preguntas y cuántas
+  herramientas puede usar por pregunta (por defecto 3).
 - `gastito.zona-horaria`: por defecto `America/Argentina/Buenos_Aires`.
 
 Las instrucciones que se le mandan a la IA y a Whisper están en `src/main/resources/prompts/` y se pueden
@@ -223,6 +233,54 @@ El monto acepta `380.000`, `380 mil` o `25k`. La cuenta se reconoce por su nombr
 decís, se usa la del último ingreso de ese tipo. Como los gastos, llega una tarjeta con **✅ Guardar** y
 **❌ Cancelar**. También se cargan y se borran desde el dashboard.
 
+### Resúmenes
+
+El **domingo a las 21** llega el resumen de la semana (lunes a domingo) y el **día 1 a las 9**, el del mes que
+terminó. Los arma Java: total, comparación con el período anterior hasta el mismo punto, categorías, el gasto más
+grande, gastos hormiga, días sin gastos, ingresos y tres escenarios de ahorro (hormiga en 3 por semana, la
+categoría que más subió de vuelta a su nivel anterior y la categoría más grande con un 10% menos). Haiku solo
+redacta "lo que noté" y un consejo; cada número que escribe se compara con los que calculó Java y, si alguno no
+aparece, se descarta el texto y quedan solo los números.
+
+Si la PC estaba apagada, al prenderla llega el resumen pendiente más reciente de cada tipo, con un botón **Ver
+anteriores** si quedaron otros sin ver. La primera vez que corre no manda nada de antes.
+
+`/resumen` arma la semana en curso hasta hoy y `/resumen mes`, el mes; si el período no terminó, dice que es
+parcial ("semana parcial, hasta el jueves 23"). El último resumen aparece también en el dashboard, en "Lo que notó
+la IA".
+
+Para **forzar el resumen semanal** sin esperar al domingo, corré el último envío registrado una semana para
+atrás (PostgreSQL). En menos de un minuto el bot ve que la última semana terminada no se mandó y la manda; no hace
+falta reiniciar. No borres la fila: sin ninguna, lo toma como primer arranque y no manda nada.
+
+```sql
+DELETE FROM resumen_envio WHERE tipo = 'SEMANAL'
+  AND desde = (SELECT MAX(desde) - 7 FROM resumen_envio WHERE tipo = 'SEMANAL');
+UPDATE resumen_envio SET desde = desde - 7, hasta = hasta - 7 WHERE tipo = 'SEMANAL'
+  AND desde = (SELECT MAX(desde) FROM resumen_envio WHERE tipo = 'SEMANAL');
+```
+
+Con `tipo = 'MENSUAL'` y `INTERVAL '1 month'` en lugar de `7` se fuerza el mensual.
+
+### Preguntas
+
+Cualquier mensaje que sea una pregunta, escrito o en audio, se responde con datos de la base:
+
+```
+¿cuánto gasté en kiosco este mes?
+compará octubre con septiembre
+¿qué compré en el Día la semana pasada?
+¿cuántas Seven Up compré desde septiembre?
+¿cuánto me queda disponible?
+```
+
+Haiku elige entre seis herramientas (total gastado, gasto por categoría, comparar períodos, listar movimientos,
+buscar un producto de los tickets, ingresos y disponible), con fechas de una tabla de rangos que calcula Java o
+con un rango explícito ("del 3 al 10 de octubre") que Java valida. Los números de la respuesta pasan por el mismo
+control que los resúmenes: si la IA escribe uno que no vino de una herramienta, se muestran los resultados tal
+cual los calculó Java. Si un mensaje tiene un monto y también parece pregunta (`¿kiosco 1500?`), el bot pregunta
+con dos botones: **Es un gasto** o **Es una pregunta**.
+
 ### Comandos
 
 Abajo del chat queda un menú fijo con estos comandos, que también están en el botón Menú de Telegram:
@@ -233,6 +291,7 @@ Abajo del chat queda un menú fijo con estos comandos, que también están en el
 | 📊 Hoy         | `/hoy`       | Gastos de hoy y el total                         |
 | 📅 Mes         | `/mes`       | Total del mes y barras por categoría             |
 | 💸 Costos IA   | `/costos`    | Lo gastado en IA este mes, en dólares            |
+|                | `/resumen`   | La semana hasta hoy; `/resumen mes`, el mes      |
 | 🖥 Dashboard   | `/dashboard` | El link del dashboard (se abre desde la PC)      |
 | ❓ Ayuda       | `/ayuda`     | Cómo cargar gastos e ingresos                    |
 |                | `/sueldo`, `/aguinaldo`, `/ingreso` | Cargar un ingreso                 |
@@ -301,6 +360,7 @@ decimales, y acepta `?mes=2026-10` (por defecto, el mes actual):
 | `GET /api/movimientos/{id}/foto`  | La foto del ticket (JPEG)                                       |
 | `GET /api/movimientos.csv`        | Gastos e ingresos del mes en CSV                                |
 | `GET /api/costos-ia`              | Costo en USD, llamadas y desglose por propósito                 |
+| `GET /api/resumenes/ultimo`       | El último resumen: período, lo que notó la IA y el consejo (204 si no hay) |
 | `GET /api/catalogo`               | Categorías, medios de pago, cuentas y tipos de ingreso          |
 | `GET /api/ingresos`               | Ingresos del mes y totales por tipo                             |
 | `GET /api/ingresos/por-mes`       | Total de los últimos meses (`hasta`, `meses`, por defecto 6)    |
@@ -411,6 +471,8 @@ ar.gastito
 ├── ia               Cliente de Claude, prompts, registro de tokens y costo (uso_ia)
 ├── audio            Transcripción de audios con el servidor de Whisper
 ├── ticket           Fotos de tickets: achicar la imagen, leerla con Haiku, validar y guardar la foto
+├── resumen          Resúmenes semanales y mensuales: cálculo, redacción con Haiku y registro de envíos
+├── consulta         Preguntas en lenguaje natural: herramientas con SQL y conversación con tool use
 ├── catalogo         Categorías, medios de pago, cuentas, tarjeta de crédito y alias de comercios
 ├── movimiento       Gastos e ingresos, su ciclo pendiente → confirmado y los totales
 ├── dashboard        API REST del dashboard, sus cálculos y el acceso (127.0.0.1 o token)

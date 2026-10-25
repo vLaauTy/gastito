@@ -63,11 +63,12 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
 
 ## Estructura y convenciones
 
-- Paquete base: `ar.gastito`. Organización por funcionalidad (`bot`, `interpretacion`, `ia`, `audio`, `ticket`, `catalogo`, `movimiento`, `dashboard`, `config`), no por capa técnica. Las entidades de referencia (categorías, medios de pago, cuentas, tarjeta, alias de comercios) van en `catalogo`; `movimiento` es solo el movimiento.
+- Paquete base: `ar.gastito`. Organización por funcionalidad (`bot`, `interpretacion`, `ia`, `audio`, `ticket`, `resumen`, `consulta`, `catalogo`, `movimiento`, `dashboard`, `config`), no por capa técnica. Las entidades de referencia (categorías, medios de pago, cuentas, tarjeta, alias de comercios) van en `catalogo`; `movimiento` es solo el movimiento.
 - Compilar y testear con el Maven Wrapper (`./mvnw`, o `mvnw.cmd` en Windows).
 - Los pedidos de cada etapa van en `docs/pedidos/`.
 - **Dashboard web** (`ar.gastito.dashboard` + `src/main/resources/static/`): API REST bajo `/api` y una página en HTML, CSS y JS sin framework, siguiendo `docs/prototipo-dashboard.html`. El JavaScript no calcula nada: los totales, promedios y porcentajes llegan hechos de la API (la misma API va a servir para la Mini App). Plata en el JSON como número con 2 decimales; el formato argentino lo hace el frontend. Chart.js por WebJar, nunca desde un CDN.
 - **Tickets** (`ar.gastito.ticket`): la foto se achica a 1568 px y se pasa a JPEG antes de mandarla a Haiku. El monto es el total impreso y sin total no se guarda nada. Las cuentas se controlan en Java (`ControlesTicket`, tolerancia $10): productos = subtotal, descuentos = descuentos impresos y subtotal + descuentos = total; la tarjeta dice cuál no cierra y qué línea no se pudo leer. Los importes se aceptan con coma o punto decimal en el mismo ticket (`Importes`). Los productos van en `movimiento_item` en el orden impreso (descuentos con subtotal negativo, debajo de su producto), con la descripción legible y la original y el código de barras si es un EAN-8/EAN-13 válido. La sucursal queda en el movimiento (para cruzarlo con el resumen de la tarjeta en la etapa 7). La foto va en `data/tickets/AAAA/MM/<id>.jpg`, que se borra si el ticket se cancela. Privacidad: la respuesta de la IA solo tiene campos para lo que se guarda (nada de tarjeta, CUIT, caja, cajero ni número de cliente); en los textos libres Java borra además tarjetas y CUIT, pero no números por su largo. Caso de prueba real: `src/test/resources/tickets/dia-2026-09-22-esperado.json`.
+- **Resúmenes y preguntas** (`ar.gastito.resumen`, `ar.gastito.consulta`): Java arma los datos (JSON) y la IA solo redacta. `ControlNumeros` compara cada número del texto de la IA con los del JSON o los resultados de las herramientas; si sobra uno, el texto se descarta y quedan los números de Java. Las preguntas usan tool use con 6 herramientas SQL, como mucho 3 llamadas, y fechas de una tabla de rangos calculada en Java o explícitas validadas en Java. Los envíos automáticos quedan en `resumen_envio` (si la PC estuvo apagada, solo el más reciente de cada tipo y "Ver anteriores").
 - Las billeteras del dashboard salen de los datos (la tarjeta o la cuenta del movimiento, o `medio_pago.es_efectivo`), nunca de nombres fijos en el código.
 - Nombres del dominio en español (`Movimiento`, `Categoria`, `MedioPago`), código y comentarios técnicos pueden ir en inglés o español pero consistentes.
 - Tests con JUnit 5. Todo parser o regla de negocio nueva lleva tests.
@@ -79,8 +80,8 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
 2. Etapa 2 (hecha): audios (Whisper local + mismo flujo que texto).
 3. Etapa 3 (hecha): fotos de tickets (visión de Haiku, detalle por producto). Ver `docs/pedidos/etapa-3.md`.
    - Hecho fuera de orden: el dashboard web (en `localhost`, base de la etapa 5) y la carga de ingresos (sueldo, aguinaldo y extras, de la etapa 6), por bot y por dashboard. Ver `docs/pedidos/dashboard.md`.
-4. **Etapa 4 (actual):** resúmenes semanales y consultas en lenguaje natural.
-5. Etapa 5: panel web dentro de Telegram (Mini App).
+4. Etapa 4 (hecha): resúmenes semanales y mensuales y consultas en lenguaje natural. Ver `docs/pedidos/etapa-4.md`.
+5. **Etapa 5 (actual):** panel web dentro de Telegram (Mini App).
 6. Etapa 6: compras repetidas, juntadas, ingresos, gastos fijos.
 7. Etapa 7: resumen de la tarjeta (PDF con texto, se parsea con PDFBox sin IA) y avisos automáticos de Galicia y Mercado Pago.
 8. Más adelante: recibos de sueldo, pantalla de costos de la IA.
