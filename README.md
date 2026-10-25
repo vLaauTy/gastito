@@ -171,11 +171,19 @@ descripción arranca con el nombre del comercio.
   subtotal dice $38.333*, junto con las líneas que no se pudieron leer si el ticket estaba arrugado.
 - Los descuentos (por ejemplo el *20% ClubDía* de cada producto) quedan debajo de su producto, en el orden
   impreso. Las líneas de *Ahorro* son informativas y no se restan otra vez.
-- Los números se entienden con coma o con punto decimal, aunque se mezclen en el mismo ticket.
+- Si una cuenta no cierra, la tarjeta nombra también los productos donde cantidad × precio unitario no da el
+  importe del renglón (casi siempre, un número tapado por un pliegue).
+- Los números se entienden con coma o con punto decimal, aunque se mezclen en el mismo ticket, y la fecha como
+  `22-09-2026 17:44:28`, `22/09/2026` o `22/09/26`.
+- En una franquicia, el comercio es el que figura en "a cuenta y orden de" (Día), no la razón social del
+  franquiciado.
 - De cada producto se guarda la descripción legible y la impresa (`GALLET CRACKER QSO`), y el código de barras si
   es un EAN-8 o EAN-13 válido. Del ticket se guarda la sucursal (`5601`), para cruzarlo más adelante con el
   resumen de la tarjeta.
-- Si el ticket dice solo *TARJETA*, sin aclarar débito o crédito, queda sin medio de pago para que lo elijas.
+- Si el ticket dice solo *TARJETA*, sin aclarar débito o crédito, queda sin medio de pago para que lo elijas
+  (salvo que lo hayas escrito con la foto).
+- Por ahora todo el ticket va a una sola categoría. La categoría por producto está anotada en
+  [docs/mejoras-futuras.md](docs/mejoras-futuras.md).
 - Si no se lee el total, no se guarda nada y te pide una foto más clara, con el ticket entero y sin reflejos.
 - La fecha es la del ticket. Una fecha futura o de hace más de un año se toma como mal leída y queda la de hoy.
 - Si escribís algo con la foto, se usa como pista: *"efectivo"*, *"con la de Galicia"*.
@@ -420,6 +428,7 @@ El resto del repositorio:
 ├── src/test                 Tests con JUnit 5 (H2 en memoria, MockMvc, WireMock)
 ├── scripts/iniciar.ps1      Arranque con chequeos previos (lo llama iniciar.bat)
 ├── docs/pedidos/            Los pedidos de cada etapa con los que se fue construyendo el bot
+├── docs/mejoras-futuras.md  Ideas anotadas para más adelante
 ├── docs/prototipo-dashboard.html  El prototipo visual del dashboard
 ├── docker-compose.yml       PostgreSQL para el perfil postgres
 └── mvnw, mvnw.cmd           Maven Wrapper

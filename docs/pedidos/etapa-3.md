@@ -98,3 +98,24 @@ Con un ticket real de Día (22/09/2026; lectura esperada en `src/test/resources/
 - **"TARJETA" sin aclarar** débito o crédito queda sin medio de pago.
 - **Prueba con la foto real:** `LecturaTicketRealIT` lee la foto de `data/tickets-prueba/` (fuera del repo) y la
   compara con la lectura esperada. Si la foto no está, el test se saltea.
+- **Comercio de una franquicia:** el primer renglón del ticket es la razón social del franquiciado (a veces el
+  nombre de una persona) y debajo dice "A CUENTA Y ORDEN DE DIA ARG. SA". El comercio es Día: si aparece "a
+  cuenta y orden de X", el comercio es X.
+- **Fecha con guiones:** Día imprime `22-09-2026 17:44:28`. Se aceptan dd-mm-aaaa, dd/mm/aaaa y dd/mm/aa, con
+  segundos o sin ellos.
+- **Producto en tres renglones:** primero cantidad X precio unitario; después la descripción con "(21,00)" (la
+  alícuota de IVA, no un precio) y el importe; al final el código de barras. La alícuota no se guarda.
+- **Sin datos personales en el repo:** la foto de prueba tiene el número de ClubDía del usuario; queda solo en
+  `data/tickets-prueba/` (ignorada con `data/`). El resumen de la tarjeta en PDF de la raíz también está
+  ignorado y nunca se subió.
+
+Lo que mostró la foto real al correr `LecturaTicketRealIT`:
+
+- Con un "TARJETA" a secas, la IA eligió crédito igual. Ahora devuelve también la forma de pago impresa y, si es
+  solo "TARJETA", Java deja el medio vacío (salvo que el usuario haya escrito el medio con la foto).
+- El ticket está arrugado: una vez la IA leyó $4.463,90 donde dice $4.488. Cuando una cuenta no cierra, la
+  tarjeta nombra además los productos donde cantidad × precio unitario no da el importe.
+- Con la categoría en duda (tres candidatas), los 22 renglones se cargaban 66 veces desde la base: los productos
+  ahora se cargan en una consulta aparte.
+
+Mejora futura (no ahora): categoría por producto. Ver `docs/mejoras-futuras.md`.
