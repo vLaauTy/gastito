@@ -39,6 +39,8 @@ import ar.gastito.movimiento.MovimientoIncompletoException;
 import ar.gastito.movimiento.MovimientoNoPendienteException;
 import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Origen;
+import ar.gastito.resumen.ResumenService;
+import ar.gastito.resumen.TipoResumen;
 import ar.gastito.ticket.ImagenInvalidaException;
 import ar.gastito.ticket.TicketService;
 
@@ -83,9 +85,13 @@ public class ProcesadorMensajes {
             /ingreso 25000 arreglo de PC a mercado pago (cualquier otro ingreso: una venta, un regalo…)
             Si no decís la cuenta, uso la del último ingreso de ese tipo. Te muestro la tarjeta y lo guardás con un toque.
 
+            <b>Resúmenes</b>
+            El domingo a las 21 te mando cómo fue tu semana, y el día 1 a las 9, cómo fue el mes. Si la PC estaba apagada, te llega apenas la prendés.
+
             <b>Comandos</b>
             /hoy – gastos de hoy y el total
             /mes – total del mes por categoría
+            /resumen – tu semana hasta hoy, con lo que noté; /resumen mes, el mes
             /costos – lo gastado en IA este mes
             /dashboard – el link del dashboard, para ver tus gastos con gráficos
             /ayuda – este mensaje""";
@@ -101,6 +107,8 @@ public class ProcesadorMensajes {
     private final ComandosIngreso comandosIngreso;
     private final TranscripcionService transcripciones;
     private final TicketService tickets;
+    private final ResumenService resumenes;
+    private final FormatoResumen formatoResumen;
     private final Duration duracionMaximaAudio;
     private final String urlDashboard;
     private final Clock clock;
@@ -134,9 +142,11 @@ public class ProcesadorMensajes {
     public ProcesadorMensajes(InterpretadorService interpretador, MovimientoService movimientos,
             CatalogoService catalogos, RegistroUsoIa usoIa, ResolvedorFechas fechas, Tarjetas tarjetas,
             FormatoMensajes formato, GraficoMes grafico, ComandosIngreso comandosIngreso,
-            TranscripcionService transcripciones, TicketService tickets, GastitoProperties properties,
-            DashboardProperties dashboard, Clock clock) {
+            TranscripcionService transcripciones, TicketService tickets, ResumenService resumenes,
+            FormatoResumen formatoResumen, GastitoProperties properties, DashboardProperties dashboard, Clock clock) {
         this.tickets = tickets;
+        this.resumenes = resumenes;
+        this.formatoResumen = formatoResumen;
         this.grafico = grafico;
         this.comandosIngreso = comandosIngreso;
         this.interpretador = interpretador;
@@ -174,7 +184,9 @@ public class ProcesadorMensajes {
             acciones.addAll(restaurar(espera));
         }
 
-        if (comando != null) {
+        if ("/resumen".equals(comando)) {
+            acciones.add(resumen(limpio));
+        } else if (comando != null) {
             ClaseIngreso clase = ComandosIngreso.clase(comando);
             acciones.add(clase != null ? comandosIngreso.responder(clase, limpio) : responderComando(comando));
         } else {
@@ -451,6 +463,10 @@ public class ProcesadorMensajes {
 
     /** @param mensajeId la tarjeta donde está el botón: se edita en el lugar */
     public List<Accion> procesarBoton(long chatId, int mensajeId, String datos) {
+        FormatoResumen.Anteriores anteriores = FormatoResumen.leerAnteriores(datos);
+        if (anteriores != null) {
+            return verAnteriores(mensajeId, anteriores);
+        }
         String[] partes = datos == null ? new String[0] : datos.split(":");
         Long id = partes.length >= 2 ? numero(partes[1]) : null;
         Long elegido = partes.length >= 3 ? numero(partes[2]) : null;
@@ -564,6 +580,32 @@ public class ProcesadorMensajes {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    // --- Resúmenes ---
+
+    /** "/resumen": la semana en curso hasta hoy; "/resumen mes": el mes en curso hasta hoy. */
+    private Accion resumen(String texto) {
+        String[] palabras = texto.strip().split("\\s+");
+        TipoResumen tipo = palabras.length > 1 && palabras[1].toLowerCase().startsWith("mes")
+                ? TipoResumen.MENSUAL
+                : TipoResumen.SEMANAL;
+        ResumenService.Armado armado = resumenes.pedido(tipo);
+        return Accion.Enviar.conMenu(formatoResumen.mensaje(armado, 0));
+    }
+
+    /** "Ver anteriores": los resúmenes que quedaron pendientes con la PC apagada. El botón se saca. */
+    private List<Accion> verAnteriores(int mensajeId, FormatoResumen.Anteriores anteriores) {
+        List<ResumenService.Armado> armados = resumenes.anteriores(anteriores.tipo(), anteriores.desde(),
+                anteriores.hasta());
+        List<Accion> acciones = new ArrayList<>();
+        acciones.add(new Accion.QuitarBotones(mensajeId));
+        if (armados.isEmpty()) {
+            acciones.add(new Accion.Avisar("Ya los viste"));
+            return acciones;
+        }
+        armados.forEach(a -> acciones.add(Accion.Enviar.texto(formatoResumen.mensaje(a, 0))));
+        return acciones;
     }
 
     // --- Comandos ---

@@ -29,6 +29,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.List;
@@ -63,6 +64,8 @@ import ar.gastito.movimiento.MovimientoNoPendienteException;
 import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Origen;
 import ar.gastito.movimiento.TotalPorCategoria;
+import ar.gastito.resumen.ResumenService;
+import ar.gastito.resumen.TipoResumen;
 import ar.gastito.ticket.ImagenInvalidaException;
 import ar.gastito.ticket.TicketService;
 import ar.gastito.ticket.ValidadorTicket;
@@ -80,19 +83,22 @@ class ProcesadorMensajesTest {
     private final TranscripcionService transcripciones = mock(TranscripcionService.class);
     private final IngresoService ingresos = mock(IngresoService.class);
     private final TicketService tickets = mock(TicketService.class);
+    private final ResumenService resumenes = mock(ResumenService.class);
     private ProcesadorMensajes procesador;
 
     @BeforeEach
     void setUp() {
         FormatoMensajes formato = new FormatoMensajes(RELOJ);
         GastitoProperties properties = new GastitoProperties(null, null, null, new GastitoProperties.Audio(
-                "http://whisper", "clave", "whisper-1", "es", Duration.ofSeconds(60), Duration.ofSeconds(60)), null, null, null);
+                "http://whisper", "clave", "whisper-1", "es", Duration.ofSeconds(60), Duration.ofSeconds(60)), null,
+                null, null);
+        DashboardProperties dashboard = new DashboardProperties("http://localhost:8090", null);
         Tarjetas tarjetas = new Tarjetas(formato);
         ComandosIngreso comandosIngreso = new ComandosIngreso(new ParserIngreso(), catalogos, ingresos,
                 new ResolvedorFechas(), tarjetas, RELOJ);
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
-                tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, properties,
-                new DashboardProperties("http://localhost:8090", null), RELOJ);
+                tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, resumenes,
+                new FormatoResumen(formato, new GraficoMes(formato), dashboard), properties, dashboard, RELOJ);
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));
         when(tickets.tamanioMaximo()).thenReturn(DataSize.ofMegabytes(10));
     }
@@ -758,6 +764,44 @@ class ProcesadorMensajesTest {
         assertThat(acciones).hasSize(2);
         assertThat(edicion(acciones).html()).startsWith("🧾 <b>Nuevo gasto</b>").doesNotContain("Escribí");
         assertThat(((Accion.Enviar) acciones.get(1)).html()).startsWith("🧾 <b>Ticket</b>");
+    }
+
+    // --- Resúmenes ---
+
+    @Test
+    void resumenEsLaSemanaYResumenMesElMes() {
+        when(resumenes.pedido(TipoResumen.SEMANAL)).thenReturn(ResumenesDePrueba.vacio(TipoResumen.SEMANAL, AHORA.toLocalDate()));
+        when(resumenes.pedido(TipoResumen.MENSUAL)).thenReturn(ResumenesDePrueba.vacio(TipoResumen.MENSUAL, AHORA.toLocalDate()));
+
+        Accion.Enviar semana = (Accion.Enviar) procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "/resumen").get(0);
+        Accion.Enviar mes = (Accion.Enviar) procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "/resumen mes").get(0);
+
+        assertThat(semana.html()).startsWith("📊 <b>Tu semana</b>").contains("No registraste gastos esta semana.");
+        assertThat(mes.html()).startsWith("📊 <b>Tu mes</b>");
+        assertThat(semana.conMenu()).isTrue();
+        verify(interpretador, never()).interpretar(anyString(), any());
+    }
+
+    @Test
+    void verAnterioresMandaCadaResumenYSacaElBoton() {
+        when(resumenes.anteriores(TipoResumen.SEMANAL, LocalDate.of(2026, 9, 28), LocalDate.of(2026, 10, 5)))
+                .thenReturn(List.of(ResumenesDePrueba.vacio(TipoResumen.SEMANAL, LocalDate.of(2026, 9, 28)),
+                        ResumenesDePrueba.vacio(TipoResumen.SEMANAL, LocalDate.of(2026, 10, 5))));
+
+        List<Accion> acciones = procesador.procesarBoton(CHAT, TARJETA, "va:S:20260928:20261005");
+
+        assertThat(acciones.get(0)).isEqualTo(new Accion.QuitarBotones(TARJETA));
+        assertThat(acciones.subList(1, acciones.size())).hasSize(2)
+                .allSatisfy(a -> assertThat(((Accion.Enviar) a).html()).startsWith("📊 <b>Tu semana</b>"));
+    }
+
+    @Test
+    void verAnterioresDeNuevoNoRepiteNada() {
+        when(resumenes.anteriores(any(), any(), any())).thenReturn(List.of());
+
+        List<Accion> acciones = procesador.procesarBoton(CHAT, TARJETA, "va:M:20260801:20260901");
+
+        assertThat(acciones).containsExactly(new Accion.QuitarBotones(TARJETA), new Accion.Avisar("Ya los viste"));
     }
 
     // --- Ingresos ---

@@ -202,9 +202,10 @@ class CalculoResumenTest {
     @Test
     void aclaraLoQueNoSePuedeCalcularBien() {
         assertThat(semana().aclaraciones())
-                .contains("1 gasto sin medio de pago (Sin especificar), por 3000.00: no se pueden repartir por "
-                        + "billetera.")
+                .contains("1 gasto sin medio de pago (Sin especificar): no se pueden repartir por billetera.")
                 .anySatisfy(a -> assertThat(a).contains("juntadas"));
+        assertThat(semana().sinEspecificar().cantidad()).isEqualTo(1);
+        assertThat(semana().sinEspecificar().total()).isEqualByComparingTo("3000");
         assertThat(semana().ingresos()).isNull(); // solo en el mensual
     }
 

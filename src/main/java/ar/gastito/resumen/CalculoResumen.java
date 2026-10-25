@@ -91,6 +91,7 @@ public class CalculoResumen {
                 gastoMasGrande(gastos),
                 hormiga,
                 diasSinGastos(gastos, periodo.desde(), hasta),
+                sinEspecificar(gastos),
                 productos(periodo.desde(), hasta),
                 escenarios(categorias, hormiga, dias),
                 ingresosDelMes,
@@ -241,16 +242,20 @@ public class CalculoResumen {
         if (parcial) {
             aclaraciones.add("Período parcial: los datos llegan hasta el " + DIA.format(hasta) + ".");
         }
-        List<Movimiento> sinMedio = gastos.stream()
-                .filter(m -> m.getMedioPago() == null && m.getCuenta() == null && m.getTarjeta() == null)
-                .toList();
-        if (!sinMedio.isEmpty()) {
-            aclaraciones.add(sinMedio.size() + (sinMedio.size() == 1 ? " gasto" : " gastos")
-                    + " sin medio de pago (Sin especificar), por " + suma(sinMedio).toPlainString()
-                    + ": no se pueden repartir por billetera.");
+        int sinMedio = sinEspecificar(gastos).cantidad();
+        if (sinMedio > 0) {
+            aclaraciones.add(sinMedio + (sinMedio == 1 ? " gasto" : " gastos")
+                    + " sin medio de pago (Sin especificar): no se pueden repartir por billetera.");
         }
         aclaraciones.add("La plata que te deben de juntadas todavía no se registra: llega en la etapa 6.");
         return aclaraciones;
+    }
+
+    private static DatosResumen.SinEspecificar sinEspecificar(List<Movimiento> gastos) {
+        List<Movimiento> sinMedio = gastos.stream()
+                .filter(m -> m.getMedioPago() == null && m.getCuenta() == null && m.getTarjeta() == null)
+                .toList();
+        return new DatosResumen.SinEspecificar(sinMedio.size(), suma(sinMedio));
     }
 
     // --- Cuentas ---

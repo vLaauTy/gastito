@@ -28,6 +28,7 @@ import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendChatAction;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.File;
@@ -58,12 +59,14 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
     private final TelegramClient telegram;
     private final FiltroUsuario filtro;
     private final ProcesadorMensajes procesador;
+    private final long usuario;
     /** Repite la acción "escribiendo…" mientras se transcribe un audio o se lee un ticket. */
     private final ScheduledExecutorService programador = Executors.newSingleThreadScheduledExecutor(
             Thread.ofPlatform().name("gastito-escribiendo").daemon().factory());
 
     public GastitoBot(GastitoProperties properties, FiltroUsuario filtro, ProcesadorMensajes procesador) {
         this.token = properties.telegram().token();
+        this.usuario = properties.telegram().allowedUserId();
         if (token == null || token.isBlank()) {
             throw new IllegalStateException("Falta TELEGRAM_BOT_TOKEN en el archivo .env");
         }
@@ -88,6 +91,7 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
         ejecutar(SetMyCommands.builder().commands(List.of(
                 new BotCommand("hoy", "Gastos de hoy y el total"),
                 new BotCommand("mes", "Total del mes por categoría"),
+                new BotCommand("resumen", "Tu semana hasta hoy (/resumen mes: el mes)"),
                 new BotCommand("costos", "Lo gastado en IA este mes"),
                 new BotCommand("sueldo", "Cargar el sueldo: /sueldo 380.000 galicia"),
                 new BotCommand("aguinaldo", "Cargar el aguinaldo"),
@@ -248,6 +252,11 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
                         .replyMarkup(inline(e.teclado()))
                         .build());
                 case Accion.Borrar b -> ejecutar(DeleteMessage.builder().chatId(chatId).messageId(b.mensajeId()).build());
+                case Accion.QuitarBotones q -> ejecutar(EditMessageReplyMarkup.builder()
+                        .chatId(chatId)
+                        .messageId(q.mensajeId())
+                        .replyMarkup(inline(Teclado.NINGUNO))
+                        .build());
                 case Accion.Avisar a -> aviso = a.texto();
             }
         }
@@ -261,7 +270,22 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
         }
     }
 
-    private void enviar(long chatId, Accion.Enviar e) {
+    /**
+     * Le manda mensajes al usuario sin que él haya escrito (los resúmenes automáticos). En un chat privado, el id
+     * del chat es el del usuario.
+     *
+     * @return si Telegram aceptó todos los mensajes
+     */
+    public boolean enviarAlUsuario(List<Accion.Enviar> mensajes) {
+        boolean todos = true;
+        for (Accion.Enviar mensaje : mensajes) {
+            todos &= enviar(usuario, mensaje);
+        }
+        return todos;
+    }
+
+    /** @return si Telegram lo aceptó */
+    private boolean enviar(long chatId, Accion.Enviar e) {
         SendMessage.SendMessageBuilder<?, ?> mensaje = SendMessage.builder()
                 .chatId(chatId)
                 .text(e.html())
@@ -276,8 +300,10 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
             if (e.tarjetaDeMovimiento() != null) {
                 procesador.tarjetaEnviada(chatId, e.tarjetaDeMovimiento(), enviado.getMessageId());
             }
+            return true;
         } catch (TelegramApiException ex) {
             log.warn("Falló sendMessage en Telegram: {}", sinToken(ex.getMessage()));
+            return false;
         }
     }
 

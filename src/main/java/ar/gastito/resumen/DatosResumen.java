@@ -21,6 +21,7 @@ public record DatosResumen(
         GastoGrande gastoMasGrande,
         Hormiga hormiga,
         int diasSinGastos,
+        SinEspecificar sinEspecificar,
         Productos productos,
         List<Escenario> escenariosAhorro,
         Ingresos ingresos,
@@ -49,6 +50,10 @@ public record DatosResumen(
     }
 
     public record GastoGrande(String descripcion, String categoria, BigDecimal monto, LocalDate fecha) {
+    }
+
+    /** Gastos sin medio de pago ni cuenta: no se pueden repartir por billetera (hay que corregirlos). */
+    public record SinEspecificar(int cantidad, BigDecimal total) {
     }
 
     /**

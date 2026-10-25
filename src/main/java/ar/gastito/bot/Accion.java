@@ -22,6 +22,15 @@ public sealed interface Accion {
         public static Enviar tarjeta(String html, Teclado teclado, long movimientoId) {
             return new Enviar(html, teclado, false, movimientoId);
         }
+
+        /** Un mensaje con botones que no es la tarjeta de un gasto (un resumen con "Ver anteriores"). */
+        public static Enviar conBotones(String html, Teclado teclado) {
+            return new Enviar(html, teclado, false, null);
+        }
+    }
+
+    /** Saca los botones de un mensaje sin cambiar su texto (por ejemplo, "Ver anteriores" después de tocarlo). */
+    record QuitarBotones(int mensajeId) implements Accion {
     }
 
     /** Cambia el texto y los botones de un mensaje que ya está en el chat. Sin botones, se los saca. */
