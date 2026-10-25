@@ -182,6 +182,30 @@ class MigracionTest {
         assertThat(contar("movimiento_item")).isZero();
     }
 
+    // --- V5: lo que aprendimos de un ticket real ---
+
+    @Test
+    void elCodigoDeBarrasEsEan8OEan13YLosDescuentosImpresosNoSonPositivos() {
+        jdbc.update("""
+                INSERT INTO movimiento (id, fecha_hora, monto, tipo, origen, estado, creado_en, sucursal,
+                                        subtotal_impreso, descuentos_impresos, lineas_ilegibles)
+                VALUES (3000, CURRENT_TIMESTAMP, 30666.40, 'GASTO', 'TICKET', 'PENDIENTE', CURRENT_TIMESTAMP, '5601',
+                        38333, -7666.60, 'Renglón 7: tapado')""");
+        jdbc.update("""
+                INSERT INTO movimiento_item (movimiento_id, orden, descripcion, descripcion_original, codigo_barras, subtotal)
+                VALUES (3000, 0, 'Galletitas cracker queso', 'GALLET CRACKER QSO', '7792180145444', 4500)""");
+        jdbc.update("""
+                INSERT INTO movimiento_item (movimiento_id, orden, descripcion, codigo_barras, subtotal)
+                VALUES (3000, 1, 'Chicle', '77912345', 100)""");
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO movimiento_item (movimiento_id, orden, descripcion, codigo_barras, subtotal)
+                VALUES (3000, 2, 'Otro', '12345', 100)""")).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO movimiento (fecha_hora, monto, tipo, origen, estado, creado_en, descuentos_impresos)
+                VALUES (CURRENT_TIMESTAMP, 100, 'GASTO', 'TICKET', 'PENDIENTE', CURRENT_TIMESTAMP, 50)"""))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
     private int contar(String tabla) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM " + tabla, Integer.class);
     }

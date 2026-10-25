@@ -33,6 +33,7 @@ import ar.gastito.catalogo.MedioPago;
 import ar.gastito.catalogo.MedioPagoRepository;
 import ar.gastito.catalogo.TarjetaCreditoRepository;
 import ar.gastito.movimiento.ClaseIngreso;
+import ar.gastito.movimiento.DatosTicket;
 import ar.gastito.movimiento.IngresoService;
 import ar.gastito.movimiento.ItemTicket;
 import ar.gastito.movimiento.Movimiento;
@@ -250,7 +251,7 @@ class ConsultaMovimientosTest {
     private Movimiento ticket(String total, List<ItemTicket> items, boolean confirmar) {
         Movimiento m = movimientos.crearPendienteDeTicket(new MovimientoInterpretado(new BigDecimal(total),
                 "Supermercado Día", categoria("Supermercado"), List.of(), medio("Débito"), null, null,
-                LocalDateTime.of(2026, 10, 18, 17, 20)), "Supermercado Día", items, null);
+                LocalDateTime.of(2026, 10, 18, 17, 20)), DatosTicket.de("Supermercado Día", items), null);
         if (confirmar) {
             movimientos.confirmar(m.getId());
         }

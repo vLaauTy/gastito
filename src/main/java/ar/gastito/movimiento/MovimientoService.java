@@ -54,10 +54,9 @@ public class MovimientoService {
 
     /** Un gasto leído de un ticket, con sus productos. */
     @Transactional
-    public Movimiento crearPendienteDeTicket(MovimientoInterpretado interpretado, String comercio,
-            List<ItemTicket> items, String textoOriginal) {
-        return movimientos.save(Movimiento.deTicket(interpretado, comercio, items, textoOriginal,
-                LocalDateTime.now(clock)));
+    public Movimiento crearPendienteDeTicket(MovimientoInterpretado interpretado, DatosTicket ticket,
+            String textoOriginal) {
+        return movimientos.save(Movimiento.deTicket(interpretado, ticket, textoOriginal, LocalDateTime.now(clock)));
     }
 
     @Transactional

@@ -29,6 +29,12 @@ public class MovimientoItem {
 
     private String descripcion;
 
+    /** Como está impresa en el ticket, o null. */
+    private String descripcionOriginal;
+
+    /** EAN-8 o EAN-13 validado, o null. */
+    private String codigoBarras;
+
     /** Null si el ticket no la dice (se entiende 1). */
     private BigDecimal cantidad;
 
@@ -43,6 +49,8 @@ public class MovimientoItem {
         this.movimiento = movimiento;
         this.orden = orden;
         this.descripcion = item.descripcion();
+        this.descripcionOriginal = item.descripcionOriginal();
+        this.codigoBarras = item.codigoBarras();
         this.cantidad = item.cantidad();
         this.precioUnitario = item.precioUnitario();
         this.subtotal = item.subtotal();
@@ -62,6 +70,14 @@ public class MovimientoItem {
 
     public String getDescripcion() {
         return descripcion;
+    }
+
+    public String getDescripcionOriginal() {
+        return descripcionOriginal;
+    }
+
+    public String getCodigoBarras() {
+        return codigoBarras;
     }
 
     public BigDecimal getCantidad() {

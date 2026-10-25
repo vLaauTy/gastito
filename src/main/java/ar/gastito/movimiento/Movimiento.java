@@ -98,6 +98,18 @@ public class Movimiento {
     /** De un ticket: el comercio tal como lo leyó la IA (la descripción arranca igual, pero se puede editar). */
     private String comercio;
 
+    /** De un ticket: la sucursal ("5601"), para cruzarlo con el resumen de la tarjeta. */
+    private String sucursal;
+
+    /** De un ticket: el SUBTOTAL impreso, si figura. */
+    private BigDecimal subtotalImpreso;
+
+    /** De un ticket: el total de descuentos impreso (negativo), si figura. */
+    private BigDecimal descuentosImpresos;
+
+    /** De un ticket: las líneas que la IA no pudo leer, una por renglón. */
+    private String lineasIlegibles;
+
     /** De un ticket: la foto, relativa a la carpeta de datos (tickets/AAAA/MM/<id>.jpg). */
     private String fotoTicket;
 
@@ -141,11 +153,19 @@ public class Movimiento {
      *
      * @param textoOriginal el texto que acompañaba la foto, o null
      */
-    public static Movimiento deTicket(MovimientoInterpretado interpretado, String comercio, List<ItemTicket> items,
-            String textoOriginal, LocalDateTime ahora) {
+    public static Movimiento deTicket(MovimientoInterpretado interpretado, DatosTicket ticket, String textoOriginal,
+            LocalDateTime ahora) {
         Movimiento m = pendiente(interpretado, Origen.TICKET, textoOriginal, ahora);
-        m.comercio = comercio;
-        for (ItemTicket item : items) {
+        m.comercio = ticket.comercio();
+        m.sucursal = ticket.sucursal();
+        m.subtotalImpreso = ticket.subtotalImpreso();
+        m.descuentosImpresos = ticket.descuentosImpresos();
+        String ilegibles = String.join("\n", ticket.lineasIlegibles());
+        m.lineasIlegibles = ilegibles.isEmpty() ? null
+                : ilegibles.length() > LARGO_MAXIMO_TEXTO_ORIGINAL
+                        ? ilegibles.substring(0, LARGO_MAXIMO_TEXTO_ORIGINAL)
+                        : ilegibles;
+        for (ItemTicket item : ticket.items()) {
             m.items.add(new MovimientoItem(m, m.items.size(), item));
         }
         return m;
@@ -350,6 +370,22 @@ public class Movimiento {
 
     public String getFotoTicket() {
         return fotoTicket;
+    }
+
+    public String getSucursal() {
+        return sucursal;
+    }
+
+    public BigDecimal getSubtotalImpreso() {
+        return subtotalImpreso;
+    }
+
+    public BigDecimal getDescuentosImpresos() {
+        return descuentosImpresos;
+    }
+
+    public List<String> getLineasIlegibles() {
+        return lineasIlegibles == null ? List.of() : List.of(lineasIlegibles.split("\n"));
     }
 
     public List<MovimientoItem> getItems() {

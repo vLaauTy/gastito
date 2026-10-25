@@ -222,12 +222,15 @@ class MovimientoServiceTest {
         MovimientoInterpretado interpretado = MovimientoInterpretado.conCategoria(new BigDecimal("8050.00"),
                 "Supermercado Día", categoria("Supermercado"), null, null, null, AHORA);
         List<ItemTicket> items = List.of(
-                new ItemTicket("Leche 1 L", new BigDecimal("2"), new BigDecimal("1450.00"), new BigDecimal("2900.00")),
+                new ItemTicket("Leche 1 L", "LECHE ENT 1L", "7790080001234", new BigDecimal("2"),
+                        new BigDecimal("1450.00"), new BigDecimal("2900.00")),
                 new ItemTicket("Yerba 500 g", null, null, new BigDecimal("3900.00")),
                 new ItemTicket("Galletitas", null, null, new BigDecimal("1500.00")),
                 new ItemTicket("Descuento 2x1", null, null, new BigDecimal("-250.00")));
+        DatosTicket ticket = new DatosTicket("DIA TIENDA 5601", "5601", new BigDecimal("8300.00"),
+                new BigDecimal("-250.00"), List.of("Renglón 3: el importe está tapado", "Renglón 5: cortado"), items);
 
-        Movimiento m = service.crearPendienteDeTicket(interpretado, "DIA TIENDA 5601", items, "con débito");
+        Movimiento m = service.crearPendienteDeTicket(interpretado, ticket, "con débito");
         service.asociarFotoTicket(m.getId(), "tickets/2026/10/" + m.getId() + ".jpg");
         entityManager.flush();
         entityManager.clear();
@@ -242,6 +245,29 @@ class MovimientoServiceTest {
         assertThat(leido.getItems().get(0).getCantidad()).isEqualByComparingTo("2");
         assertThat(leido.getItems().get(3).isDescuento()).isTrue();
         assertThat(leido.getItems().get(3).getSubtotal()).isEqualByComparingTo("-250");
+        assertThat(leido.getItems().get(0).getDescripcionOriginal()).isEqualTo("LECHE ENT 1L");
+        assertThat(leido.getItems().get(0).getCodigoBarras()).isEqualTo("7790080001234");
+        assertThat(leido.getItems().get(1).getCodigoBarras()).isNull();
+        assertThat(leido.getSucursal()).isEqualTo("5601");
+        assertThat(leido.getSubtotalImpreso()).isEqualByComparingTo("8300");
+        assertThat(leido.getDescuentosImpresos()).isEqualByComparingTo("-250");
+        assertThat(leido.getLineasIlegibles())
+                .containsExactly("Renglón 3: el importe está tapado", "Renglón 5: cortado");
+    }
+
+    @Test
+    void unTicketSinDatosExtraNoTieneLineasIlegibles() {
+        MovimientoInterpretado interpretado = MovimientoInterpretado.conCategoria(new BigDecimal("1500"),
+                "Kiosco", categoria("Kiosco"), null, null, null, AHORA);
+
+        Movimiento m = service.crearPendienteDeTicket(interpretado, DatosTicket.de("Kiosco", List.of()), null);
+        entityManager.flush();
+        entityManager.clear();
+
+        Movimiento leido = service.buscar(m.getId());
+        assertThat(leido.getLineasIlegibles()).isEmpty();
+        assertThat(leido.getSucursal()).isNull();
+        assertThat(leido.getSubtotalImpreso()).isNull();
     }
 
     @Test

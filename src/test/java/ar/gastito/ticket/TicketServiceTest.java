@@ -3,7 +3,6 @@ package ar.gastito.ticket;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -42,7 +41,7 @@ import ar.gastito.ia.RegistroUsoIa;
 import ar.gastito.interpretacion.CatalogoDePrueba;
 import ar.gastito.interpretacion.HistorialCategorias;
 import ar.gastito.interpretacion.ResolvedorFechas;
-import ar.gastito.movimiento.ItemTicket;
+import ar.gastito.movimiento.DatosTicket;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
 import ar.gastito.movimiento.MovimientoService;
@@ -69,9 +68,9 @@ class TicketServiceTest {
         service = servicio(DataSize.ofMegabytes(10));
         when(catalogos.cargar()).thenReturn(CatalogoDePrueba.crear());
         when(historial.buscar(anyString(), any())).thenReturn(Optional.empty());
-        when(movimientos.crearPendienteDeTicket(any(), any(), anyList(), any())).thenAnswer(invocacion -> {
+        when(movimientos.crearPendienteDeTicket(any(), any(), any())).thenAnswer(invocacion -> {
             Movimiento m = Movimiento.deTicket(invocacion.getArgument(0), invocacion.getArgument(1),
-                    invocacion.getArgument(2), invocacion.getArgument(3), AHORA);
+                    invocacion.getArgument(2), AHORA);
             ReflectionTestUtils.setField(m, "id", ID);
             when(movimientos.buscar(ID)).thenReturn(m);
             return m;
@@ -97,14 +96,13 @@ class TicketServiceTest {
         TicketService.Resultado resultado = service.leer(jpeg(3000, 4000), " con débito ");
 
         assertThat(resultado).isInstanceOf(TicketService.Leido.class);
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<ItemTicket>> items = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<DatosTicket> leido = ArgumentCaptor.forClass(DatosTicket.class);
         ArgumentCaptor<MovimientoInterpretado> interpretado = ArgumentCaptor.forClass(MovimientoInterpretado.class);
-        verify(movimientos).crearPendienteDeTicket(interpretado.capture(), eq("Supermercado Día"), items.capture(),
-                eq("con débito"));
+        verify(movimientos).crearPendienteDeTicket(interpretado.capture(), leido.capture(), eq("con débito"));
         assertThat(interpretado.getValue().monto()).isEqualByComparingTo("8050");
         assertThat(interpretado.getValue().fechaHora()).isEqualTo(LocalDateTime.of(2026, 10, 18, 17, 20));
-        assertThat(items.getValue()).hasSize(3);
+        assertThat(leido.getValue().comercio()).isEqualTo("Supermercado Día");
+        assertThat(leido.getValue().items()).hasSize(3);
         verify(usoIa).asociarMovimiento(USO_IA, ID);
 
         // La foto queda en tickets/AAAA/MM/<id>.jpg según la fecha del ticket, achicada.
@@ -134,7 +132,7 @@ class TicketServiceTest {
 
         service.leer(jpeg(800, 600), "  ");
 
-        verify(movimientos).crearPendienteDeTicket(any(), any(), anyList(), isNull());
+        verify(movimientos).crearPendienteDeTicket(any(), any(), isNull());
     }
 
     @Test
@@ -146,7 +144,7 @@ class TicketServiceTest {
         service.leer(jpeg(800, 600), null);
 
         ArgumentCaptor<MovimientoInterpretado> interpretado = ArgumentCaptor.forClass(MovimientoInterpretado.class);
-        verify(movimientos).crearPendienteDeTicket(interpretado.capture(), any(), anyList(), any());
+        verify(movimientos).crearPendienteDeTicket(interpretado.capture(), any(), any());
         assertThat(interpretado.getValue().categoria()).isEqualTo(CatalogoDePrueba.KIOSCO);
     }
 
@@ -155,7 +153,7 @@ class TicketServiceTest {
         laIaLee(new LecturaTicketIa("no_es_ticket", "", "", "", List.of(), List.of(), "", "", "", List.of(), ""));
 
         assertThat(service.leer(jpeg(800, 600), null)).isInstanceOf(TicketService.NoEsTicket.class);
-        verify(movimientos, never()).crearPendienteDeTicket(any(), any(), anyList(), any());
+        verify(movimientos, never()).crearPendienteDeTicket(any(), any(), any());
         assertThat(datos.resolve("tickets")).doesNotExist();
     }
 
@@ -165,7 +163,7 @@ class TicketServiceTest {
 
         assertThat(service.leer(jpeg(800, 600), null))
                 .isEqualTo(new TicketService.Ilegible(ValidadorTicket.Motivo.SIN_TOTAL));
-        verify(movimientos, never()).crearPendienteDeTicket(any(), any(), anyList(), any());
+        verify(movimientos, never()).crearPendienteDeTicket(any(), any(), any());
     }
 
     @Test
@@ -186,7 +184,7 @@ class TicketServiceTest {
         when(lector.leer(any(), any(), any(), any())).thenThrow(new IaNoDisponibleException("sin red", null));
 
         assertThatThrownBy(() -> service.leer(jpeg(800, 600), null)).isInstanceOf(IaNoDisponibleException.class);
-        verify(movimientos, never()).crearPendienteDeTicket(any(), any(), anyList(), any());
+        verify(movimientos, never()).crearPendienteDeTicket(any(), any(), any());
     }
 
     @Test

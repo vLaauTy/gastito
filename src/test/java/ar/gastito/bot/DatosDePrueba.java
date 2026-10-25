@@ -10,6 +10,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.MedioPago;
+import ar.gastito.movimiento.DatosTicket;
 import ar.gastito.movimiento.ItemTicket;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
@@ -84,7 +85,7 @@ final class DatosDePrueba {
     static Movimiento ticket(String total, Categoria categoria, List<ItemTicket> items, Categoria... candidatas) {
         MovimientoInterpretado interpretado = new MovimientoInterpretado(new BigDecimal(total), "Supermercado Día",
                 categoria, List.of(candidatas), DEBITO, null, null, FECHA_TICKET);
-        return conId(Movimiento.deTicket(interpretado, "Supermercado Día", items, null, AHORA), ID);
+        return conId(Movimiento.deTicket(interpretado, DatosTicket.de("Supermercado Día", items), null, AHORA), ID);
     }
 
     private static Movimiento movimiento(MovimientoInterpretado interpretado) {
