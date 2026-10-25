@@ -1,0 +1,189 @@
+package ar.gastito.prueba;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import javax.sql.DataSource;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Profile;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import ar.gastito.catalogo.Catalogo;
+import ar.gastito.catalogo.CatalogoService;
+import ar.gastito.catalogo.Categoria;
+import ar.gastito.catalogo.Cuenta;
+import ar.gastito.catalogo.MedioPago;
+import ar.gastito.config.GastitoProperties;
+import ar.gastito.movimiento.DatosTicket;
+import ar.gastito.movimiento.IngresoService;
+import ar.gastito.movimiento.Movimiento;
+import ar.gastito.movimiento.MovimientoInterpretado;
+import ar.gastito.movimiento.MovimientoService;
+
+/**
+ * Borra los datos de la base de prueba y la vuelve a llenar con {@link PlanDatosPrueba}. Solo existe con el perfil
+ * prueba y gastito.prueba.generar=true, y antes de tocar nada comprueba que la base sea gastito_prueba: con la base
+ * real (perfil postgres) no corre nunca. Al terminar, apaga la aplicación.
+ * <p>
+ * Borra movimientos (con sus productos y categorías candidatas, y por lo tanto lo aprendido), resúmenes y envíos de
+ * resúmenes, y las fotos de los tickets de prueba. Deja el catálogo y uso_ia, que es plata de verdad gastada en la
+ * API mientras se probaba.
+ */
+@Component
+@Profile("prueba")
+@ConditionalOnProperty(prefix = "gastito.prueba", name = "generar", havingValue = "true")
+public class GeneradorDatosPrueba implements ApplicationRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(GeneradorDatosPrueba.class);
+
+    /** El nombre que tiene que tener la base: cualquier otra, y no se toca. */
+    static final String BASE_DE_PRUEBA = "gastito_prueba";
+    static final int MESES = 3;
+    static final long SEMILLA = 20261025L;
+
+    private static final List<String> BORRAR = List.of(
+            "UPDATE uso_ia SET movimiento_id = NULL",
+            "DELETE FROM resumen_envio",
+            "DELETE FROM resumen",
+            "DELETE FROM movimiento_item",
+            "DELETE FROM movimiento_categoria_candidata",
+            "DELETE FROM movimiento");
+
+    private final DataSource dataSource;
+    private final JdbcTemplate jdbc;
+    private final TransactionTemplate transaccion;
+    private final CatalogoService catalogos;
+    private final MovimientoService movimientos;
+    private final IngresoService ingresos;
+    private final GastitoProperties properties;
+    private final Environment entorno;
+    private final ApplicationContext contexto;
+    private final Clock clock;
+
+    public GeneradorDatosPrueba(DataSource dataSource, JdbcTemplate jdbc, TransactionTemplate transaccion,
+            CatalogoService catalogos, MovimientoService movimientos, IngresoService ingresos,
+            GastitoProperties properties, Environment entorno, ApplicationContext contexto, Clock clock) {
+        this.dataSource = dataSource;
+        this.jdbc = jdbc;
+        this.transaccion = transaccion;
+        this.catalogos = catalogos;
+        this.movimientos = movimientos;
+        this.ingresos = ingresos;
+        this.properties = properties;
+        this.entorno = entorno;
+        this.contexto = contexto;
+        this.clock = clock;
+    }
+
+    @Override
+    public void run(ApplicationArguments args) throws Exception {
+        comprobarBase(urlDeLaBase(), entorno.acceptsProfiles(Profiles.of("postgres")));
+
+        PlanDatosPrueba.Plan plan = PlanDatosPrueba.armar(LocalDateTime.now(clock), MESES, SEMILLA);
+        log.info("Generando datos de prueba del {} al {} ({} gastos, {} ingresos; mes caro: {})", plan.desde(),
+                plan.hasta(), plan.gastos().size(), plan.ingresos().size(), plan.mesCaro());
+
+        transaccion.executeWithoutResult(estado -> BORRAR.forEach(jdbc::update));
+        borrarFotos();
+        cargar(plan);
+
+        log.info("Listo: la base {} tiene datos de prueba nuevos", BASE_DE_PRUEBA);
+        int codigo = SpringApplication.exit(contexto, () -> 0);
+        System.exit(codigo);
+    }
+
+    /**
+     * Solo la base gastito_prueba, y nunca con el perfil postgres activo (aunque la URL apunte a la de prueba).
+     *
+     * @throws IllegalStateException si no es la base de prueba
+     */
+    static void comprobarBase(String url, boolean perfilPostgres) {
+        if (perfilPostgres) {
+            throw new IllegalStateException("El generador de datos de prueba no corre con el perfil postgres");
+        }
+        String base = url == null ? "" : url.replaceFirst("\\?.*$", "").replaceFirst("^.*/", "");
+        if (!BASE_DE_PRUEBA.equals(base)) {
+            throw new IllegalStateException("El generador solo carga datos en la base " + BASE_DE_PRUEBA
+                    + ", y esta es \"" + base + "\"");
+        }
+    }
+
+    private String urlDeLaBase() throws SQLException {
+        try (Connection conexion = dataSource.getConnection()) {
+            return conexion.getMetaData().getURL();
+        }
+    }
+
+    private void borrarFotos() throws IOException {
+        Path carpeta = Path.of(properties.ticket().carpetaDatos(), "tickets");
+        if (!Files.isDirectory(carpeta)) {
+            return;
+        }
+        try (Stream<Path> archivos = Files.walk(carpeta)) {
+            for (Path p : archivos.sorted(Comparator.reverseOrder()).toList()) {
+                Files.delete(p);
+            }
+        }
+    }
+
+    private void cargar(PlanDatosPrueba.Plan plan) {
+        Catalogo catalogo = catalogos.cargar();
+        Map<String, Categoria> categorias = porNombre(catalogo.categorias(), Categoria::getNombre);
+        Map<String, MedioPago> medios = porNombre(catalogo.mediosPago(), MedioPago::getNombre);
+        Map<String, Cuenta> cuentas = porNombre(catalogo.cuentas(), Cuenta::getNombre);
+
+        for (PlanDatosPrueba.Gasto g : plan.gastos()) {
+            Categoria categoria = buscar(categorias, g.categoria());
+            MedioPago medio = buscar(medios, g.medio());
+            Cuenta cuenta = g.cuenta() == null ? null : buscar(cuentas, g.cuenta());
+            MovimientoInterpretado interpretado = MovimientoInterpretado.conCategoria(g.monto(), g.descripcion(),
+                    categoria, medio, cuenta,
+                    PlanDatosPrueba.TARJETA.equals(g.medio()) ? catalogo.tarjetaCredito().orElse(null) : null,
+                    g.fechaHora());
+            Movimiento m = g.ticket() == null
+                    ? movimientos.crearPendiente(interpretado, g.origen(), g.descripcion() + " " + g.monto())
+                    : movimientos.crearPendienteDeTicket(interpretado, new DatosTicket(g.ticket().comercio(),
+                            g.ticket().sucursal(), g.ticket().subtotal(), g.ticket().descuentos(), List.of(),
+                            g.ticket().items()), null);
+            movimientos.confirmar(m.getId());
+        }
+        for (PlanDatosPrueba.Ingreso i : plan.ingresos()) {
+            ingresos.cargar(i.clase(), i.monto(), i.descripcion(),
+                    i.cuenta() == null ? null : buscar(cuentas, i.cuenta()).getId(), i.fecha());
+        }
+    }
+
+    private static <T> Map<String, T> porNombre(List<T> elementos, Function<T, String> nombre) {
+        return elementos.stream().collect(Collectors.toMap(nombre, Function.identity()));
+    }
+
+    private static <T> T buscar(Map<String, T> porNombre, String nombre) {
+        T t = porNombre.get(nombre);
+        if (t == null) {
+            throw new IllegalStateException("No está en el catálogo: " + nombre);
+        }
+        return t;
+    }
+}
