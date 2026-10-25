@@ -77,3 +77,24 @@ Corré los tests, levantá la aplicación con el perfil `postgres` y decime cóm
 - **Privacidad:** además del prompt, Java borra de la descripción y de los productos cualquier secuencia de 6 o
   más dígitos (tarjeta, CUIT, códigos). La foto viaja a la API de Anthropic para leerla y después queda solo en
   `data/tickets/`.
+
+## Agregado: lo que aprendimos de un ticket real
+
+Con un ticket real de Día (22/09/2026; lectura esperada en `src/test/resources/tickets/dia-2026-09-22-esperado.json`):
+
+- **Código de barras:** se guarda en `movimiento_item.codigo_barras` (opcional), solo si es un EAN-8 o EAN-13
+  con el dígito verificador correcto; si no, se descarta. No es un dato personal: identifica un producto.
+- **Privacidad:** no se borran números por su largo. La protección principal es que la respuesta de la IA solo
+  tiene campos para lo que se guarda: el CUIT, la cajera, la caja y el número de ClubDía no tienen dónde ir. El
+  filtro (tarjetas, CUIT) se aplica solo a los textos libres.
+- **Sucursal:** se guarda en el movimiento como texto opcional ("5601"). En la etapa 7 permite cruzar el ticket
+  con `DIA TIENDA 5601` del resumen de la tarjeta.
+- **Descripción:** de cada producto se guarda la original (como está impresa) y la legible.
+- **Números:** en un mismo ticket conviven los dos formatos (coma decimal en los importes y punto en el TOTAL).
+- **Tres controles:** productos = subtotal impreso, descuentos = descuentos impresos y subtotal + descuentos =
+  total. Los descuentos ("20% ClubDía") van debajo de cada producto, en el orden impreso; el "Ahorro ClubDía" es
+  informativo y no se resta de nuevo.
+- **Ticket arrugado:** si las cuentas no cierran, la tarjeta dice qué línea no se pudo leer.
+- **"TARJETA" sin aclarar** débito o crédito queda sin medio de pago.
+- **Prueba con la foto real:** `LecturaTicketRealIT` lee la foto de `data/tickets-prueba/` (fuera del repo) y la
+  compara con la lectura esperada. Si la foto no está, el test se saltea.
