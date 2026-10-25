@@ -1,7 +1,9 @@
 package ar.gastito.ia;
 
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.slf4j.Logger;
@@ -11,15 +13,24 @@ import org.springframework.stereotype.Component;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
+import com.anthropic.core.JsonValue;
 import com.anthropic.errors.AnthropicException;
 import com.anthropic.models.messages.Base64ImageSource;
 import com.anthropic.models.messages.ContentBlockParam;
+import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.MessageCreateParams;
+import com.anthropic.models.messages.MessageParam;
 import com.anthropic.models.messages.StopReason;
 import com.anthropic.models.messages.StructuredMessage;
 import com.anthropic.models.messages.StructuredMessageCreateParams;
 import com.anthropic.models.messages.TextBlockParam;
 import com.anthropic.models.messages.ThinkingConfigDisabled;
+import com.anthropic.models.messages.Tool;
+import com.anthropic.models.messages.ToolChoiceNone;
+import com.anthropic.models.messages.ToolResultBlockParam;
+import com.anthropic.models.messages.ToolUseBlock;
+
+import com.fasterxml.jackson.databind.JsonNode;
 
 import ar.gastito.config.GastitoProperties;
 
@@ -127,6 +138,130 @@ public class ClienteIa implements DisposableBean {
             throw new IaNoDisponibleException("La IA devolvió una respuesta que no se pudo leer", e);
         }
         return new Respuesta<>(valor, uso.getId());
+    }
+
+    // --- Conversación con herramientas (tool use) ---
+
+    /**
+     * Una herramienta que la IA puede pedir. Las implementa Java: la IA solo elige cuál y con qué parámetros.
+     *
+     * @param propiedades el JSON schema de cada parámetro ({"type": "string", "description": …})
+     */
+    public record Herramienta(String nombre, String descripcion, Map<String, Map<String, Object>> propiedades,
+            List<String> requeridas) {
+    }
+
+    /** El resultado de ejecutar una herramienta, en JSON. Con error, el texto le explica a la IA qué corregir. */
+    public record ResultadoHerramienta(String contenido, boolean error) {
+    }
+
+    @FunctionalInterface
+    public interface EjecutorHerramientas {
+        ResultadoHerramienta ejecutar(String nombre, JsonNode parametros);
+    }
+
+    /**
+     * @param texto         la respuesta final de la IA
+     * @param llamadas      cuántas veces pidió una herramienta
+     * @param topeAlcanzado si pidió más herramientas que el tope (las de más no se ejecutaron)
+     * @param usoIaId       un solo registro en uso_ia con todas las llamadas a la API sumadas
+     */
+    public record Conversacion(String texto, int llamadas, boolean topeAlcanzado, Long usoIaId) {
+    }
+
+    /**
+     * Le pasa la pregunta a la IA con las herramientas y ejecuta las que pide (como mucho {@code maxLlamadas}),
+     * hasta que responde con texto. Al llegar al tope, la siguiente llamada no ofrece herramientas: la IA tiene que
+     * contestar con lo que tiene. Todas las llamadas a la API se registran juntas en uso_ia.
+     *
+     * @throws IaNoDisponibleException si no se pudo usar la IA (lo que ya se gastó queda registrado)
+     */
+    public Conversacion conversar(String modelo, long maxTokens, String instrucciones, String pregunta,
+            List<Herramienta> herramientas, int maxLlamadas, EjecutorHerramientas ejecutor, PropositoIa proposito) {
+        if (client == null) {
+            throw new IaNoDisponibleException("Falta configurar ANTHROPIC_API_KEY", null);
+        }
+        List<MessageParam> mensajes = new ArrayList<>();
+        mensajes.add(MessageParam.builder().role(MessageParam.Role.USER).content(pregunta).build());
+        long entrada = 0;
+        long salida = 0;
+        int llamadas = 0;
+        boolean tope = false;
+        try {
+            // Una vuelta por cada llamada a herramientas, más la respuesta final.
+            for (int vuelta = 0; vuelta <= maxLlamadas + 1; vuelta++) {
+                boolean sinHerramientas = llamadas >= maxLlamadas;
+                MessageCreateParams.Builder params = MessageCreateParams.builder()
+                        .model(modelo)
+                        .maxTokens(maxTokens)
+                        .thinking(ThinkingConfigDisabled.builder().build())
+                        .system(instrucciones)
+                        .messages(mensajes);
+                herramientas.forEach(h -> params.addTool(tool(h)));
+                if (sinHerramientas) {
+                    params.toolChoice(ToolChoiceNone.builder().build());
+                }
+                Message respuesta;
+                try {
+                    respuesta = client.messages().create(params.build());
+                } catch (AnthropicException e) {
+                    log.warn("Falló la llamada a la IA: {}", e.getMessage());
+                    throw new IaNoDisponibleException("No pude consultar a la IA", e);
+                }
+                entrada += respuesta.usage().inputTokens();
+                salida += respuesta.usage().outputTokens();
+
+                List<ToolUseBlock> pedidos = respuesta.content().stream()
+                        .flatMap(b -> b.toolUse().stream()).toList();
+                if (pedidos.isEmpty() || sinHerramientas) {
+                    if (respuesta.stopReason().filter(StopReason.MAX_TOKENS::equals).isPresent()) {
+                        throw new IaNoDisponibleException("La IA no devolvió una respuesta completa", null);
+                    }
+                    String texto = respuesta.content().stream().flatMap(b -> b.text().stream())
+                            .map(t -> t.text()).reduce("", (a, b) -> a.isEmpty() ? b : a + "\n" + b).strip();
+                    return new Conversacion(texto, llamadas, tope || sinHerramientas,
+                            registrar(modelo, entrada, salida, proposito));
+                }
+
+                mensajes.add(respuesta.toParam());
+                List<ContentBlockParam> resultados = new ArrayList<>();
+                for (ToolUseBlock pedido : pedidos) {
+                    ResultadoHerramienta r;
+                    if (llamadas >= maxLlamadas) {
+                        tope = true;
+                        r = new ResultadoHerramienta("Se alcanzó el tope de " + maxLlamadas
+                                + " consultas: respondé con lo que ya tenés.", true);
+                    } else {
+                        llamadas++;
+                        r = ejecutor.ejecutar(pedido.name(), pedido._input().convert(JsonNode.class));
+                    }
+                    resultados.add(ContentBlockParam.ofToolResult(ToolResultBlockParam.builder()
+                            .toolUseId(pedido.id()).content(r.contenido()).isError(r.error()).build()));
+                }
+                mensajes.add(MessageParam.builder().role(MessageParam.Role.USER).contentOfBlockParams(resultados)
+                        .build());
+            }
+            throw new IaNoDisponibleException("La IA no terminó de responder", null);
+        } catch (IaNoDisponibleException e) {
+            if (entrada + salida > 0) {
+                registrar(modelo, entrada, salida, proposito);
+            }
+            throw e;
+        }
+    }
+
+    private Long registrar(String modelo, long entrada, long salida, PropositoIa proposito) {
+        return registro.registrar(modelo, entrada, salida, proposito).getId();
+    }
+
+    private static Tool tool(Herramienta h) {
+        Tool.InputSchema.Properties.Builder propiedades = Tool.InputSchema.Properties.builder();
+        h.propiedades().forEach((nombre, schema) -> propiedades.putAdditionalProperty(nombre, JsonValue.from(schema)));
+        return Tool.builder()
+                .name(h.nombre())
+                .description(h.descripcion())
+                .inputSchema(Tool.InputSchema.builder().properties(propiedades.build()).required(h.requeridas()).build())
+                .build();
     }
 
     private static ContentBlockParam texto(String texto) {
