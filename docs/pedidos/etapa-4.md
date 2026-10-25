@@ -97,3 +97,21 @@ Sin Docker ni API real:
 ## Al terminar
 
 Corré los tests, levantá la aplicación con el perfil `postgres` y decime cómo probar: `/resumen`, `/resumen mes`, tres preguntas de la lista (una por audio) y cómo forzar el resumen semanal sin esperar al domingo. Contame cuánto costó cada resumen y cada pregunta según `uso_ia`. Commits chicos y al final subí todo a GitHub.
+
+## Ajustes acordados antes de empezar
+
+- **PC apagada:** al arrancar se manda solo el resumen pendiente más reciente de cada tipo (el último semanal y
+  el último mensual). Si había más pendientes, al final dice "Tenés N resúmenes anteriores sin ver" con un botón
+  **Ver anteriores**. La primera vez que corre no manda nada de antes.
+- **Escenarios de ahorro** (los calcula Java; la IA elige uno y cita sus números): gastos hormiga bajados a 3
+  por semana, la categoría que más subió de vuelta al nivel del período anterior, y la categoría más grande con
+  un 10% menos.
+- **Dashboard:** el link va en el texto del resumen (Telegram no acepta botones a `localhost`).
+- **Fechas de las preguntas:** Java le pasa a la IA una tabla de rangos ya calculados (hoy, esta semana, la
+  semana pasada, este mes, el mes pasado, cada mes del año), y también se pueden pedir rangos que no están en
+  ella ("del 3 al 10 de octubre", "desde septiembre") como fechas explícitas que Java valida.
+- **Clasificación:** las preguntas obvias ("¿", "cuánto", "compará") las detecta Java sin llamar a la IA, salvo
+  que el mensaje tenga un monto ("¿cuánto salió la nafta? 9000" es un gasto): ahí decide la IA, en la misma
+  llamada que interpreta el gasto.
+- **`/resumen` a mano:** se guarda (el dashboard muestra el último) pero no cuenta como envío automático. Si el
+  período no terminó, el texto y el dashboard dicen que es parcial ("semana parcial, hasta el jueves 23").
