@@ -55,7 +55,17 @@ public class RepetidosService {
                 .map(RepetidosService::huella)
                 .min(Comparator.comparing((Huella c) -> c.monto().subtract(huella.monto()).abs())
                         .thenComparing(c -> Duration.between(c.fechaHora(), huella.fechaHora()).abs()))
-                .flatMap(c -> movimientos.findConDetalleById(c.id()));
+                .flatMap(c -> movimientos.findConDetalleById(c.id()))
+                .map(RepetidosService::conProductos);
+    }
+
+    /**
+     * Los productos de un ticket, cargados antes de salir de la transacción: la tarjeta los cuenta después. Van en
+     * una consulta aparte (en el mismo JOIN que las candidatas se repetirían).
+     */
+    private static Movimiento conProductos(Movimiento m) {
+        m.getItems().size();
+        return m;
     }
 
     private static boolean cobroDeFijo(Object[] fila) {
@@ -113,7 +123,7 @@ public class RepetidosService {
             existente.confirmar();
         }
         movimientos.flush();
-        return new Union(existente, fotoQueSobra);
+        return new Union(conProductos(existente), fotoQueSobra);
     }
 
     /** @param fotoQueSobra la foto del que se borró, si no pasó al que quedó; null si no hay */

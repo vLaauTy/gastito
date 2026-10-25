@@ -19,6 +19,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
 
 import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.CategoriaRepository;
@@ -71,6 +74,7 @@ class RepetidosServiceTest {
 
     @Autowired
     JdbcTemplate jdbc;
+
 
     private Categoria categoria(String nombre) {
         return categorias.findByNombre(nombre).orElseThrow();
@@ -165,6 +169,31 @@ class RepetidosServiceTest {
                 "x", categoria("Kiosco"), null, null, null, AHORA), Origen.AUTOMATICO, null);
 
         assertThat(repetidos.buscar(automatico)).isEmpty();
+    }
+
+    /**
+     * Como en el bot: sin una transacción alrededor, la tarjeta se arma con lo que devolvió el servicio. Si los
+     * productos no vinieran cargados, contarlos fallaría (LazyInitializationException).
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void loEncontradoYLoUnidoLleganConLosProductosCargados() {
+        Movimiento ticket = nuevoTicket("8050", AHORA.minusHours(2));
+        Movimiento texto = null;
+        try {
+            movimientos.confirmar(ticket.getId());
+            texto = nuevoTexto("8050", "Supermercado", AHORA.minusHours(1));
+
+            Movimiento encontrado = repetidos.buscar(texto).orElseThrow();
+            assertThat(encontrado.getItems()).hasSize(1);
+
+            Movimiento unido = repetidos.unir(texto.getId(), ticket.getId()).movimiento();
+            assertThat(unido.getItems()).hasSize(1);
+        } finally {
+            // Sin la transacción del test no hay rollback: se borra a mano (los productos y la unión van en cascada).
+            jdbc.update("DELETE FROM movimiento WHERE id IN (?, ?)", ticket.getId(),
+                    texto == null ? ticket.getId() : texto.getId());
+        }
     }
 
     // --- Unir ---
