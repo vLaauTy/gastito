@@ -164,9 +164,18 @@ Galletitas ............ $1.250
 Con **✅ Guardar**, **✏️ Editar** y **❌ Cancelar**, igual que un gasto escrito. Se editan los mismos campos; la
 descripción arranca con el nombre del comercio.
 
-- El monto es el **total impreso**. Gastito suma los productos, resta los descuentos y, si la diferencia con el
-  total pasa los $10, la tarjeta avisa: *⚠️ Los productos suman $X y el total dice $Y. Revisalo antes de
-  guardar.*
+- El monto es el **total impreso**. Gastito hace las cuentas en Java. Si el ticket imprime el subtotal, revisa
+  tres cosas: que los productos sumen el subtotal, que los descuentos sumen lo que dice el ticket y que el
+  subtotal menos los descuentos dé el total. Si no, que los productos menos los descuentos den el total. Cada
+  cuenta que no cierra (por más de $10) aparece en la tarjeta, por ejemplo *⚠️ Los productos suman $38.133 y el
+  subtotal dice $38.333*, junto con las líneas que no se pudieron leer si el ticket estaba arrugado.
+- Los descuentos (por ejemplo el *20% ClubDía* de cada producto) quedan debajo de su producto, en el orden
+  impreso. Las líneas de *Ahorro* son informativas y no se restan otra vez.
+- Los números se entienden con coma o con punto decimal, aunque se mezclen en el mismo ticket.
+- De cada producto se guarda la descripción legible y la impresa (`GALLET CRACKER QSO`), y el código de barras si
+  es un EAN-8 o EAN-13 válido. Del ticket se guarda la sucursal (`5601`), para cruzarlo más adelante con el
+  resumen de la tarjeta.
+- Si el ticket dice solo *TARJETA*, sin aclarar débito o crédito, queda sin medio de pago para que lo elijas.
 - Si no se lee el total, no se guarda nada y te pide una foto más clara, con el ticket entero y sin reflejos.
 - La fecha es la del ticket. Una fecha futura o de hace más de un año se toma como mal leída y queda la de hoy.
 - Si escribís algo con la foto, se usa como pista: *"efectivo"*, *"con la de Galicia"*.
@@ -177,10 +186,12 @@ descripción arranca con el nombre del comercio.
 - Un ticket por foto. Si es muy largo y sale borroso, sacalo en dos partes.
 - La lectura queda en `uso_ia` con propósito `TICKET`.
 
-**Privacidad.** Los tickets traen los últimos números de la tarjeta, el CUIT o el nombre del cajero. En la base
-se guarda solo el comercio, la fecha, los productos (tabla `movimiento_item`), el total y el medio de pago: la
-respuesta de la IA no tiene campos para lo demás, y además Java borra de los textos cualquier número de 6 dígitos
-o más y las tarjetas enmascaradas (`**** 1234`). La foto (achicada y sin los metadatos de la original) queda en
+**Privacidad.** Los tickets traen los últimos números de la tarjeta, el CUIT, la caja, el nombre del cajero o el
+número de cliente (ClubDía). En la base se guarda solo el comercio, la sucursal, la fecha, los productos (tabla
+`movimiento_item`), el subtotal, los descuentos, el total y el medio de pago: la respuesta de la IA no tiene campos
+para lo demás. Además, en los textos libres (descripciones, comercio) Java borra los números de tarjeta y los
+CUIT que se hayan colado. Los números no se borran por su largo: un código de barras identifica un producto, no a
+una persona. La foto (achicada y sin los metadatos de la original) queda en
 `data/tickets/AAAA/MM/<id>.jpg`, que está en el `.gitignore`; si cancelás el ticket, se borra. Para leerla, la
 foto viaja a la API de Anthropic.
 
@@ -365,12 +376,21 @@ Usan H2 en memoria y no se conectan a Telegram, a Anthropic ni a Whisper: Whispe
 simulan con WireMock (incluida una respuesta con el JSON mal formado), así que no hace falta Docker. Las
 imágenes de prueba de los tickets se generan en el test.
 
-Hay además un test que llama a la API real de Anthropic con la key del `.env`. Sirve para revisar el prompt
-después de cambiarlo y cuesta fracciones de centavo. No corre con `./mvnw test`; se corre a mano:
+El ticket real de Día (`src/test/resources/tickets/dia-2026-09-22-esperado.json`, la lectura esperada sin la
+foto) es un caso de prueba más: pasa por la validación con los dos formatos de número, los tres controles y
+los códigos de barras.
+
+Hay además tests que llaman a la API real de Anthropic con la key del `.env`. Sirven para revisar los prompts
+después de cambiarlos y cuestan fracciones de centavo. No corren con `./mvnw test`; se corren a mano:
 
 ```bash
 ./mvnw test -Dtest=InterpretacionRealIT -Dsurefire.failIfNoSpecifiedTests=false
+./mvnw test -Dtest=LecturaTicketRealIT -Dsurefire.failIfNoSpecifiedTests=false
 ```
+
+`LecturaTicketRealIT` lee un ticket dibujado en el test y, si está, la foto real en
+`data/tickets-prueba/dia-2026-09-22.jpg` (fuera del repo, porque `data/` está en el `.gitignore`), y la compara
+con la lectura esperada renglón por renglón. Sin la foto, esa parte se saltea.
 
 ## Estructura
 
