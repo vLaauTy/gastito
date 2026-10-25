@@ -13,7 +13,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +27,7 @@ import ar.gastito.audio.TranscripcionService;
 import ar.gastito.bot.Tarjetas.Campo;
 import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.config.GastitoProperties;
+import ar.gastito.consulta.ConsultaService;
 import ar.gastito.dashboard.DashboardProperties;
 import ar.gastito.ia.IaNoDisponibleException;
 import ar.gastito.ia.PropositoIa;
@@ -85,6 +89,9 @@ public class ProcesadorMensajes {
             /ingreso 25000 arreglo de PC a mercado pago (cualquier otro ingreso: una venta, un regalo…)
             Si no decís la cuenta, uso la del último ingreso de ese tipo. Te muestro la tarjeta y lo guardás con un toque.
 
+            <b>Preguntas</b>
+            Preguntame por escrito o por audio: "¿cuánto gasté en kiosco este mes?", "compará octubre con septiembre", "¿cuántas Seven Up compré?", "¿cuánto me queda disponible?". Los números los calculo con tu base, no los inventa la IA.
+
             <b>Resúmenes</b>
             El domingo a las 21 te mando cómo fue tu semana, y el día 1 a las 9, cómo fue el mes. Si la PC estaba apagada, te llega apenas la prendés.
 
@@ -109,6 +116,26 @@ public class ProcesadorMensajes {
     private final TicketService tickets;
     private final ResumenService resumenes;
     private final FormatoResumen formatoResumen;
+    private final ConsultaService consultas;
+    private final FormatoConsulta formatoConsulta;
+
+    /** Botones de un mensaje dudoso: "dg:<id>" (es un gasto) y "dp:<id>" (es una pregunta). */
+    static final String ES_GASTO = "dg";
+    static final String ES_PREGUNTA = "dp";
+    /** Cuántos mensajes dudosos se recuerdan esperando un botón (los más viejos se olvidan). */
+    static final int DUDOSOS_RECORDADOS = 20;
+
+    /** Un mensaje que puede ser un gasto o una pregunta, esperando que el usuario elija. */
+    private record Dudoso(InterpretadorService.Interpretado gasto, String texto, Origen origen) {
+    }
+
+    private final AtomicLong siguienteDudoso = new AtomicLong();
+    private final Map<Long, Dudoso> dudosos = Collections.synchronizedMap(new LinkedHashMap<>() {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<Long, Dudoso> mas) {
+            return size() > DUDOSOS_RECORDADOS;
+        }
+    });
     private final Duration duracionMaximaAudio;
     private final String urlDashboard;
     private final Clock clock;
@@ -143,7 +170,10 @@ public class ProcesadorMensajes {
             CatalogoService catalogos, RegistroUsoIa usoIa, ResolvedorFechas fechas, Tarjetas tarjetas,
             FormatoMensajes formato, GraficoMes grafico, ComandosIngreso comandosIngreso,
             TranscripcionService transcripciones, TicketService tickets, ResumenService resumenes,
-            FormatoResumen formatoResumen, GastitoProperties properties, DashboardProperties dashboard, Clock clock) {
+            FormatoResumen formatoResumen, ConsultaService consultas, FormatoConsulta formatoConsulta,
+            GastitoProperties properties, DashboardProperties dashboard, Clock clock) {
+        this.consultas = consultas;
+        this.formatoConsulta = formatoConsulta;
         this.tickets = tickets;
         this.resumenes = resumenes;
         this.formatoResumen = formatoResumen;
@@ -372,24 +402,73 @@ public class ProcesadorMensajes {
                     Mientras tanto podés usar el formato simple, por ejemplo: kiosco 1500"""
                     .formatted(html(e.getMessage())));
         }
-        if (!(resultado instanceof InterpretadorService.Interpretado i)) {
-            return Accion.Enviar.texto(audio
+        return switch (resultado) {
+            case InterpretadorService.Interpretado i -> {
+                Movimiento m = crearGasto(i, origen, texto);
+                if (m.getMonto() == null) {
+                    esperas.put(chatId, new Espera(m.getId(), Campo.MONTO, null));
+                    yield Accion.Enviar.tarjeta(tarjetas.pidiendoMontoFaltante(m), tarjetas.principal(m), m.getId());
+                }
+                yield Accion.Enviar.tarjeta(tarjetas.pendiente(m), tarjetas.principal(m), m.getId());
+            }
+            case InterpretadorService.Pregunta _ -> Accion.Enviar.conMenu(responderPregunta(texto, audio));
+            case InterpretadorService.Dudoso d -> {
+                long id = siguienteDudoso.incrementAndGet();
+                dudosos.put(id, new Dudoso(d.comoGasto(), texto, origen));
+                yield Accion.Enviar.conBotones((audio ? escuche(texto) : "")
+                        + "🤔 ¿Es un gasto para cargar o una pregunta sobre tus gastos?", Teclado.constructor()
+                                .fila(new Teclado.Boton("🧾 Es un gasto", ES_GASTO + ":" + id),
+                                        new Teclado.Boton("❓ Es una pregunta", ES_PREGUNTA + ":" + id))
+                                .build());
+            }
+            case InterpretadorService.NoEsGasto _ -> Accion.Enviar.texto(audio
                     ? escuche(texto) + """
                             No encontré un gasto en lo que escuché 🤔
                             Probá de nuevo, por ejemplo: "kiosco 1500", o mandámelo escrito."""
                     : """
                             No encontré un gasto en el mensaje 🤔
                             Probá con algo como "kiosco 1500" o mirá /ayuda""");
-        }
+        };
+    }
+
+    private Movimiento crearGasto(InterpretadorService.Interpretado i, Origen origen, String texto) {
         Movimiento m = movimientos.crearPendiente(i.movimiento(), origen, texto);
         if (i.usoIaId() != null) {
             usoIa.asociarMovimiento(i.usoIaId(), m.getId());
         }
-        if (m.getMonto() == null) {
-            esperas.put(chatId, new Espera(m.getId(), Campo.MONTO, null));
-            return Accion.Enviar.tarjeta(tarjetas.pidiendoMontoFaltante(m), tarjetas.principal(m), m.getId());
+        return m;
+    }
+
+    // --- Preguntas ---
+
+    /** Responde con tool use. Si la IA no está, lo dice; si inventó números, quedan los que calculó Java. */
+    private String responderPregunta(String texto, boolean audio) {
+        String prefijo = audio ? escuche(texto) : "";
+        try {
+            return prefijo + formatoConsulta.respuesta(consultas.responder(texto));
+        } catch (IaNoDisponibleException e) {
+            return prefijo + "No pude responder la pregunta: " + html(e.getMessage()) + ".";
         }
-        return Accion.Enviar.tarjeta(tarjetas.pendiente(m), tarjetas.principal(m), m.getId());
+    }
+
+    /** "Es un gasto": se crea la tarjeta con lo que ya se había interpretado. */
+    private List<Accion> esUnGasto(long chatId, int mensajeId, long id) {
+        Dudoso dudoso = dudosos.remove(id);
+        if (dudoso == null) {
+            return List.of(new Accion.Avisar("Ese mensaje ya no está pendiente"));
+        }
+        Movimiento m = crearGasto(dudoso.gasto(), dudoso.origen(), dudoso.texto());
+        return List.of(principal(chatId, mensajeId, m));
+    }
+
+    /** "Es una pregunta": la respuesta reemplaza a los botones. */
+    private List<Accion> esUnaPregunta(int mensajeId, long id) {
+        Dudoso dudoso = dudosos.remove(id);
+        if (dudoso == null) {
+            return List.of(new Accion.Avisar("Ese mensaje ya no está pendiente"));
+        }
+        return List.of(new Accion.Editar(mensajeId,
+                responderPregunta(dudoso.texto(), dudoso.origen() == Origen.AUDIO), Teclado.NINGUNO));
     }
 
     private static String escuche(String texto) {
@@ -531,6 +610,8 @@ public class ProcesadorMensajes {
             case Tarjetas.EDITAR_MONTO -> pedir(chatId, mensajeId, id, Campo.MONTO);
             case Tarjetas.EDITAR_FECHA -> pedir(chatId, mensajeId, id, Campo.FECHA);
             case Tarjetas.EDITAR_DESCRIPCION -> pedir(chatId, mensajeId, id, Campo.DESCRIPCION);
+            case ES_GASTO -> esUnGasto(chatId, mensajeId, id);
+            case ES_PREGUNTA -> esUnaPregunta(mensajeId, id);
             default -> List.of(new Accion.Avisar("Botón inválido"));
         };
     }

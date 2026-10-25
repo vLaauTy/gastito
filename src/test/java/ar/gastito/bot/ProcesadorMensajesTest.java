@@ -46,6 +46,8 @@ import ar.gastito.audio.TranscripcionService;
 import ar.gastito.catalogo.Catalogo;
 import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.config.GastitoProperties;
+import ar.gastito.consulta.ConsultaService;
+import ar.gastito.consulta.HerramientasConsulta;
 import ar.gastito.dashboard.DashboardProperties;
 import ar.gastito.ia.IaNoDisponibleException;
 import ar.gastito.ia.PropositoIa;
@@ -84,6 +86,7 @@ class ProcesadorMensajesTest {
     private final IngresoService ingresos = mock(IngresoService.class);
     private final TicketService tickets = mock(TicketService.class);
     private final ResumenService resumenes = mock(ResumenService.class);
+    private final ConsultaService consultas = mock(ConsultaService.class);
     private ProcesadorMensajes procesador;
 
     @BeforeEach
@@ -98,7 +101,8 @@ class ProcesadorMensajesTest {
                 new ResolvedorFechas(), tarjetas, RELOJ);
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
                 tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, resumenes,
-                new FormatoResumen(formato, new GraficoMes(formato), dashboard), properties, dashboard, RELOJ);
+                new FormatoResumen(formato, new GraficoMes(formato), dashboard), consultas, new FormatoConsulta(formato),
+                properties, dashboard, RELOJ);
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));
         when(tickets.tamanioMaximo()).thenReturn(DataSize.ofMegabytes(10));
     }
@@ -969,5 +973,111 @@ class ProcesadorMensajesTest {
         Accion.Enviar tarjeta = mandarGasto("kiosco 1500", conCategoria("1500", KIOSCO), Confianza.ALTA, null);
         assertThat(tarjeta.conMenu()).isFalse();
         assertThat(tarjeta.teclado().isVacio()).isFalse();
+    }
+    // --- Preguntas ---
+
+    private static final HerramientasConsulta.Total KIOSCO_OCTUBRE = new HerramientasConsulta.Total(
+            LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 25),
+            new HerramientasConsulta.Filtros("Kiosco", null, null, null), new BigDecimal("14800.00"), 11);
+
+    @Test
+    void unaPreguntaSeRespondeConElTextoDeLaIa() {
+        String pregunta = "¿cuánto gasté en kiosco este mes?";
+        when(interpretador.interpretar(pregunta, PropositoIa.TEXTO))
+                .thenReturn(new InterpretadorService.Pregunta(pregunta, null));
+        when(consultas.responder(pregunta)).thenReturn(new ConsultaService.Respuesta(
+                "En kiosco llevás $14.800 este mes, en 11 compras.", List.of(KIOSCO_OCTUBRE), false, 7L));
+
+        List<Accion> acciones = procesador.procesarTexto(CHAT, MENSAJE_USUARIO, pregunta);
+
+        Accion.Enviar r = (Accion.Enviar) acciones.get(0);
+        assertThat(r.html()).isEqualTo("💬 En kiosco llevás $14.800 este mes, en 11 compras.");
+        assertThat(r.conMenu()).isTrue();
+        verify(movimientos, never()).crearPendiente(any(), any(), any());
+    }
+
+    @Test
+    void siLaIaInventoUnNumeroQuedanLosQueCalculoJava() {
+        String pregunta = "¿cuánto gasté en kiosco?";
+        when(interpretador.interpretar(pregunta, PropositoIa.TEXTO))
+                .thenReturn(new InterpretadorService.Pregunta(pregunta, null));
+        when(consultas.responder(pregunta))
+                .thenReturn(new ConsultaService.Respuesta(null, List.of(KIOSCO_OCTUBRE), true, 7L));
+
+        Accion.Enviar r = (Accion.Enviar) procesador.procesarTexto(CHAT, MENSAJE_USUARIO, pregunta).get(0);
+
+        assertThat(r.html()).isEqualTo("💬 Esto es lo que encontré:\n\nDel 1/10 al 25/10 en Kiosco: <b>$14.800</b> en 11 gastos.");
+    }
+
+    @Test
+    void sinIaParaLaPreguntaSeAvisa() {
+        String pregunta = "¿cuánto gasté?";
+        when(interpretador.interpretar(pregunta, PropositoIa.TEXTO))
+                .thenReturn(new InterpretadorService.Pregunta(pregunta, null));
+        when(consultas.responder(pregunta)).thenThrow(new IaNoDisponibleException("la IA no responde", null));
+
+        Accion.Enviar r = (Accion.Enviar) procesador.procesarTexto(CHAT, MENSAJE_USUARIO, pregunta).get(0);
+
+        assertThat(r.html()).isEqualTo("No pude responder la pregunta: la IA no responde.");
+    }
+
+    @Test
+    void unaPreguntaPorAudioMuestraLoQueEscucho() {
+        String pregunta = "Cuánto gasté en kiosco este mes";
+        when(interpretador.interpretar(pregunta, PropositoIa.AUDIO))
+                .thenReturn(new InterpretadorService.Pregunta(pregunta, null));
+        when(consultas.responder(pregunta)).thenReturn(new ConsultaService.Respuesta(
+                "En kiosco llevás $14.800.", List.of(KIOSCO_OCTUBRE), false, 7L));
+
+        Accion.Enviar r = (Accion.Enviar) mandarAudio("Cuánto gasté en kiosco este mes.").get(0);
+
+        assertThat(r.html()).contains("Cuánto gasté en kiosco este mes").endsWith("💬 En kiosco llevás $14.800.");
+    }
+
+    // --- Dudosos: ¿gasto o pregunta? ---
+
+    private Accion.Enviar mandarDudoso(String texto) {
+        MovimientoInterpretado interpretado = new MovimientoInterpretado(new BigDecimal("1500"), "Kiosco", KIOSCO,
+                List.of(), null, null, null, AHORA);
+        when(interpretador.interpretar(texto, PropositoIa.TEXTO)).thenReturn(new InterpretadorService.Dudoso(
+                new InterpretadorService.Interpretado(interpretado, Confianza.ALTA, 9L)));
+        return (Accion.Enviar) procesador.procesarTexto(CHAT, MENSAJE_USUARIO, texto).get(0);
+    }
+
+    @Test
+    void unDudosoPreguntaSiEsGastoOPregunta() {
+        Accion.Enviar r = mandarDudoso("¿kiosco 1500?");
+
+        assertThat(r.html()).contains("¿Es un gasto para cargar o una pregunta");
+        assertThat(r.teclado().botones()).extracting(Teclado.Boton::datos).containsExactly("dg:1", "dp:1");
+        verifyNoInteractions(consultas);
+        verify(movimientos, never()).crearPendiente(any(), any(), any());
+    }
+
+    @Test
+    void esUnGastoArmaLaTarjetaSinVolverALlamarALaIa() {
+        mandarDudoso("¿kiosco 1500?");
+        Movimiento pendiente = conCategoria("1500", KIOSCO);
+        when(movimientos.crearPendiente(any(), eq(Origen.TEXTO), eq("¿kiosco 1500?"))).thenReturn(pendiente);
+
+        Accion.Editar tarjeta = edicion(tocar("dg:1"));
+
+        assertThat(tarjeta.html()).startsWith("🧾 <b>Nuevo gasto</b>");
+        verify(usoIa).asociarMovimiento(9L, pendiente.getId());
+        verify(interpretador).interpretar(anyString(), any());
+        assertThat(tocar("dg:1")).containsExactly(new Accion.Avisar("Ese mensaje ya no está pendiente"));
+    }
+
+    @Test
+    void esUnaPreguntaLaRespondeEnElMismoMensaje() {
+        mandarDudoso("¿kiosco 1500?");
+        when(consultas.responder("¿kiosco 1500?")).thenReturn(new ConsultaService.Respuesta(
+                "En kiosco llevás $14.800.", List.of(KIOSCO_OCTUBRE), false, 7L));
+
+        Accion.Editar r = edicion(tocar("dp:1"));
+
+        assertThat(r.html()).isEqualTo("💬 En kiosco llevás $14.800.");
+        assertThat(r.teclado().isVacio()).isTrue();
+        verify(movimientos, never()).crearPendiente(any(), any(), any());
     }
 }
