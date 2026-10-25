@@ -33,6 +33,7 @@ import ar.gastito.ia.RegistroUsoIa;
 import ar.gastito.movimiento.ClaseIngreso;
 import ar.gastito.movimiento.DatosTicket;
 import ar.gastito.movimiento.IngresoService;
+import ar.gastito.movimiento.InicioRegistro;
 import ar.gastito.movimiento.ItemTicket;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
@@ -46,7 +47,7 @@ import ar.gastito.movimiento.Origen;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
-@Import({CalculoResumen.class, MovimientoService.class, IngresoService.class, RegistroUsoIa.class,
+@Import({CalculoResumen.class, MovimientoService.class, IngresoService.class, RegistroUsoIa.class, InicioRegistro.class,
         CalculadoraCostoIa.class, CalculoResumenTest.Config.class})
 class CalculoResumenTest {
 
@@ -94,6 +95,9 @@ class CalculoResumenTest {
 
     @BeforeEach
     void cargarGastos() {
+        // El registro empieza antes de las dos semanas: la anterior tiene datos. Un ingreso no cuenta en los gastos.
+        ingresos.cargar(ClaseIngreso.EXTRA, new BigDecimal("1000"), "Inicio del registro", null,
+                LocalDate.of(2026, 9, 30));
         // Semana anterior: 1.000 de kiosco y 30.000 de súper.
         gasto("Kiosco", "1000", LocalDate.of(2026, 10, 6), true);
         gasto("Supermercado", "30000", LocalDate.of(2026, 10, 8), true);
@@ -222,8 +226,9 @@ class CalculoResumenTest {
                 .containsExactly(
                         // Kiosco tiene gastos de la semana anterior: se lleva al mes.
                         tuple("HORMIGA", null, "2050.00", "8900.00"),
-                        // Ropa es la primera semana: el ahorro queda por semana.
-                        tuple("CATEGORIA_QUE_MAS_SUBIO", "Ropa", "50000.00", "null"),
+                        // Ropa subió más, pero la semana anterior no tuvo gastos ahí: "volver" es con Kiosco.
+                        tuple("CATEGORIA_QUE_MAS_SUBIO", "Kiosco", "7699.00", "33400.00"),
+                        // Ropa es su primera semana: el ahorro queda por semana.
                         tuple("CATEGORIA_MAS_GRANDE", "Ropa", "5000.00", "null"));
     }
 

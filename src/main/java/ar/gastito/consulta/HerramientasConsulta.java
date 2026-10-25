@@ -23,6 +23,7 @@ import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.catalogo.ConPalabrasClave;
 import ar.gastito.interpretacion.ValidadorInterpretacion;
 import ar.gastito.movimiento.IngresoService;
+import ar.gastito.movimiento.InicioRegistro;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoItem;
 
@@ -42,9 +43,12 @@ public class HerramientasConsulta {
     private final ConsultaRepository consultas;
     private final CatalogoService catalogos;
     private final IngresoService ingresos;
+    private final InicioRegistro inicio;
 
-    public HerramientasConsulta(ConsultaRepository consultas, CatalogoService catalogos, IngresoService ingresos) {
+    public HerramientasConsulta(ConsultaRepository consultas, CatalogoService catalogos, IngresoService ingresos,
+            InicioRegistro inicio) {
         this.consultas = consultas;
+        this.inicio = inicio;
         this.catalogos = catalogos;
         this.ingresos = ingresos;
     }
@@ -64,7 +68,16 @@ public class HerramientasConsulta {
 
     // --- Resultados ---
 
-    public record Total(LocalDate desde, LocalDate hasta, Filtros filtros, BigDecimal total, int cantidad) {
+    /**
+     * @param conDatos false si el registro empezó después de {@code desde}: el total no es de todo el rango (si el
+     *                 rango es anterior, no hay datos, no es que se gastó $0)
+     */
+    public record Total(LocalDate desde, LocalDate hasta, Filtros filtros, BigDecimal total, int cantidad,
+            boolean conDatos) {
+
+        public Total(LocalDate desde, LocalDate hasta, Filtros filtros, BigDecimal total, int cantidad) {
+            this(desde, hasta, filtros, total, cantidad, true);
+        }
     }
 
     public record CategoriaTotal(String categoria, BigDecimal total, int cantidad) {
@@ -74,8 +87,8 @@ public class HerramientasConsulta {
     }
 
     /**
-     * @param diferencia          A menos B
-     * @param variacionPorcentaje de A respecto de B, redondeada; null si B fue cero
+     * @param diferencia          A menos B; null si alguno de los dos no tiene datos
+     * @param variacionPorcentaje de A respecto de B, redondeada; null si B fue cero o alguno no tiene datos
      */
     public record Comparacion(Total a, Total b, BigDecimal diferencia, Integer variacionPorcentaje,
             List<CategoriaComparada> porCategoria) {
@@ -111,7 +124,7 @@ public class HerramientasConsulta {
     @Transactional(readOnly = true)
     public Total totalGastado(LocalDate desde, LocalDate hasta, Filtros filtros) {
         List<Movimiento> gastos = filtrar(gastos(desde, hasta), filtros, catalogos.cargar());
-        return new Total(desde, hasta, filtros, suma(gastos), gastos.size());
+        return new Total(desde, hasta, filtros, suma(gastos), gastos.size(), inicio.hayDatosDesde(desde));
     }
 
     @Transactional(readOnly = true)
@@ -134,9 +147,11 @@ public class HerramientasConsulta {
         porCategoriaB.keySet().stream().filter(c -> !porCategoriaA.containsKey(c))
                 .forEach(c -> categorias.add(new CategoriaComparada(c, cero(), porCategoriaB.get(c))));
         categorias.sort(Comparator.comparing((CategoriaComparada c) -> c.totalA().max(c.totalB())).reversed());
-        return new Comparacion(new Total(desdeA, hastaA, Filtros.NINGUNO, totalA, a.size()),
-                new Total(desdeB, hastaB, Filtros.NINGUNO, totalB, b.size()), totalA.subtract(totalB),
-                variacion(totalA, totalB), categorias);
+        boolean conDatos = inicio.hayDatosDesde(desdeA) && inicio.hayDatosDesde(desdeB);
+        return new Comparacion(
+                new Total(desdeA, hastaA, Filtros.NINGUNO, totalA, a.size(), inicio.hayDatosDesde(desdeA)),
+                new Total(desdeB, hastaB, Filtros.NINGUNO, totalB, b.size(), inicio.hayDatosDesde(desdeB)),
+                conDatos ? totalA.subtract(totalB) : null, conDatos ? variacion(totalA, totalB) : null, categorias);
     }
 
     /** @param limite cuántos listar, de 1 a {@value #LIMITE_MOVIMIENTOS} (los más nuevos primero) */

@@ -49,6 +49,18 @@ class FormatoConsultaTest {
     }
 
     @Test
+    void unaComparacionContraUnPeriodoSinDatosNoMuestraDiferencia() {
+        var agosto = new HerramientasConsulta.Total(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31),
+                HerramientasConsulta.Filtros.NINGUNO, new BigDecimal("0.00"), 0, false);
+        var c = new HerramientasConsulta.Comparacion(total(OCT_1, OCT_25, "120000.00", 30), agosto, null, null,
+                List.of());
+
+        assertThat(formato.numeros(c)).isEqualTo("Del 1/10 al 25/10: <b>$120.000</b>\nDel 1/8 al 31/8: <b>$0</b>\n"
+                + FormatoConsulta.SIN_DATOS);
+        assertThat(formato.numeros(agosto)).endsWith(FormatoConsulta.SIN_DATOS);
+    }
+
+    @Test
     void productoListadoEIngresos() {
         assertThat(formato.numeros(new HerramientasConsulta.Producto("Seven Up", OCT_1, OCT_25,
                 new BigDecimal("3.000"), new BigDecimal("5400.00"), 2, List.of())))

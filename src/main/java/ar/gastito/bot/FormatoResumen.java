@@ -179,9 +179,16 @@ public class FormatoResumen {
         }
     }
 
-    /** "(+12% que la semana pasada)", "(-5% que septiembre)", "(la semana pasada no hubo gastos)". */
+    /**
+     * "(+12% que la semana pasada)", "(-5% que septiembre)", "(la semana pasada no hubo gastos)" o, si el período
+     * anterior no tiene datos, "Sin datos de septiembre para comparar" en otra línea.
+     */
     private String comparacion(DatosResumen d, boolean semanal, Resumen r) {
         String contra = semanal ? "la semana pasada" : MES.format(r.getDesde().minusMonths(1));
+        // Los resúmenes guardados antes de conDatos traen el total anterior: esos sí tenían con qué comparar.
+        if (!d.comparacion().conDatos() && d.comparacion().total() == null) {
+            return "\nSin datos de " + contra + " para comparar.";
+        }
         String altura = d.periodo().parcial() ? " a esta altura" : "";
         Integer variacion = d.comparacion().variacionPorcentaje();
         if (variacion == null) {

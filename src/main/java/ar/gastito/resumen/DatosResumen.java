@@ -55,12 +55,19 @@ public record DatosResumen(
     /**
      * Contra el período anterior hasta el mismo punto.
      *
-     * @param variacionPorcentaje redondeada; null si el anterior fue cero
+     * @param conDatos            false si el registro empezó después del inicio del período anterior: no hay con
+     *                            qué comparar (no es que se gastó $0)
+     * @param total               null sin datos
+     * @param variacionPorcentaje redondeada; null sin datos o si el anterior fue cero
      */
-    public record Comparacion(LocalDate desde, LocalDate hasta, BigDecimal total, Integer variacionPorcentaje) {
+    public record Comparacion(LocalDate desde, LocalDate hasta, boolean conDatos, BigDecimal total,
+            Integer variacionPorcentaje) {
     }
 
-    /** @param variacionPorcentaje contra la misma categoría en el período anterior; null si allá fue cero */
+    /**
+     * @param totalAnterior       null si el período anterior no tiene datos
+     * @param variacionPorcentaje contra la misma categoría en el período anterior; null sin datos o si allá fue cero
+     */
     public record Categoria(String nombre, String emoji, BigDecimal total, int cantidad, BigDecimal totalAnterior,
             Integer variacionPorcentaje) {
     }

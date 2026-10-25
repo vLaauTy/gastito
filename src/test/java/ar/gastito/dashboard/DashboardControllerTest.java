@@ -100,7 +100,7 @@ class DashboardControllerTest {
         when(dashboard.resumen(OCTUBRE)).thenReturn(new DashboardService.Resumen(OCTUBRE, true, 21,
                 pesos("186400"), 63, pesos("8876.19"),
                 new DashboardService.Comparacion(YearMonth.of(2026, 9), pesos("172600"), 21, false, 8,
-                        DashboardService.Direccion.SUBE),
+                        DashboardService.Direccion.SUBE, true),
                 new DashboardService.Ingresos(pesos("405000"), pesos("380000"), pesos("0"), pesos("25000"), 1),
                 new DashboardService.Disponible(pesos("218600"), 46)));
 

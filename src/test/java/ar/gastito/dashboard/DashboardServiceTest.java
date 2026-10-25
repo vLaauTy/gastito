@@ -35,6 +35,7 @@ import ar.gastito.ia.UsoIa;
 import ar.gastito.ia.UsoIaRepository;
 import ar.gastito.movimiento.ClaseIngreso;
 import ar.gastito.movimiento.IngresoService;
+import ar.gastito.movimiento.InicioRegistro;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
 import ar.gastito.movimiento.MovimientoService;
@@ -44,7 +45,7 @@ import ar.gastito.movimiento.Origen;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
-@Import({DashboardService.class, IngresoService.class, MovimientoService.class, DashboardServiceTest.Reloj.class})
+@Import({DashboardService.class, IngresoService.class, MovimientoService.class, InicioRegistro.class, DashboardServiceTest.Reloj.class})
 class DashboardServiceTest {
 
     static final ZoneId ARGENTINA = ZoneId.of("America/Argentina/Buenos_Aires");
@@ -79,6 +80,9 @@ class DashboardServiceTest {
 
     @Autowired
     UsoIaRepository usoIa;
+
+    @Autowired
+    InicioRegistro inicio;
 
     @Autowired
     CategoriaRepository categorias;
@@ -129,6 +133,11 @@ class DashboardServiceTest {
         return LocalDateTime.of(2026, mes, dia, 12, 0);
     }
 
+    /** El registro empieza ese día: un movimiento entre cuentas, que no cuenta en nada. */
+    private void registroDesde(LocalDateTime fecha) {
+        otroTipo("ENTRE_CUENTAS", "1", fecha);
+    }
+
     /** Un movimiento confirmado de un tipo que no es gasto. */
     private void otroTipo(String tipo, String monto, LocalDateTime fecha) {
         jdbc.update("""
@@ -137,7 +146,7 @@ class DashboardServiceTest {
     }
 
     private DashboardService conReloj(LocalDateTime enArgentina) {
-        return new DashboardService(consultas, ingresos, usoIa, reloj(enArgentina));
+        return new DashboardService(consultas, ingresos, usoIa, inicio, reloj(enArgentina));
     }
 
     // --- Qué cuenta ---
@@ -182,7 +191,7 @@ class DashboardServiceTest {
         // 01/11 01:30 UTC todavía es 31/10 22:30 en Argentina.
         Clock utcYaEsNoviembre = Clock.fixed(ZonedDateTime.of(2026, 11, 1, 1, 30, 0, 0, ZoneId.of("UTC")).toInstant(),
                 ARGENTINA);
-        DashboardService enElLimite = new DashboardService(consultas, ingresos, usoIa, utcYaEsNoviembre);
+        DashboardService enElLimite = new DashboardService(consultas, ingresos, usoIa, inicio, utcYaEsNoviembre);
 
         DashboardService.Resumen r = enElLimite.resumen(OCTUBRE);
 
@@ -194,6 +203,7 @@ class DashboardServiceTest {
 
     @Test
     void comparaContraElMesAnteriorHastaElMismoDia() {
+        registroDesde(dia(9, 1));
         gasto("1000", dia(9, 10));
         gasto("5000", dia(9, 25)); // después del día 21: no entra en la comparación
         gasto("1100", dia(10, 5));
@@ -209,7 +219,20 @@ class DashboardServiceTest {
     }
 
     @Test
+    void siElRegistroEmpiezaEnEsteMesElAnteriorNoTieneDatos() {
+        gasto("1100", dia(10, 5));
+
+        DashboardService.Comparacion c = dashboard.resumen(OCTUBRE).comparacion();
+
+        assertThat(c.conDatos()).isFalse();
+        assertThat(c.total()).isNull();
+        assertThat(c.variacionPorcentaje()).isNull();
+        assertThat(c.direccion()).isEqualTo(DashboardService.Direccion.SIN_DATOS);
+    }
+
+    @Test
     void siElMesAnteriorEsMasCortoComparaHastaSuUltimoDia() {
+        registroDesde(LocalDateTime.of(2026, 2, 1, 0, 0));
         gasto("2000", LocalDateTime.of(2026, 2, 28, 20, 0));
         gasto("1000", LocalDateTime.of(2026, 3, 31, 10, 0));
 
@@ -224,6 +247,7 @@ class DashboardServiceTest {
 
     @Test
     void unMesQueYaTerminoComparaLosDosMesesCompletos() {
+        registroDesde(dia(8, 1));
         gasto("1000", dia(8, 31));
         gasto("1000", dia(9, 30));
 

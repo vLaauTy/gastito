@@ -24,6 +24,10 @@ public class FormatoConsulta {
             Todavía no sé responder eso 🤔
             Probá con algo como "¿cuánto gasté en kiosco este mes?" o "compará octubre con septiembre".""";
 
+    /** Un rango que empieza antes del primer movimiento: lo que hay no es todo lo que se gastó. */
+    static final String SIN_DATOS = "<i>(Todavía no registrabas gastos al principio de ese período: no hay datos "
+            + "completos para comparar.)</i>";
+
     private static final DateTimeFormatter DIA = DateTimeFormatter.ofPattern("d/M");
 
     private final FormatoMensajes formato;
@@ -50,7 +54,7 @@ public class FormatoConsulta {
         return switch (resultado) {
             case HerramientasConsulta.Total t -> "Del " + rango(t.desde(), t.hasta()) + filtros(t.filtros())
                     + ": <b>" + formato.pesos(t.total()) + "</b> en " + t.cantidad()
-                    + (t.cantidad() == 1 ? " gasto." : " gastos.");
+                    + (t.cantidad() == 1 ? " gasto." : " gastos.") + (t.conDatos() ? "" : " " + SIN_DATOS);
             case HerramientasConsulta.PorCategoria p -> {
                 StringBuilder sb = new StringBuilder("Del " + rango(p.desde(), p.hasta()) + ": <b>"
                         + formato.pesos(p.total()) + "</b>");
@@ -61,7 +65,8 @@ public class FormatoConsulta {
             case HerramientasConsulta.Comparacion c -> "Del " + rango(c.a().desde(), c.a().hasta()) + ": <b>"
                     + formato.pesos(c.a().total()) + "</b>\nDel " + rango(c.b().desde(), c.b().hasta()) + ": <b>"
                     + formato.pesos(c.b().total()) + "</b>"
-                    + (c.variacionPorcentaje() == null ? ""
+                    + (!c.a().conDatos() || !c.b().conDatos() ? "\n" + SIN_DATOS
+                            : c.variacionPorcentaje() == null ? ""
                             : "\nDiferencia: " + signo(c.diferencia()) + formato.pesos(c.diferencia().abs()) + " ("
                                     + (c.variacionPorcentaje() > 0 ? "+" : "") + c.variacionPorcentaje() + "%)");
             case HerramientasConsulta.Listado l -> {

@@ -15,12 +15,15 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import ar.gastito.config.GastitoProperties;
 import ar.gastito.ia.RegistroUsoIa;
 import ar.gastito.movimiento.IngresoService;
+import ar.gastito.movimiento.InicioRegistro;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoItem;
 
@@ -30,6 +33,8 @@ import ar.gastito.movimiento.MovimientoItem;
  */
 @Service
 public class CalculoResumen {
+
+    private static final Logger log = LoggerFactory.getLogger(CalculoResumen.class);
 
     static final int PRODUCTOS = 5;
     static final BigDecimal HORMIGA_OBJETIVO_POR_SEMANA = new BigDecimal("3");
@@ -41,11 +46,13 @@ public class CalculoResumen {
     private final ResumenConsultas consultas;
     private final IngresoService ingresos;
     private final RegistroUsoIa usoIa;
+    private final InicioRegistro inicio;
     private final GastitoProperties.Resumenes config;
 
     public CalculoResumen(ResumenConsultas consultas, IngresoService ingresos, RegistroUsoIa usoIa,
-            GastitoProperties properties) {
+            InicioRegistro inicio, GastitoProperties properties) {
         this.consultas = consultas;
+        this.inicio = inicio;
         this.ingresos = ingresos;
         this.usoIa = usoIa;
         this.config = properties.resumenes();
@@ -64,9 +71,11 @@ public class CalculoResumen {
         List<Movimiento> gastosAnteriores = consultas.gastos(anterior.desde().atStartOfDay(),
                 hastaAnterior.plusDays(1).atStartOfDay());
 
+        // Si el registro empezó después del inicio del período anterior, ese período no tiene datos: no es $0.
+        boolean conDatos = inicio.hayDatosDesde(anterior.desde());
         BigDecimal total = suma(gastos);
-        BigDecimal totalAnterior = suma(gastosAnteriores);
-        List<DatosResumen.Categoria> categorias = porCategoria(gastos, gastosAnteriores);
+        BigDecimal totalAnterior = conDatos ? suma(gastosAnteriores) : null;
+        List<DatosResumen.Categoria> categorias = porCategoria(gastos, conDatos ? gastosAnteriores : null);
         DatosResumen.Hormiga hormiga = hormiga(gastos, dias);
         int diasSinGastos = diasSinGastos(gastos, periodo.desde(), hasta);
         boolean semanal = periodo.tipo() == TipoResumen.SEMANAL;
@@ -93,8 +102,8 @@ public class CalculoResumen {
                 new DatosResumen.Periodo(periodo.tipo().name(), periodo.desde(), hasta, periodo.hasta(), parcial, dias),
                 total,
                 gastos.size(),
-                new DatosResumen.Comparacion(anterior.desde(), hastaAnterior, totalAnterior,
-                        variacion(total, totalAnterior)),
+                new DatosResumen.Comparacion(anterior.desde(), hastaAnterior, conDatos, totalAnterior,
+                        conDatos ? variacion(total, totalAnterior) : null),
                 categorias,
                 gastoMasGrande(gastos),
                 hormiga,
@@ -110,16 +119,19 @@ public class CalculoResumen {
 
     // --- Categorías y gasto más grande ---
 
+    /** @param anteriores null si el período anterior no tiene datos: el total anterior de cada categoría queda null */
     private static List<DatosResumen.Categoria> porCategoria(List<Movimiento> gastos, List<Movimiento> anteriores) {
         Map<String, List<Movimiento>> actuales = agrupar(gastos);
-        Map<String, List<Movimiento>> previos = agrupar(anteriores);
+        Map<String, List<Movimiento>> previos = anteriores == null ? null : agrupar(anteriores);
         return actuales.entrySet().stream()
                 .map(e -> {
                     Movimiento ejemplo = e.getValue().get(0);
                     BigDecimal total = suma(e.getValue());
-                    BigDecimal totalAnterior = suma(previos.getOrDefault(e.getKey(), List.of()));
+                    BigDecimal totalAnterior = previos == null ? null
+                            : suma(previos.getOrDefault(e.getKey(), List.of()));
                     return new DatosResumen.Categoria(e.getKey(), ejemplo.getCategoria().getEmoji(), total,
-                            e.getValue().size(), totalAnterior, variacion(total, totalAnterior));
+                            e.getValue().size(), totalAnterior,
+                            totalAnterior == null ? null : variacion(total, totalAnterior));
                 })
                 .sorted(Comparator.comparing(DatosResumen.Categoria::total).reversed()
                         .thenComparing(DatosResumen.Categoria::nombre))
@@ -199,7 +211,8 @@ public class CalculoResumen {
 
     /**
      * Hasta tres ahorros posibles, con los números ya hechos: los gastos hormiga a 3 por semana, la categoría que más
-     * subió de vuelta al nivel del período anterior y la categoría más grande con un 10% menos.
+     * subió de vuelta al nivel del período anterior (solo si ese período tiene datos y ahí se gastó algo) y la categoría
+     * más grande con un 10% menos. Ninguno promete ahorrar más de lo gastado (ver {@link #dentroDeLoGastado}).
      *
      * @param alMes si los ahorros de esas categorías se pueden llevar a un mes; si no, ahorroMensual queda null
      */
@@ -216,7 +229,8 @@ public class CalculoResumen {
                     alMes.test(hormiga.categorias()) ? alMes(ahorro, dias) : null));
         }
         categorias.stream()
-                .filter(c -> c.total().compareTo(c.totalAnterior()) > 0)
+                .filter(c -> c.totalAnterior() != null && c.totalAnterior().signum() > 0
+                        && c.total().compareTo(c.totalAnterior()) > 0)
                 .max(Comparator.comparing(c -> c.total().subtract(c.totalAnterior())))
                 .ifPresent(c -> {
                     BigDecimal ahorro = c.total().subtract(c.totalAnterior());
@@ -233,7 +247,25 @@ public class CalculoResumen {
                     pesos(mayor.total().subtract(ahorro)), redondear(ahorro),
                     alMes.test(List.of(mayor.nombre())) ? alMes(ahorro, dias) : null));
         }
-        return escenarios;
+        return escenarios.stream().filter(e -> dentroDeLoGastado(e, categorias, hormiga, dias)).toList();
+    }
+
+    /**
+     * Un escenario no puede prometer un ahorro mayor a lo gastado en el período en esa categoría (o en gastos
+     * hormiga), ni, llevado a un mes, mayor a ese gasto llevado a un mes. Si pasa, es un error de cálculo: se saca.
+     */
+    static boolean dentroDeLoGastado(DatosResumen.Escenario e, List<DatosResumen.Categoria> categorias,
+            DatosResumen.Hormiga hormiga, int dias) {
+        BigDecimal gastado = e.categoria() == null ? hormiga.total()
+                : categorias.stream().filter(c -> c.nombre().equals(e.categoria())).map(DatosResumen.Categoria::total)
+                        .findFirst().orElse(BigDecimal.ZERO);
+        boolean bien = e.ahorroPeriodo().compareTo(gastado) <= 0
+                && (e.ahorroMensual() == null || e.ahorroMensual().compareTo(alMes(gastado, dias)) <= 0);
+        if (!bien) {
+            log.warn("Se saca el escenario {}: promete ahorrar {} y en el período se gastó {}", e.tipo(),
+                    e.ahorroPeriodo(), gastado);
+        }
+        return bien;
     }
 
     /** Lo ahorrado en el período, llevado a un mes de 30,4 días y redondeado a la centena. */

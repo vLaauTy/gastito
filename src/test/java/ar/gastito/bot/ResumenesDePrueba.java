@@ -24,7 +24,7 @@ final class ResumenesDePrueba {
         BigDecimal cero = BigDecimal.ZERO.setScale(2);
         DatosResumen d = new DatosResumen(new DatosResumen.Periodo(tipo.name(), periodo.desde(), periodo.hasta(),
                 periodo.hasta(), false, (int) periodo.diasHasta(periodo.hasta())), cero, 0,
-                new DatosResumen.Comparacion(periodo.anterior().desde(), periodo.anterior().hasta(), cero, null),
+                new DatosResumen.Comparacion(periodo.anterior().desde(), periodo.anterior().hasta(), true, cero, null),
                 List.of(), null, new DatosResumen.Hormiga(new BigDecimal("3000.00"), List.of(), 0, cero, cero,
                         BigDecimal.ZERO), 7, new DatosResumen.SinEspecificar(0, cero),
                 new DatosResumen.Productos(List.of(), List.of()), List.of(), null, null, false, List.of());

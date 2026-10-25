@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ar.gastito.ia.ResumenUsoIa;
 import ar.gastito.ia.UsoIaRepository;
 import ar.gastito.movimiento.IngresoService;
+import ar.gastito.movimiento.InicioRegistro;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.Periodo;
 import ar.gastito.movimiento.TotalPorMes;
@@ -43,11 +44,13 @@ public class DashboardService {
     private final DashboardRepository consultas;
     private final IngresoService ingresos;
     private final UsoIaRepository usoIa;
+    private final InicioRegistro inicio;
     private final Clock clock;
 
     public DashboardService(DashboardRepository consultas, IngresoService ingresos, UsoIaRepository usoIa,
-            Clock clock) {
+            InicioRegistro inicio, Clock clock) {
         this.consultas = consultas;
+        this.inicio = inicio;
         this.ingresos = ingresos;
         this.usoIa = usoIa;
         this.clock = clock;
@@ -63,10 +66,12 @@ public class DashboardService {
      * Contra el mes anterior. En el mes actual, hasta el mismo día (o hasta el último día del anterior, si es más
      * corto); en un mes que ya terminó, los dos meses completos.
      *
-     * @param variacionPorcentaje entero, o null si el mes anterior no tuvo gastos
+     * @param variacionPorcentaje entero, o null si el mes anterior no tuvo gastos o no tiene datos
+     * @param conDatos            false si el registro empezó después del 1 del mes anterior: no hay con qué comparar
+     *                            (no es que se gastó $0). La dirección es SIN_DATOS.
      */
     public record Comparacion(YearMonth mes, BigDecimal total, int hastaDia, boolean mesCompleto,
-            Integer variacionPorcentaje, Direccion direccion) {
+            Integer variacionPorcentaje, Direccion direccion, boolean conDatos) {
     }
 
     public record Ingresos(BigDecimal total, BigDecimal sueldo, BigDecimal aguinaldo, BigDecimal extras,
@@ -265,22 +270,26 @@ public class DashboardService {
     private Comparacion comparacion(YearMonth mes, Corte corte) {
         YearMonth anterior = mes.minusMonths(1);
         if (corte.futuro()) {
-            return new Comparacion(anterior, pesos(BigDecimal.ZERO), 0, false, null, Direccion.SIN_DATOS);
+            return new Comparacion(anterior, pesos(BigDecimal.ZERO), 0, false, null, Direccion.SIN_DATOS, true);
         }
         // En el mes actual: del 1 a hoy contra del 1 al mismo día (o al último, si el anterior es más corto).
         int hastaDia = corte.mesActual() ? Math.min(corte.dias(), anterior.lengthOfMonth()) : anterior.lengthOfMonth();
+        if (!inicio.hayDatosDesde(anterior.atDay(1))) {
+            return new Comparacion(anterior, null, hastaDia, !corte.mesActual(), null, Direccion.SIN_DATOS, false);
+        }
         BigDecimal totalAnterior = total(anterior.atDay(1), anterior.atDay(hastaDia).plusDays(1));
         BigDecimal totalActual = total(mes.atDay(1), mes.atDay(corte.dias()).plusDays(1));
 
         if (totalAnterior.signum() == 0) {
             return new Comparacion(anterior, pesos(totalAnterior), hastaDia, !corte.mesActual(), null,
-                    Direccion.SIN_DATOS);
+                    Direccion.SIN_DATOS, true);
         }
         int variacion = totalActual.subtract(totalAnterior).multiply(CIEN)
                 .divide(totalAnterior, 0, RoundingMode.HALF_UP).intValue();
         int signo = totalActual.compareTo(totalAnterior);
         Direccion direccion = signo > 0 ? Direccion.SUBE : signo < 0 ? Direccion.BAJA : Direccion.IGUAL;
-        return new Comparacion(anterior, pesos(totalAnterior), hastaDia, !corte.mesActual(), variacion, direccion);
+        return new Comparacion(anterior, pesos(totalAnterior), hastaDia, !corte.mesActual(), variacion, direccion,
+                true);
     }
 
     /** Total gastado en [desde, hasta). */

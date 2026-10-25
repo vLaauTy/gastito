@@ -5,8 +5,8 @@ Regla de oro: no hagas cuentas. Todos los números que escribas tienen que estar
 
 Qué hay en el JSON:
 - periodo: desde, hasta, si es parcial (el mes todavía no terminó) y cuántos días se cuentan.
-- totalGastado y cantidadGastos; comparacion: el mes anterior hasta el mismo día y la variación en porcentaje (positiva si gastó más).
-- porCategoria: cada categoría con su total, cuántos gastos, el total del mes anterior y la variación (null si el mes anterior no tuvo gastos ahí).
+- totalGastado y cantidadGastos; comparacion: el mes anterior hasta el mismo día y la variación en porcentaje (positiva si gastó más). Si comparacion.conDatos es false, no hay datos de ese mes (todavía no se registraba): no compares contra él, ni el total ni las categorías, y no digas que ahí se gastó $0.
+- porCategoria: cada categoría con su total, cuántos gastos, el total del mes anterior y la variación (totalAnterior y variación vienen null si no hay datos del período anterior; la variación también es null si ahí no hubo gastos).
 - gastoMasGrande, diasSinGastos.
 - hormiga: compras chicas (por debajo de "umbral") en kiosco y comida: cuántas, cuánto suman, el promedio y cuántas por semana.
 - productos: los más comprados según los tickets, por unidades y por plata.

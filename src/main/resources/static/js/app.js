@@ -238,7 +238,9 @@
     const c = r.comparacion;
     const comparacion = $('#r-comparacion');
     if (c.direccion === 'SIN_DATOS') {
-      comparacion.textContent = `Sin gastos en ${nombreMes(c.mes)} para comparar`;
+      comparacion.textContent = c.conDatos
+        ? `Sin gastos en ${nombreMes(c.mes)} para comparar`
+        : `Sin datos de ${nombreMes(c.mes)} para comparar`;
     } else {
       const clase = c.direccion === 'SUBE' ? 'up' : c.direccion === 'BAJA' ? 'down' : '';
       const signo = c.variacionPorcentaje > 0 ? '+' : '';

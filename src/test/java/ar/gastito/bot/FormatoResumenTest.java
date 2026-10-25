@@ -143,6 +143,24 @@ class FormatoResumenTest {
     }
 
     @Test
+    void sinDatosDelMesAnteriorLoDiceEnVezDeCompararContraCero() {
+        DatosResumen conDatos = datos("MENSUAL", LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31), false, null,
+                null);
+        DatosResumen d = new DatosResumen(conDatos.periodo(), conDatos.totalGastado(), conDatos.cantidadGastos(),
+                new DatosResumen.Comparacion(LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30), false, null, null),
+                conDatos.porCategoria(), conDatos.gastoMasGrande(), conDatos.hormiga(), conDatos.diasSinGastos(),
+                conDatos.sinEspecificar(), conDatos.productos(), List.of(), null, null, false, List.of());
+        Resumen r = new Resumen(TipoResumen.MENSUAL, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31), false,
+                true, "{}", List.of(), null, false, null, LocalDateTime.now());
+
+        String html = formatoResumen.mensaje(new ResumenService.Armado(r, d), 0);
+
+        assertThat(html).startsWith("📊 <b>Tu mes</b> · Octubre 2026\nGastaste <b>$52.300</b> en 23 gastos\n"
+                + "Sin datos de septiembre para comparar.");
+        assertThat(html).doesNotContain("%");
+    }
+
+    @Test
     void unaSemanaQueCruzaDeMes() {
         assertThat(FormatoResumen.rango(LocalDate.of(2026, 10, 26), LocalDate.of(2026, 11, 1)))
                 .isEqualTo("26 de octubre al 1 de noviembre");
@@ -172,7 +190,8 @@ class FormatoResumenTest {
         return new DatosResumen(
                 new DatosResumen.Periodo(tipo, desde, hasta, fin, parcial, 7),
                 new BigDecimal("52300.00"), 23,
-                new DatosResumen.Comparacion(desde.minusDays(7), hasta.minusDays(7), new BigDecimal("46700.00"), 12),
+                new DatosResumen.Comparacion(desde.minusDays(7), hasta.minusDays(7), true,
+                        new BigDecimal("46700.00"), 12),
                 List.of(new DatosResumen.Categoria("Supermercado", "🛒", new BigDecimal("21400.00"), 3,
                                 new BigDecimal("30000.00"), -29),
                         new DatosResumen.Categoria("Kiosco", "🍬", new BigDecimal("14800.00"), 11,

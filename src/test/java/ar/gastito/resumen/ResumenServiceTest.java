@@ -31,6 +31,7 @@ import ar.gastito.config.GastitoProperties;
 import ar.gastito.ia.CalculadoraCostoIa;
 import ar.gastito.ia.RegistroUsoIa;
 import ar.gastito.movimiento.IngresoService;
+import ar.gastito.movimiento.InicioRegistro;
 import ar.gastito.movimiento.MovimientoService;
 
 /** El armado y los envíos automáticos, con la IA simulada. Hoy es el jueves 22/10/2026. */
@@ -38,7 +39,8 @@ import ar.gastito.movimiento.MovimientoService;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Import({ResumenService.class, CalculoResumen.class, MovimientoService.class, IngresoService.class,
-        RegistroUsoIa.class, CalculadoraCostoIa.class, JacksonAutoConfiguration.class, ResumenServiceTest.Config.class})
+        RegistroUsoIa.class, InicioRegistro.class, CalculadoraCostoIa.class, JacksonAutoConfiguration.class,
+        ResumenServiceTest.Config.class})
 class ResumenServiceTest {
 
     static final ZoneId ARGENTINA = ZoneId.of("America/Argentina/Buenos_Aires");

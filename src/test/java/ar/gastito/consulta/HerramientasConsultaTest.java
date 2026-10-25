@@ -31,6 +31,7 @@ import ar.gastito.catalogo.MedioPagoRepository;
 import ar.gastito.movimiento.ClaseIngreso;
 import ar.gastito.movimiento.DatosTicket;
 import ar.gastito.movimiento.IngresoService;
+import ar.gastito.movimiento.InicioRegistro;
 import ar.gastito.movimiento.ItemTicket;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
@@ -42,6 +43,7 @@ import ar.gastito.movimiento.Origen;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Import({HerramientasConsulta.class, CatalogoService.class, IngresoService.class, MovimientoService.class,
+        InicioRegistro.class,
         HerramientasConsultaTest.Reloj.class})
 class HerramientasConsultaTest {
 
@@ -137,6 +139,8 @@ class HerramientasConsultaTest {
 
     @Test
     void compararOctubreConSeptiembre() {
+        ingresos.cargar(ClaseIngreso.EXTRA, new BigDecimal("1"), "Inicio del registro", null,
+                LocalDate.of(2026, 9, 1));
         HerramientasConsulta.Comparacion c = herramientas.compararPeriodos(OCT_1, OCT_31, LocalDate.of(2026, 9, 1),
                 LocalDate.of(2026, 9, 30));
 
@@ -146,6 +150,21 @@ class HerramientasConsultaTest {
         assertThat(c.variacionPorcentaje()).isEqualTo(-23);
         assertThat(c.porCategoria()).extracting(HerramientasConsulta.CategoriaComparada::categoria)
                 .containsExactly("Supermercado", "Transporte / Moto", "Kiosco");
+    }
+
+    @Test
+    void compararContraUnMesSinDatosNoTieneDiferencia() {
+        // El registro empieza el 5 de septiembre: agosto no tiene datos, y septiembre no está completo.
+        HerramientasConsulta.Comparacion c = herramientas.compararPeriodos(OCT_1, OCT_31, LocalDate.of(2026, 8, 1),
+                LocalDate.of(2026, 8, 31));
+
+        assertThat(c.a().conDatos()).isTrue();
+        assertThat(c.b().conDatos()).isFalse();
+        assertThat(c.b().total()).isEqualByComparingTo("0");
+        assertThat(c.diferencia()).isNull();
+        assertThat(c.variacionPorcentaje()).isNull();
+        assertThat(herramientas.totalGastado(LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30),
+                HerramientasConsulta.Filtros.NINGUNO).conDatos()).isFalse();
     }
 
     @Test

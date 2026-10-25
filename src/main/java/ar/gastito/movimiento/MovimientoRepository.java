@@ -21,6 +21,12 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
     @EntityGraph(attributePaths = {"categoria", "medioPago", "cuenta", "tarjeta", "candidatas"})
     Optional<Movimiento> findConDetalleById(Long id);
 
+    /** La fecha del primer movimiento confirmado, de cualquier tipo: antes de eso no hay datos. Null si no hay. */
+    @Query("""
+            select min(m.fechaHora) from Movimiento m
+            where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO""")
+    LocalDateTime primerFechaConfirmada();
+
     /** Últimos gastos confirmados, del más nuevo al más viejo (ejemplos para la IA). */
     @EntityGraph(attributePaths = {"categoria"})
     @Query("""
