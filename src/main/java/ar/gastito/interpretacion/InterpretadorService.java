@@ -72,6 +72,18 @@ public class InterpretadorService {
     public record NoEsGasto() implements Resultado {
     }
 
+    /**
+     * Una pregunta sobre sus gastos ("¿cuánto gasté en kiosco?").
+     *
+     * @param usoIaId si la IA intervino al clasificarla, el registro en uso_ia; null si la reconoció Java
+     */
+    public record Pregunta(String texto, Long usoIaId) implements Resultado {
+    }
+
+    /** Puede ser un gasto o una pregunta: se le pregunta al usuario. Si es un gasto, ya está interpretado. */
+    public record Dudoso(Interpretado comoGasto) implements Resultado {
+    }
+
     /** Un mensaje escrito. */
     public Resultado interpretar(String texto) {
         return interpretar(texto, PropositoIa.TEXTO);
@@ -83,6 +95,10 @@ public class InterpretadorService {
      * @throws ar.gastito.ia.IaNoDisponibleException si hacía falta la IA y no se pudo usar
      */
     public Resultado interpretar(String texto, PropositoIa proposito) {
+        // 0. Una pregunta obvia, sin monto: no hace falta la IA para saber que no es un gasto.
+        if (ClasificadorIntencion.esPreguntaObvia(texto)) {
+            return new Pregunta(texto, null);
+        }
         Catalogo catalogo = catalogos.cargar();
         LocalDateTime ahora = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MINUTES);
 
@@ -119,17 +135,21 @@ public class InterpretadorService {
                 ia.extraer(instrucciones, texto, InterpretacionIa.class, proposito);
 
         return switch (validador.validar(respuesta.valor(), catalogo, ahora)) {
-            case ValidadorInterpretacion.Valida v -> {
-                // 4. Lo que el usuario ya decidió para esa descripción manda sobre lo que dijo la IA.
-                Optional<HistorialCategorias.Aprendido> aprendido =
-                        historial.buscar(v.movimiento().descripcion(), catalogo);
-                yield aprendido.isPresent()
-                        ? new Interpretado(v.movimiento().conCategoriaElegida(aprendido.get().categoria()),
-                                Confianza.ALTA, respuesta.usoIaId())
-                        : new Interpretado(v.movimiento(), v.confianza(), respuesta.usoIaId());
-            }
+            case ValidadorInterpretacion.Valida v -> conHistorial(v, catalogo, respuesta.usoIaId());
             case ValidadorInterpretacion.NoEsGasto n -> new NoEsGasto();
+            case ValidadorInterpretacion.Pregunta p -> new Pregunta(texto, respuesta.usoIaId());
+            case ValidadorInterpretacion.Dudosa d ->
+                    new Dudoso(conHistorial(d.comoGasto(), catalogo, respuesta.usoIaId()));
         };
+    }
+
+    /** 4. Lo que el usuario ya decidió para esa descripción manda sobre lo que dijo la IA. */
+    private Interpretado conHistorial(ValidadorInterpretacion.Valida v, Catalogo catalogo, Long usoIaId) {
+        Optional<HistorialCategorias.Aprendido> aprendido = historial.buscar(v.movimiento().descripcion(), catalogo);
+        return aprendido.isPresent()
+                ? new Interpretado(v.movimiento().conCategoriaElegida(aprendido.get().categoria()), Confianza.ALTA,
+                        usoIaId)
+                : new Interpretado(v.movimiento(), v.confianza(), usoIaId);
     }
 
     private static Cuenta cuenta(MedioPago medio, Cuenta cuenta) {

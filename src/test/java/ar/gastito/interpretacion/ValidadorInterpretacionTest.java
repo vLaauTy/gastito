@@ -39,7 +39,7 @@ class ValidadorInterpretacionTest {
 
     private static InterpretacionIa ia(String monto, String descripcion, List<String> categorias, String confianza,
             String medio, String cuenta) {
-        return new InterpretacionIa(true, monto, descripcion, categorias, confianza, medio, cuenta, "", "");
+        return new InterpretacionIa("GASTO", monto, descripcion, categorias, confianza, medio, cuenta, "", "");
     }
 
     private static InterpretacionIa ia(String monto, String descripcion, String categoria, String medio,
@@ -193,9 +193,31 @@ class ValidadorInterpretacionTest {
 
     @Test
     void siNoEsGastoNoSeGuardaNada() {
-        InterpretacionIa saludo = new InterpretacionIa(false, "", "", List.of(), "", "", "", "", "");
+        InterpretacionIa saludo = new InterpretacionIa("OTRO", "", "", List.of(), "", "", "", "", "");
         assertThat(validador.validar(saludo, catalogo, AHORA)).isInstanceOf(ValidadorInterpretacion.NoEsGasto.class);
         assertThat(validador.validar(null, catalogo, AHORA)).isInstanceOf(ValidadorInterpretacion.NoEsGasto.class);
+        InterpretacionIa rara = new InterpretacionIa("QUIZAS", "", "", List.of(), "", "", "", "", "");
+        assertThat(validador.validar(rara, catalogo, AHORA)).isInstanceOf(ValidadorInterpretacion.NoEsGasto.class);
+    }
+
+    @Test
+    void unaPreguntaNoEsUnGasto() {
+        InterpretacionIa pregunta = new InterpretacionIa("pregunta", "", "", List.of(), "", "", "", "", "");
+
+        assertThat(validador.validar(pregunta, catalogo, AHORA)).isInstanceOf(ValidadorInterpretacion.Pregunta.class);
+    }
+
+    @Test
+    void unaDudosaTraeElGastoYaInterpretadoPorSiElUsuarioDiceQueEsUnGasto() {
+        InterpretacionIa dudosa = new InterpretacionIa("DUDOSO", "3700", "pan", List.of("Supermercado"), "alta",
+                "", "", "", "");
+
+        ValidadorInterpretacion.Resultado r = validador.validar(dudosa, catalogo, AHORA);
+
+        assertThat(r).isInstanceOf(ValidadorInterpretacion.Dudosa.class);
+        MovimientoInterpretado m = ((ValidadorInterpretacion.Dudosa) r).comoGasto().movimiento();
+        assertThat(m.monto()).isEqualByComparingTo("3700");
+        assertThat(m.descripcion()).isEqualTo("Pan");
     }
 
     @Test
@@ -208,7 +230,7 @@ class ValidadorInterpretacionTest {
 
     @Test
     void resuelveLaFecha() {
-        InterpretacionIa conFecha = new InterpretacionIa(true, "100", "x", List.of("Kiosco"), "alta", "", "", "ayer",
+        InterpretacionIa conFecha = new InterpretacionIa("GASTO", "100", "x", List.of("Kiosco"), "alta", "", "", "ayer",
                 "21:30");
         assertThat(valida(conFecha).fechaHora()).isEqualTo(LocalDateTime.of(2026, 10, 12, 21, 30));
     }

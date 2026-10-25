@@ -51,10 +51,25 @@ public class ValidadorInterpretacion {
     public record NoEsGasto() implements Resultado {
     }
 
+    /** Una pregunta sobre sus gastos: la responde ConsultaService. */
+    public record Pregunta() implements Resultado {
+    }
+
+    /** Puede ser un gasto o una pregunta: se le pregunta al usuario. Si dice que es un gasto, se usa este. */
+    public record Dudosa(Valida comoGasto) implements Resultado {
+    }
+
     public Resultado validar(InterpretacionIa ia, Catalogo catalogo, LocalDateTime ahora) {
-        if (ia == null || !ia.esGasto()) {
-            return new NoEsGasto();
-        }
+        Intencion intencion = ia == null ? Intencion.OTRO : Intencion.de(ia.intencion());
+        return switch (intencion) {
+            case OTRO -> new NoEsGasto();
+            case PREGUNTA -> new Pregunta();
+            case GASTO -> comoGasto(ia, catalogo, ahora);
+            case DUDOSO -> new Dudosa(comoGasto(ia, catalogo, ahora));
+        };
+    }
+
+    private Valida comoGasto(InterpretacionIa ia, Catalogo catalogo, LocalDateTime ahora) {
         Candidatas c = candidatas(ia.categorias(), ia.confianza(), catalogo);
         List<Categoria> candidatas = c.categorias();
         Confianza confianza = c.confianza();

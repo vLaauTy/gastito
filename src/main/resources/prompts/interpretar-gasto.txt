@@ -30,4 +30,8 @@ Cómo completar cada dato:
 - cuenta: solo si el mensaje nombra la cuenta ("desde Mercado Pago", "con la de Galicia"). Si no, vacío.
 - fecha: copiá cómo lo dice el mensaje: "hoy", "ayer", "anteayer", el día de la semana ("sábado") o la fecha ("12/10"). No calcules la fecha vos. Si no se menciona, vacío.
 - hora: solo si el mensaje la dice, en formato HH:mm. Si no, vacío.
-- esGasto: false si el mensaje no describe un gasto (un saludo, una pregunta, una prueba). En ese caso dejá el resto vacío.
+- intencion: qué quiere el usuario con el mensaje.
+  - "GASTO": carga un gasto ("3700 en pan", "kiosco 1500", "¿cuánto salió la nafta? 9000": tiene el monto de lo que pagó).
+  - "PREGUNTA": pregunta por sus gastos, ingresos o compras ("¿cuánto gasté en pan?", "en qué gasté más esta semana", "compará octubre con septiembre"). En ese caso dejá el resto vacío.
+  - "OTRO": un saludo, una prueba, algo que no es ni un gasto ni una pregunta. En ese caso dejá el resto vacío.
+  - "DUDOSO": podría ser cualquiera de los dos ("pan 3700?", "nafta ayer"). Completá igual los datos del gasto: si el usuario dice que es un gasto, se usan.

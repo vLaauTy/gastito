@@ -102,7 +102,7 @@ class InterpretadorServiceTest {
     @Test
     void despuesDeLaIaElHistorialCorrigeLaCategoria() {
         yaConfirmo(new DescripcionConfirmada("Pan de pancho y papas", SUPER.getId()));
-        iaResponde(new InterpretacionIa(true, "3700", "Pan de pancho y papas", List.of("Kiosco", "Supermercado"),
+        iaResponde(new InterpretacionIa("GASTO", "3700", "Pan de pancho y papas", List.of("Kiosco", "Supermercado"),
                 "media", "", "", "", ""), 7L);
 
         // "unos" y "compré" no los saca el separador, pero la IA devuelve la descripción limpia.
@@ -119,7 +119,7 @@ class InterpretadorServiceTest {
     void siElHistorialNoEsUnanimeSePregunta() {
         yaConfirmo(new DescripcionConfirmada("Pan de pancho y papas", SUPER.getId()),
                 new DescripcionConfirmada("Pan de pancho y papas", KIOSCO.getId()));
-        iaResponde(new InterpretacionIa(true, "3700", "Pan de pancho y papas", List.of("Supermercado", "Kiosco"),
+        iaResponde(new InterpretacionIa("GASTO", "3700", "Pan de pancho y papas", List.of("Supermercado", "Kiosco"),
                 "media", "", "", "", ""), 7L);
 
         InterpretadorService.Interpretado i = (InterpretadorService.Interpretado) interpretador.interpretar(
@@ -134,7 +134,7 @@ class InterpretadorServiceTest {
     void laTranscripcionDeUnAudioRegistraLaIaComoAudio() {
         when(ia.extraer(anyString(), anyString(), eq(InterpretacionIa.class), eq(PropositoIa.AUDIO)))
                 .thenReturn(new ClienteIa.Respuesta<>(
-                        new InterpretacionIa(true, "3700", "Pan de pancho y papas", List.of("Supermercado"), "alta",
+                        new InterpretacionIa("GASTO", "3700", "Pan de pancho y papas", List.of("Supermercado"), "alta",
                                 "Efectivo", "", "", ""), 9L));
 
         InterpretadorService.Interpretado i = (InterpretadorService.Interpretado) interpretador.interpretar(
@@ -188,7 +188,7 @@ class InterpretadorServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void unGastoDudosoVieneConCandidatasYSinCategoria() {
-        iaResponde(new InterpretacionIa(true, "3700", "Pan de pancho y papas", List.of("Supermercado", "Kiosco"),
+        iaResponde(new InterpretacionIa("GASTO", "3700", "Pan de pancho y papas", List.of("Supermercado", "Kiosco"),
                 "media", "Efectivo", "", "", ""), 7L);
 
         InterpretadorService.Interpretado i = (InterpretadorService.Interpretado) interpretador.interpretar(
@@ -206,7 +206,7 @@ class InterpretadorServiceTest {
     void elPromptLlevaLasDescripcionesDeLasCategoriasYLosEjemplos() {
         when(movimientos.ultimasConfirmaciones()).thenReturn(List.of(
                 confirmado("Pan de pancho y papas", SUPER), confirmado("Alfajor", KIOSCO)));
-        iaResponde(new InterpretacionIa(true, "100", "x", List.of("Kiosco"), "alta", "", "", "", ""), 7L);
+        iaResponde(new InterpretacionIa("GASTO", "100", "x", List.of("Kiosco"), "alta", "", "", "", ""), 7L);
 
         interpretador.interpretar("algo que no entiende el parser simple");
 
@@ -229,7 +229,7 @@ class InterpretadorServiceTest {
 
     @Test
     void siLaIaNoEncuentraElMontoVieneVacio() {
-        iaResponde(new InterpretacionIa(true, "", "Nafta", List.of("Transporte / Moto"), "alta",
+        iaResponde(new InterpretacionIa("GASTO", "", "Nafta", List.of("Transporte / Moto"), "alta",
                 "Tarjeta de crédito", "", "ayer", ""), 8L);
 
         InterpretadorService.Interpretado i = (InterpretadorService.Interpretado) interpretador.interpretar(
@@ -242,8 +242,39 @@ class InterpretadorServiceTest {
 
     @Test
     void mensajesQueNoSonGastos() {
-        iaResponde(new InterpretacionIa(false, "", "", List.of(), "", "", "", "", ""), 9L);
+        iaResponde(new InterpretacionIa("OTRO", "", "", List.of(), "", "", "", "", ""), 9L);
 
         assertThat(interpretador.interpretar("hola!")).isInstanceOf(InterpretadorService.NoEsGasto.class);
+    }
+
+    @Test
+    void unaPreguntaObviaNoLlamaALaIa() {
+        InterpretadorService.Resultado r = interpretador.interpretar("¿Cuánto gasté en kiosco este mes?");
+
+        assertThat(r).isEqualTo(new InterpretadorService.Pregunta("¿Cuánto gasté en kiosco este mes?", null));
+        verifyNoInteractions(ia);
+    }
+
+    @Test
+    void conMontoDecideLaIa() {
+        iaResponde(new InterpretacionIa("GASTO", "9000", "Nafta", List.of("Transporte / Moto"), "alta", "", "",
+                "", ""), 9L);
+
+        assertThat(interpretador.interpretar("¿cuánto salió la nafta? 9000"))
+                .isInstanceOf(InterpretadorService.Interpretado.class);
+    }
+
+    @Test
+    void unaPreguntaQueReconoceLaIaYUnCasoDudoso() {
+        iaResponde(new InterpretacionIa("PREGUNTA", "", "", List.of(), "", "", "", "", ""), 9L);
+        assertThat(interpretador.interpretar("lo del kiosco de este mes"))
+                .isEqualTo(new InterpretadorService.Pregunta("lo del kiosco de este mes", 9L));
+
+        iaResponde(new InterpretacionIa("DUDOSO", "3700", "Pan", List.of("Supermercado"), "media", "", "", "",
+                ""), 10L);
+        InterpretadorService.Resultado r = interpretador.interpretar("pan 3700?");
+        assertThat(r).isInstanceOf(InterpretadorService.Dudoso.class);
+        assertThat(((InterpretadorService.Dudoso) r).comoGasto().movimiento().monto()).isEqualByComparingTo("3700");
+        assertThat(((InterpretadorService.Dudoso) r).comoGasto().usoIaId()).isEqualTo(10L);
     }
 }
