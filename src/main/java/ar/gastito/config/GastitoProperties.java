@@ -2,14 +2,17 @@ package ar.gastito.config;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.unit.DataSize;
 
 @ConfigurationProperties(prefix = "gastito")
-public record GastitoProperties(ZoneId zonaHoraria, Telegram telegram, Ia ia, Audio audio, Ticket ticket) {
+public record GastitoProperties(ZoneId zonaHoraria, Telegram telegram, Ia ia, Audio audio, Ticket ticket,
+        Resumenes resumenes, Consultas consultas) {
 
     public record Telegram(String token, String username, long allowedUserId) {
     }
@@ -46,5 +49,27 @@ public record GastitoProperties(ZoneId zonaHoraria, Telegram telegram, Ia ia, Au
      * @param maxTokens     tope de la respuesta de la IA (un ticket largo tiene muchos productos)
      */
     public record Ticket(String carpetaDatos, int ladoMaximo, DataSize tamanioMaximo, long maxTokens) {
+    }
+
+    /**
+     * Resúmenes automáticos (en la zona horaria de gastito.zona-horaria).
+     *
+     * @param horaSemanal       el domingo, a esta hora, sale el resumen de la semana
+     * @param horaMensual       el día 1, a esta hora, sale el resumen del mes que terminó
+     * @param modeloSemanal     el modelo que redacta el semanal
+     * @param modeloMensual     el que redacta el mensual (por si conviene uno más potente)
+     * @param umbralHormiga     compras por debajo de este monto, en las categorías hormiga, son gastos hormiga
+     * @param categoriasHormiga nombres de las categorías donde se cuentan los gastos hormiga
+     */
+    public record Resumenes(LocalTime horaSemanal, LocalTime horaMensual, String modeloSemanal, String modeloMensual,
+            long maxTokens, BigDecimal umbralHormiga, List<String> categoriasHormiga) {
+    }
+
+    /**
+     * Preguntas en lenguaje natural, respondidas con herramientas (tool use).
+     *
+     * @param maxLlamadas tope de llamadas a herramientas por pregunta
+     */
+    public record Consultas(String modelo, long maxTokens, int maxLlamadas) {
     }
 }

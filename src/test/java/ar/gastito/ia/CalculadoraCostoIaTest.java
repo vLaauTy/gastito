@@ -15,7 +15,7 @@ class CalculadoraCostoIaTest {
     private final CalculadoraCostoIa calculadora = new CalculadoraCostoIa(new GastitoProperties(
             ZoneId.of("America/Argentina/Buenos_Aires"), null,
             new GastitoProperties.Ia("key", null, "claude-haiku-5-5", 1024, Map.of(
-                    "claude-haiku-5-5", new GastitoProperties.Precio(new BigDecimal("0.10"), new BigDecimal("0.50")))), null, null));
+                    "claude-haiku-5-5", new GastitoProperties.Precio(new BigDecimal("0.10"), new BigDecimal("0.50")))), null, null, null, null));
 
     @Test
     void unMillonDeTokensCuestaElPrecioPorMillon() {

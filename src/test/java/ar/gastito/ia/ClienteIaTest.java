@@ -58,7 +58,7 @@ class ClienteIaTest {
         ReflectionTestUtils.setField(uso, "id", 7L);
         when(registro.registrar(anyString(), anyLong(), anyLong(), any())).thenReturn(uso);
         cliente = new ClienteIa(new GastitoProperties(null, null,
-                new GastitoProperties.Ia("clave-de-prueba", anthropic.baseUrl(), MODELO, 1024, Map.of()), null, null),
+                new GastitoProperties.Ia("clave-de-prueba", anthropic.baseUrl(), MODELO, 1024, Map.of()), null, null, null, null),
                 registro);
     }
 
@@ -131,7 +131,7 @@ class ClienteIaTest {
     @Test
     void sinClaveNoLlama() {
         ClienteIa sinClave = new ClienteIa(new GastitoProperties(null, null,
-                new GastitoProperties.Ia("", anthropic.baseUrl(), MODELO, 1024, Map.of()), null, null), registro);
+                new GastitoProperties.Ia("", anthropic.baseUrl(), MODELO, 1024, Map.of()), null, null, null, null), registro);
 
         assertThatThrownBy(() -> sinClave.extraerDeImagen("x", JPEG, "", 4096, Lectura.class, PropositoIa.TICKET))
                 .isInstanceOf(IaNoDisponibleException.class);

@@ -79,7 +79,7 @@ class TicketServiceTest {
 
     private TicketService servicio(DataSize tamanioMaximo) {
         GastitoProperties properties = new GastitoProperties(null, null, null, null,
-                new GastitoProperties.Ticket(datos.toString(), 1568, tamanioMaximo, 4096));
+                new GastitoProperties.Ticket(datos.toString(), 1568, tamanioMaximo, 4096), null, null);
         return new TicketService(new ImagenTicket(1568), lector, new ValidadorTicket(new ResolvedorFechas()),
                 historial, catalogos, movimientos, usoIa, new FotosTicket(datos), properties,
                 Clock.fixed(AHORA.atZone(ARGENTINA).toInstant(), ARGENTINA));

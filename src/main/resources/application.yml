@@ -65,6 +65,24 @@ gastito:
     tamanio-maximo: 10MB
     # Un ticket largo trae muchos productos: la respuesta necesita más lugar que la de un texto.
     max-tokens: 4096
+  resumenes:
+    # En la zona de gastito.zona-horaria. El semanal sale el domingo; el mensual, el día 1.
+    hora-semanal: "21:00"
+    hora-mensual: "09:00"
+    # Si cambiás a otro modelo, agregá su precio en gastito.ia.precios (si no, el costo queda en 0).
+    modelo-semanal: claude-haiku-5-5
+    modelo-mensual: claude-haiku-5-5
+    max-tokens: 1024
+    # Gastos hormiga: compras por debajo de este monto en estas categorías.
+    umbral-hormiga: 3000
+    categorias-hormiga:
+      - Kiosco
+      - Comida afuera / delivery
+  consultas:
+    modelo: claude-haiku-5-5
+    max-tokens: 1024
+    # Tope de llamadas a herramientas por pregunta, para acotar el costo.
+    max-llamadas: 3
 
 ---
 spring:

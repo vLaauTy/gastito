@@ -39,7 +39,7 @@ class ClienteTranscripcionTest {
 
     private static ClienteTranscripcion cliente(String url, Duration timeout) {
         return new ClienteTranscripcion(new GastitoProperties(null, null, null,
-                new GastitoProperties.Audio(url, CLAVE, "whisper-1", "es", timeout, Duration.ofSeconds(60)), null));
+                new GastitoProperties.Audio(url, CLAVE, "whisper-1", "es", timeout, Duration.ofSeconds(60)), null, null, null));
     }
 
     private ClienteTranscripcion cliente() {

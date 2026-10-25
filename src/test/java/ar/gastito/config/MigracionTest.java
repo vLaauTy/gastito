@@ -206,6 +206,30 @@ class MigracionTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    // --- V6: resúmenes ---
+
+    @Test
+    void unPeriodoSoloSeRegistraUnaVezYUnEnviadoTieneSuResumen() {
+        jdbc.update("""
+                INSERT INTO resumen (id, tipo, desde, hasta, automatico, datos, creado_en)
+                VALUES (1, 'SEMANAL', DATE '2026-10-12', DATE '2026-10-18', TRUE, '{}', CURRENT_TIMESTAMP)""");
+        jdbc.update("""
+                INSERT INTO resumen_envio (tipo, desde, hasta, estado, resumen_id, actualizado)
+                VALUES ('SEMANAL', DATE '2026-10-12', DATE '2026-10-18', 'ENVIADO', 1, CURRENT_TIMESTAMP)""");
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO resumen_envio (tipo, desde, hasta, estado, actualizado)
+                VALUES ('SEMANAL', DATE '2026-10-12', DATE '2026-10-18', 'OMITIDO', CURRENT_TIMESTAMP)"""))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO resumen_envio (tipo, desde, hasta, estado, actualizado)
+                VALUES ('MENSUAL', DATE '2026-10-01', DATE '2026-10-31', 'ENVIADO', CURRENT_TIMESTAMP)"""))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO resumen (tipo, desde, hasta, automatico, datos, creado_en)
+                VALUES ('SEMANAL', DATE '2026-10-18', DATE '2026-10-12', FALSE, '{}', CURRENT_TIMESTAMP)"""))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
     private int contar(String tabla) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM " + tabla, Integer.class);
     }
