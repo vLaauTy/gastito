@@ -37,7 +37,12 @@ public class RegistroUsoIa {
 
     @Transactional(readOnly = true)
     public ResumenUsoIa resumenMesActual() {
-        Periodo mes = Periodo.delMes(YearMonth.now(clock));
-        return repositorio.resumen(mes.desde(), mes.hasta());
+        return resumenDe(YearMonth.now(clock));
+    }
+
+    @Transactional(readOnly = true)
+    public ResumenUsoIa resumenDe(YearMonth mes) {
+        Periodo periodo = Periodo.delMes(mes);
+        return repositorio.resumen(periodo.desde(), periodo.hasta());
     }
 }
