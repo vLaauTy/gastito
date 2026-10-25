@@ -8,5 +8,7 @@ public enum Origen {
     AVISO,
     RESUMEN,
     /** Cargado en un formulario del dashboard (por ahora, los ingresos). */
-    DASHBOARD
+    DASHBOARD,
+    /** Lo genera Gastito: el cobro de un gasto fijo, las cuotas de una compra. */
+    AUTOMATICO
 }
