@@ -29,7 +29,8 @@ import ar.gastito.movimiento.MovimientoInterpretado;
  * <li>El monto del gasto es el total impreso. Sin total no hay gasto: se pide otra foto.</li>
  * <li>Los productos menos los descuentos se comparan con el total ({@link #coinciden}); la tarjeta avisa si no.</li>
  * <li>La fecha es la del ticket. Una fecha futura o de hace más de un año se toma como mal leída: queda hoy.</li>
- * <li>Categoría, medio de pago y cuenta se buscan en el catálogo, igual que con un texto.</li>
+ * <li>Categoría y cuenta se buscan en el catálogo, igual que con un texto. El medio de pago, solo por nombre
+ * exacto: "Tarjeta" a secas no se toma como crédito.</li>
  * <li>Privacidad: de los textos se borra cualquier número largo (tarjeta, CUIT, códigos) y las tarjetas
  * enmascaradas ("**** 1234").</li>
  * </ul>
@@ -115,7 +116,9 @@ public class ValidadorTicket {
                 ValidadorInterpretacion.candidatas(ia.categorias(), ia.confianza(), catalogo);
         Categoria primera = candidatas.categorias().get(0);
 
-        MedioPago medio = ValidadorInterpretacion.buscar(ia.medioPago(), catalogo.mediosPago()).orElse(null);
+        // Solo el nombre exacto: un ticket que dice "TARJETA" puede ser débito o crédito, y la palabra clave
+        // "tarjeta" lo llevaría a crédito. Sin aclarar, queda sin medio de pago y lo elige el usuario.
+        MedioPago medio = ValidadorInterpretacion.buscarPorNombre(ia.medioPago(), catalogo.mediosPago()).orElse(null);
         Cuenta cuenta = ValidadorInterpretacion.buscar(ia.cuenta(), catalogo.cuentas()).orElse(null);
         TarjetaCredito tarjeta = null;
         if (medio != null && medio.esTarjetaDeCredito()) {

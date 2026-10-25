@@ -1,0 +1,41 @@
+{
+  "_nota": "Lectura esperada de un ticket real de Día (22/09/2026). La foto no se sube al repo. Se omitieron a propósito el CUIT, el código de cajera y el número de ClubDía.",
+  "esTicket": true,
+  "comercio": "Día",
+  "sucursal": "5601",
+  "fecha": "2026-09-22",
+  "hora": "17:44",
+  "items": [
+    { "descripcion": "Galletitas cracker queso", "codigoBarras": "7792180145444", "cantidad": 2, "precioUnitario": 2250.00, "subtotal": 4500.00 },
+    { "descripcion": "20% ClubDía", "cantidad": 1, "precioUnitario": -900.00, "subtotal": -900.00, "esDescuento": true },
+    { "descripcion": "Premezcla brownies", "codigoBarras": "7790070432858", "cantidad": 1, "precioUnitario": 5460.00, "subtotal": 5460.00 },
+    { "descripcion": "20% ClubDía", "cantidad": 1, "precioUnitario": -1092.00, "subtotal": -1092.00, "esDescuento": true },
+    { "descripcion": "Papel higiénico simple hoja aloe", "codigoBarras": "7790250016182", "cantidad": 1, "precioUnitario": 2760.00, "subtotal": 2760.00 },
+    { "descripcion": "20% ClubDía", "cantidad": 1, "precioUnitario": -552.00, "subtotal": -552.00, "esDescuento": true },
+    { "descripcion": "Minitostaditas jamón", "codigoBarras": "7790310983256", "cantidad": 1, "precioUnitario": 3490.00, "subtotal": 3490.00 },
+    { "descripcion": "20% ClubDía", "cantidad": 1, "precioUnitario": -698.00, "subtotal": -698.00, "esDescuento": true },
+    { "descripcion": "Pasta mac & cheese", "codigoBarras": "7794000009547", "cantidad": 1, "precioUnitario": 4488.00, "subtotal": 4488.00 },
+    { "descripcion": "20% ClubDía", "cantidad": 1, "precioUnitario": -897.60, "subtotal": -897.60, "esDescuento": true },
+    { "descripcion": "Seven Up lata 354 ml", "codigoBarras": "7791813777021", "cantidad": 1, "precioUnitario": 2250.00, "subtotal": 2250.00 },
+    { "descripcion": "20% ClubDía", "cantidad": 1, "precioUnitario": -450.00, "subtotal": -450.00, "esDescuento": true },
+    { "descripcion": "Pasta dental Luminous White", "codigoBarras": "7509546700434", "cantidad": 1, "precioUnitario": 5280.00, "subtotal": 5280.00 },
+    { "descripcion": "20% ClubDía", "cantidad": 1, "precioUnitario": -1056.00, "subtotal": -1056.00, "esDescuento": true },
+    { "descripcion": "Café en saquitos intenso", "codigoBarras": "7792360094968", "cantidad": 1, "precioUnitario": 4850.00, "subtotal": 4850.00 },
+    { "descripcion": "20% ClubDía", "cantidad": 1, "precioUnitario": -970.00, "subtotal": -970.00, "esDescuento": true },
+    { "descripcion": "Cepillo dental Super Flex", "codigoBarras": "7509546075242", "cantidad": 1, "precioUnitario": 2940.00, "subtotal": 2940.00 },
+    { "descripcion": "20% ClubDía", "cantidad": 1, "precioUnitario": -588.00, "subtotal": -588.00, "esDescuento": true },
+    { "descripcion": "Bolsa compostable verde", "cantidad": 1, "precioUnitario": 225.00, "subtotal": 225.00 },
+    { "descripcion": "20% ClubDía", "cantidad": 1, "precioUnitario": -45.00, "subtotal": -45.00, "esDescuento": true },
+    { "descripcion": "Pan para hamburguesa", "codigoBarras": "8480017056221", "cantidad": 1, "precioUnitario": 2090.00, "subtotal": 2090.00 },
+    { "descripcion": "20% ClubDía", "cantidad": 1, "precioUnitario": -418.00, "subtotal": -418.00, "esDescuento": true }
+  ],
+  "subtotal": 38333.00,
+  "descuentos": -7666.60,
+  "total": 30666.40,
+  "medioPago": "TARJETA (sin aclarar si es débito o crédito)",
+  "noSonProductos": [
+    "IVA contenido 5322,27",
+    "Otros tributos nacionales indirectos 62,03",
+    "Ahorro ClubDía 11621,60 (informativo, no se resta de nuevo)"
+  ]
+}

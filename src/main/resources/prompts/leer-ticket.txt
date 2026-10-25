@@ -21,10 +21,12 @@ Cómo son los tickets argentinos:
 - Los importes usan punto para los miles y coma para los decimales: "$ 8.050,00" son ocho mil cincuenta pesos, "1.450,5" es mil cuatrocientos cincuenta con cincuenta centavos. Devolvé todos los importes solo con dígitos y punto decimal, sin separador de miles: 8050, 1450.50.
 - Las fechas son día/mes/año, con el año en dos o cuatro cifras: "18/10/26" es el 18 de octubre de 2026, nunca el 10 de diciembre. Copiá la fecha como está impresa.
 - Arriba suele estar el comercio (nombre de fantasía y razón social), el CUIT, la dirección y el tipo de comprobante ("Factura B", "Factura C", "Tique", "Ticket Factura A"). Nada de eso es un producto.
-- Las líneas de IVA ("IVA 21%", "IVA contenido", "Régimen de Transparencia Fiscal al Consumidor", "Otros impuestos nacionales indirectos"), "Subtotal", "Total", "Su pago", "Vuelto", "Cambio" y los datos del pago no son productos.
+- Las líneas de IVA ("IVA 21%", "IVA contenido", "Régimen de Transparencia Fiscal al Consumidor", "Otros impuestos nacionales indirectos", "Otros tributos nacionales indirectos"), "Subtotal", "Total", "Su pago", "Vuelto", "Cambio" y los datos del pago no son productos.
+- El código de barras o de artículo que acompaña a un producto no es parte de la descripción.
 - Un producto puede ocupar dos líneas: la cantidad y el precio unitario arriba ("2 x 1.450,00") y la descripción con el subtotal abajo, o al revés. Juntalas en un solo producto.
 - Los productos por peso traen el peso y el precio por kilo ("0,532 kg x 5.990,00"): la cantidad es el peso.
-- Promociones, "2x1", "3x2", "Desc.", "Bonif.", "Ahorro" y los descuentos con tarjeta o banco son descuentos, aunque estén impresos al lado del producto o con signo menos. Van en descuentos, con el monto en positivo, y no como productos.
+- Promociones, "2x1", "3x2", "Desc.", "Bonif." y los descuentos con tarjeta, banco o programa de clientes (por ejemplo "20% ClubDía" debajo de cada producto) son descuentos, aunque estén impresos al lado del producto o con signo menos. Van en descuentos, uno por cada línea impresa, con el monto en positivo, y no como productos.
+- Las líneas que resumen lo que ya se descontó ("Ahorro ClubDía", "Usted ahorró", "Total ahorro") son informativas: no son un descuento más, porque restarlas de nuevo contaría dos veces lo mismo.
 
 Cómo completar cada dato:
 - problema: vacío si es un ticket o factura de compra y se leen los productos y el total. "no_es_ticket" si la foto es otra cosa (una persona, un paisaje, una captura de pantalla que no es un comprobante). "borrosa" si no se pueden leer los productos o los importes. "cortada" si falta una parte del ticket, por ejemplo el total.
@@ -33,6 +35,7 @@ Cómo completar cada dato:
 - medioPago: según lo impreso o el texto del usuario. Si el texto del usuario dice otra cosa que el ticket, manda el texto del usuario.
   - "Débito", "Tarjeta de débito", "Maestro", "Visa Débito", "Visa Electron" o "Cabal Débito" es "Débito".
   - "Crédito", "Visa", "Mastercard", "Master", "American Express", "Naranja" o "Cabal" sin la palabra débito es "Tarjeta de crédito".
+  - Si solo dice "Tarjeta", sin aclarar si es débito o crédito ni la marca, dejalo vacío: lo elige el usuario.
   - "Mercado Pago", "QR", "Modo" o "Pago con billetera" es "QR".
   - "Efectivo" o "Contado" es "Efectivo". "Transferencia" es "Transferencia".
 - cuenta: "Mercado Pago" si se pagó con Mercado Pago. Si el usuario nombra la cuenta ("con la de Galicia"), esa. Si no, vacío.

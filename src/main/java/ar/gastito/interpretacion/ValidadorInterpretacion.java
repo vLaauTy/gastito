@@ -142,18 +142,22 @@ public class ValidadorInterpretacion {
         return d.length() > LARGO_MAXIMO_DESCRIPCION ? d.substring(0, LARGO_MAXIMO_DESCRIPCION) : d;
     }
 
-    /** Primero por nombre exacto (sin tildes ni mayúsculas), después por palabra clave. */
-    public static <T extends ConPalabrasClave> Optional<T> buscar(String nombre, List<T> opciones) {
+    /** Solo por nombre exacto (sin tildes ni mayúsculas), sin palabras clave. */
+    public static <T extends ConPalabrasClave> Optional<T> buscarPorNombre(String nombre, List<T> opciones) {
         if (nombre == null || nombre.isBlank()) {
             return Optional.empty();
         }
         String buscado = Textos.normalizar(nombre);
-        Optional<T> exacto = opciones.stream()
-                .filter(o -> Textos.normalizar(o.getNombre()).equals(buscado))
-                .findFirst();
-        if (exacto.isPresent()) {
+        return opciones.stream().filter(o -> Textos.normalizar(o.getNombre()).equals(buscado)).findFirst();
+    }
+
+    /** Primero por nombre exacto (sin tildes ni mayúsculas), después por palabra clave. */
+    public static <T extends ConPalabrasClave> Optional<T> buscar(String nombre, List<T> opciones) {
+        Optional<T> exacto = buscarPorNombre(nombre, opciones);
+        if (exacto.isPresent() || nombre == null || nombre.isBlank()) {
             return exacto;
         }
+        String buscado = Textos.normalizar(nombre);
         List<T> porPalabra = opciones.stream()
                 .filter(o -> Textos.palabrasClave(o).contains(buscado))
                 .toList();
