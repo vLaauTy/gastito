@@ -189,6 +189,7 @@
           api(conMes('/api/gastos/por-categoria')).then(categorias),
           api(conMes('/api/gastos/por-billetera')).then(billeteras),
           api(conMes('/api/ingresos')).then(ingresosDelResumen),
+          api('/api/resumenes/ultimo').then(loQueNotoLaIa),
           ultimosMovimientos(),
         );
       } else if (estado.vista === 'movimientos') {
@@ -367,6 +368,39 @@
       h('span', {}, [i.descripcion || i.claseNombre, fechaCorta(i.fecha), i.billetera].join(' · ')),
       h('span', { class: 'money' }, pesos(i.monto)),
     )));
+  }
+
+  // --- Lo que notó la IA ---
+
+  const diaYMes = new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+  const diaSemana = new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', timeZone: 'UTC' });
+  const fecha = (iso) => new Date(`${iso}T00:00:00Z`);
+
+  /** El último resumen (semanal o mensual): de qué período es, si es parcial, y sus observaciones. */
+  function loQueNotoLaIa(r) {
+    const lista = $('#r-ia');
+    if (!r) {
+      texto('#r-ia-periodo', '');
+      lista.replaceChildren(h('p', { class: 'note' },
+        'Todavía no hay resúmenes. El domingo a las 21 llega el de la semana, o pedilo con /resumen.'));
+      return;
+    }
+    const periodo = r.tipo === 'SEMANAL'
+      ? `Semana del ${diaYMes.format(fecha(r.desde))} al ${diaYMes.format(fecha(r.fin))}`
+      : mesYAnio(r.desde.slice(0, 7));
+    texto('#r-ia-periodo', r.parcial
+      ? `${periodo} · ${r.tipo === 'SEMANAL' ? 'semana' : 'mes'} parcial, hasta el ${diaSemana.format(fecha(r.hasta))}`
+      : periodo);
+    if (!r.observaciones.length && !r.consejo) {
+      lista.replaceChildren(h('p', { class: 'note' }, r.textoIaDescartado
+        ? 'Esta vez la IA escribió un número que no estaba en los datos, así que el resumen salió solo con los números.'
+        : 'Este resumen salió sin el texto de la IA.'));
+      return;
+    }
+    lista.replaceChildren(
+      h('ul', { class: 'observaciones' }, ...r.observaciones.map((o) => h('li', {}, o))),
+      r.consejo ? h('p', { class: 'consejo' }, h('b', {}, '👉 Consejo: '), r.consejo) : null,
+    );
   }
 
   // --- Tablas de movimientos ---
