@@ -85,7 +85,8 @@ ajustar sin tocar código.
 
 ## Arrancar el bot (lo más fácil)
 
-Doble clic en **`iniciar.bat`**, en la raíz del proyecto. Arranca con el perfil `postgres` y antes revisa:
+Doble clic en **`iniciar.bat`**, en la raíz del proyecto. Por ahora arranca con el perfil `prueba`, la base de
+datos inventados (ver [Dos bases: prueba y real](#dos-bases-prueba-y-real)), y antes revisa:
 
 1. Que esté Java (Maven no hace falta: usa el wrapper `mvnw`).
 2. Que el `.env` tenga todas las variables (no muestra los valores).
@@ -97,10 +98,73 @@ Doble clic en **`iniciar.bat`**, en la raíz del proyecto. Arranca con el perfil
 Cuando en la ventana aparece `Bot de Telegram conectado y escuchando mensajes`, ya se puede usar. **Para
 apagarlo, cerrá la ventana.** Si algo falla, la ventana queda abierta con el motivo.
 
-Para arrancar con H2 en lugar de PostgreSQL, desde una terminal en la raíz del proyecto:
+Para arrancar con otra base, desde una terminal en la raíz del proyecto:
 
 ```bash
-iniciar.bat dev
+iniciar.bat postgres   # la base real (gastito)
+iniciar.bat dev        # H2 en un archivo, sin PostgreSQL
+```
+
+## Dos bases: prueba y real
+
+Hasta terminar todas las etapas (hasta la 8), la aplicación no se usa con datos reales: todo es prueba. Por eso
+hay dos bases en el mismo PostgreSQL de la VM, con las mismas migraciones y el mismo usuario del `.env`:
+
+| Perfil     | Base             | Para qué                                                                        |
+|------------|------------------|---------------------------------------------------------------------------------|
+| `prueba`   | `gastito_prueba` | Probar todo, con datos inventados. Es la que usa `iniciar.bat` por ahora.        |
+| `postgres` | `gastito`        | La real. Queda vacía y reservada para cuando se empiece a usar de verdad.        |
+
+El perfil `prueba` toma la URL de `DB_PRUEBA_URL` si está en el `.env`; si no, usa
+`jdbc:postgresql://localhost:5432/gastito_prueba`. Las fotos de sus tickets van a `data/prueba/tickets/`, aparte
+de las reales (`data/tickets/`), porque los ids de las dos bases se repiten. Como las dos usan el mismo bot de
+Telegram, no se pueden tener prendidas a la vez (`iniciar.bat` avisa).
+
+La base de prueba se crea una sola vez, en la VM:
+
+```bash
+docker exec gastito-db createdb -U gastito -O gastito gastito_prueba
+```
+
+### Datos de prueba
+
+**`generar-datos-prueba.bat`** (doble clic) borra lo que haya en `gastito_prueba` y la llena con unos 3 meses
+de datos creíbles, hasta hoy. Se puede correr las veces que haga falta, y la semilla es fija, así que con la
+misma fecha sale lo mismo:
+
+- De 2 a 5 gastos por día, en todas las categorías y medios de pago, con montos típicos de cada una. Algunos
+  vienen por audio.
+- Gastos hormiga en el kiosco casi todos los días.
+- Servicios, suscripciones, el seguro (FEDERA8) y el impuesto de sellos, todos los meses el mismo día.
+- Algunas compras en el Día con el detalle del ticket y el 20% de ClubDía, basadas en el ticket real de ejemplo.
+- El mes del medio es caro (más salidas, ropa y compras grandes, alrededor de un 25% más), para que las
+  comparaciones y los consejos tengan algo para mostrar.
+- Sueldo todos los meses, un aguinaldo y algunos extras (con descripción).
+
+Borra movimientos e ingresos (y con ellos lo aprendido), tickets, resúmenes y sus envíos, y las fotos de
+`data/prueba/tickets/`. Deja el catálogo y `uso_ia`, que es plata de verdad gastada en la API mientras se
+probaba. El generador está en `ar.gastito.prueba`: solo existe con el perfil `prueba` y, antes de borrar nada,
+comprueba que la base se llame `gastito_prueba` y que no esté activo el perfil `postgres`. Con la base real no
+corre nunca.
+
+### El día del lanzamiento
+
+1. Apagá Gastito (cerrá la ventana).
+2. En `scripts/iniciar.ps1`, cambiá el perfil por defecto de `'prueba'` a `'postgres'` (la línea `param(...)`), y
+   en `iniciar.bat` el comentario.
+3. Doble clic en `iniciar.bat`. Como `gastito` está vacía, el primer resumen automático no manda nada de antes.
+
+La base de prueba puede quedar para seguir probando cambios con `iniciar.bat prueba`.
+
+El 25/10/2026 la base `gastito` se vació (tenía las primeras pruebas, cargadas antes de separar las bases). Antes
+se guardó un backup en `data/backups/gastito-2026-10-25.dump` (fuera del repo, como todo `data/`), hecho desde
+Windows con `ssh devbox "docker exec gastito-db pg_dump -U gastito -d gastito --format=custom" > ...`. Para ver
+qué tiene, o restaurarlo en una base aparte sin tocar `gastito` (desde Git Bash, en la raíz del proyecto):
+
+```bash
+ssh devbox "docker exec -i gastito-db pg_restore --list" < data/backups/gastito-2026-10-25.dump
+ssh devbox "docker exec gastito-db createdb -U gastito gastito_backup"
+ssh devbox "docker exec -i gastito-db pg_restore -U gastito -d gastito_backup" < data/backups/gastito-2026-10-25.dump
 ```
 
 Las secciones de abajo explican cómo arrancarlo a mano con el Maven Wrapper (`./mvnw`; en Windows sin Git Bash, `mvnw.cmd`) o con el jar. La primera vez descarga Maven solo.
@@ -397,7 +461,7 @@ decimales, y acepta `?mes=2026-10` (por defecto, el mes actual):
    Si preferís levantar la base con el `docker-compose.yml` del repo (`docker compose up -d`), usa las mismas
    `DB_USER` y `DB_PASSWORD` del `.env`.
 
-2. Corré la aplicación con el perfil `postgres`: doble clic en `iniciar.bat`, o a mano:
+2. Corré la aplicación con el perfil `postgres`: `iniciar.bat postgres`, o a mano:
 
    ```bash
    ./mvnw spring-boot:run -Dspring-boot.run.profiles=postgres
@@ -489,6 +553,7 @@ ar.gastito
 ├── catalogo         Categorías, medios de pago, cuentas, tarjeta de crédito y alias de comercios
 ├── movimiento       Gastos e ingresos, su ciclo pendiente → confirmado y los totales
 ├── dashboard        API REST del dashboard, sus cálculos y el acceso (127.0.0.1 o token)
+├── prueba           Generador de datos de prueba (solo con el perfil prueba y la base gastito_prueba)
 └── config           Propiedades y reloj en hora de Argentina
 ```
 
@@ -502,6 +567,7 @@ El resto del repositorio:
 │   └── static/              El dashboard: index.html, css/ y js/ (sin framework)
 ├── src/test                 Tests con JUnit 5 (H2 en memoria, MockMvc, WireMock)
 ├── scripts/iniciar.ps1      Arranque con chequeos previos (lo llama iniciar.bat)
+├── scripts/generar-datos-prueba.ps1  Datos de prueba desde cero (lo llama generar-datos-prueba.bat)
 ├── docs/pedidos/            Los pedidos de cada etapa con los que se fue construyendo el bot
 ├── docs/mejoras-futuras.md  Ideas anotadas para más adelante
 ├── docs/prototipo-dashboard.html  El prototipo visual del dashboard
