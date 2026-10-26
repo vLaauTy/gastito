@@ -105,7 +105,11 @@ public class JuntadaService {
 
     // --- Cobrar ---
 
-    /** Alguien me debe en una juntada guardada: a quién se le puede imputar una devolución. */
+    /**
+     * Alguien me debe en una juntada guardada: a quién se le puede imputar una devolución.
+     *
+     * @param monto lo que todavía me debe
+     */
     public record Deudor(Long participanteId, String nombre, BigDecimal monto, VistaJuntada juntada) {
     }
 
@@ -118,7 +122,7 @@ public class JuntadaService {
         List<Deudor> todos = new ArrayList<>();
         for (Juntada j : juntadas.conDeudasPendientes()) {
             VistaJuntada v = vista(j);
-            v.pendientes().forEach(p -> todos.add(new Deudor(p.id(), p.nombre(), p.monto(), v)));
+            v.pendientes().forEach(p -> todos.add(new Deudor(p.id(), p.nombre(), p.restante(), v)));
         }
         List<Deudor> candidatos = todos;
         if (persona != null && !persona.isBlank()) {
@@ -160,28 +164,55 @@ public class JuntadaService {
                 textoOriginal, LocalDateTime.now(clock)));
     }
 
-    /** Lo que quedó después de cobrar: la devolución guardada y cómo queda la juntada. */
-    public record Cobro(Movimiento devolucion, VistaJuntada juntada, BigDecimal debia) {
+    /**
+     * Lo que quedó después de cobrar.
+     *
+     * @param debia          lo que me debía antes de esta devolución
+     * @param sigueDebiendo  lo que me sigue debiendo (cero si quedó pagado o saldado)
+     */
+    public record Cobro(Movimiento devolucion, VistaJuntada juntada, BigDecimal debia, BigDecimal sigueDebiendo) {
     }
 
     /**
-     * La devolución es de esta persona: se guarda (como DEVOLUCION, que no es ingreso) y la persona queda pagada. Si
-     * no se dijo en qué cuenta entró, se toma la de la juntada.
+     * Si la devolución no alcanza para lo que debe esta persona, cuánto falta; si alcanza (o sobra), cero. Si falta,
+     * hay que preguntar si queda debiendo la diferencia o si está saldado.
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal faltante(Long devolucionId, Long participanteId) {
+        BigDecimal pago = movimiento(devolucionId).getMonto();
+        return participante(participanteId).getRestante().subtract(pago).max(BigDecimal.ZERO);
+    }
+
+    /**
+     * La devolución es de esta persona: se guarda (como DEVOLUCION, que no es ingreso). Si no se dijo en qué cuenta
+     * entró, se toma la de la juntada.
+     * <ul>
+     * <li>Si cubre lo que debía (o sobra), queda pagada.</li>
+     * <li>Si es menos y {@code saldado}, queda pagada igual: la diferencia no se reclama.</li>
+     * <li>Si es menos y no, sigue pendiente por la diferencia.</li>
+     * </ul>
      */
     @Transactional
-    public Cobro cobrar(Long devolucionId, Long participanteId) {
+    public Cobro cobrar(Long devolucionId, Long participanteId, boolean saldado) {
         Movimiento devolucion = movimiento(devolucionId);
         Participante p = participante(participanteId);
         Juntada j = p.getJuntada();
-        BigDecimal debia = p.getMonto();
+        BigDecimal debia = p.getRestante();
         devolucion.asignarDevolucion(p.getNombre() + ", de " + descripcion(j), j.getCuenta());
         devolucion.confirmar();
-        p.pagado(devolucion.getId(), LocalDateTime.now(clock));
-        return new Cobro(devolucion, vista(j), debia);
+        p.recibir(devolucion.getMonto(), devolucion.getId(), LocalDateTime.now(clock), saldado);
+        return new Cobro(devolucion, vista(j), debia, p.getRestante());
+    }
+
+    /** Pagó lo que debía (o más): queda pagada. */
+    @Transactional
+    public Cobro cobrar(Long devolucionId, Long participanteId) {
+        return cobrar(devolucionId, participanteId, false);
     }
 
     /**
-     * No me la va a pagar: su parte pasa a ser gasto mío, con la categoría, la billetera y la fecha de la juntada.
+     * No me la va a pagar: lo que me debía (su parte, o lo que le faltaba si ya pagó algo) pasa a ser gasto mío, con
+     * la categoría, la billetera y la fecha de la juntada.
      */
     @Transactional
     public VistaJuntada darPorPerdido(Long participanteId) {
@@ -191,11 +222,15 @@ public class JuntadaService {
         if (original.getEstado() != EstadoMovimiento.CONFIRMADO) {
             throw new JuntadaInvalidaException("Primero guardá la juntada");
         }
-        Movimiento gasto = movimientoService.crearPendiente(MovimientoInterpretado.conCategoria(p.getMonto(),
+        BigDecimal perdido = p.getRestante();
+        if (perdido.signum() <= 0) {
+            throw new JuntadaInvalidaException(p.getNombre() + " ya no tiene nada pendiente");
+        }
+        Movimiento gasto = movimientoService.crearPendiente(MovimientoInterpretado.conCategoria(perdido,
                 descripcion(j) + ": la parte de " + p.getNombre() + " (no la cobré)", original.getCategoria(),
                 original.getMedioPago(), original.getCuenta(), original.getTarjeta(), original.getFechaHora()),
                 Origen.AUTOMATICO, null);
-        gasto.prepararJuntada(p.getMonto());
+        gasto.prepararJuntada(perdido);
         gasto.confirmar();
         p.perdido(gasto.getId());
         return vista(j);
@@ -212,8 +247,8 @@ public class JuntadaService {
     private VistaJuntada vista(Juntada j) {
         Movimiento m = j.getMovimiento();
         List<VistaJuntada.Persona> personas = j.getParticipantes().stream()
-                .map(p -> new VistaJuntada.Persona(p.getId(), p.getNombre(), p.getMonto(), p.getEstado(),
-                        p.isMontoAMano()))
+                .map(p -> new VistaJuntada.Persona(p.getId(), p.getNombre(), p.getMonto(), p.getMontoPagado(),
+                        p.getRestante(), p.getEstado(), p.isMontoAMano()))
                 .toList();
         return new VistaJuntada(m.getId(), j.getId(), m.getDescripcion(),
                 m.getCategoria() == null ? null : m.getCategoria().getNombre(), m.getFechaHora(), j.getTotalPagado(),

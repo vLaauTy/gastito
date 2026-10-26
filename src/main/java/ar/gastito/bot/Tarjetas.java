@@ -54,6 +54,9 @@ public class Tarjetas {
     static final String JUNTADA_VER = "jv";
     /** Una devolución: de quién es ("jd:devolución:persona"). */
     static final String DEVOLUCION_DE = "jd";
+    /** Pagó menos de lo que debía: queda debiendo la diferencia, o se da por saldado. */
+    static final String DEVOLUCION_QUEDA_DEBIENDO = "jq";
+    static final String DEVOLUCION_SALDADO = "js";
     /** Id de medio de pago que significa "sin medio de pago". */
     static final long SIN_MEDIO = 0;
 
@@ -268,10 +271,12 @@ public class Tarjetas {
         StringBuilder sb = new StringBuilder("👥 <b>Entre " + j.personas() + "</b> (vos " + formato.pesos(j.miParte())
                 + ")");
         for (VistaJuntada.Persona p : j.participantes()) {
+            boolean pagoAlgo = p.pagado().signum() > 0 && p.pagado().compareTo(p.monto()) < 0;
             sb.append("\n• ").append(html(p.nombre())).append(": ").append(formato.pesos(p.monto())).append(' ')
                     .append(switch (p.estado()) {
-                        case PENDIENTE -> "⏳";
-                        case PAGADO -> "✅";
+                        case PENDIENTE -> pagoAlgo ? "⏳ (pagó " + formato.pesos(p.pagado()) + ", debe "
+                                + formato.pesos(p.restante()) + ")" : "⏳";
+                        case PAGADO -> pagoAlgo ? "✅ saldado con " + formato.pesos(p.pagado()) : "✅";
                         case PERDIDO -> "🚫 perdido";
                     });
         }
@@ -449,7 +454,9 @@ public class Tarjetas {
         Teclado.Constructor t = Teclado.constructor();
         List<VistaJuntada.Persona> personas = accion.equals(JUNTADA_NOMBRES) ? j.participantes() : j.pendientes();
         for (VistaJuntada.Persona p : personas) {
-            t.fila(boton(p.nombre() + " · " + formato.pesos(p.monto()), accion, id, p.id()));
+            // Para dar por perdido importa lo que todavía debe; para nombres y partes, su parte.
+            BigDecimal monto = accion.equals(JUNTADA_PERDIDO) ? p.restante() : p.monto();
+            t.fila(boton(p.nombre() + " · " + formato.pesos(monto), accion, id, p.id()));
         }
         t.fila(boton("↩️ Volver", JUNTADA_VER, id));
         return t.build();

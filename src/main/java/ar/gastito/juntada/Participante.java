@@ -40,12 +40,15 @@ public class Participante {
     @Column(name = "monto_a_mano")
     private boolean montoAMano;
 
+    /** Lo que ya me pagó, con una o varias devoluciones. */
+    private BigDecimal montoPagado = BigDecimal.ZERO;
+
     @Enumerated(EnumType.STRING)
     private EstadoParticipante estado;
 
     private LocalDateTime pagadoEn;
 
-    /** La DEVOLUCION con la que pagó. */
+    /** La última DEVOLUCION con la que pagó (o pagó una parte). */
     private Long devolucionId;
 
     /** Si se dio por perdida, el gasto en que se convirtió su parte. */
@@ -67,9 +70,32 @@ public class Participante {
         return limpio.length() > LARGO_MAXIMO_NOMBRE ? limpio.substring(0, LARGO_MAXIMO_NOMBRE) : limpio;
     }
 
-    /** Ya no se recalcula: pagó (lo que pagó es lo que debía) o se dio por perdida, o se cambió a mano. */
+    /**
+     * Ya no se recalcula: pagó (todo o una parte: lo pagado ya es parte de lo que le tocaba), se dio por perdida, o se
+     * cambió a mano.
+     */
     boolean isFija() {
-        return montoAMano || estado != EstadoParticipante.PENDIENTE;
+        return montoAMano || estado != EstadoParticipante.PENDIENTE || montoPagado.signum() > 0;
+    }
+
+    /** Lo que todavía me debe: su parte menos lo que ya pagó (cero si ya no está pendiente). */
+    public BigDecimal getRestante() {
+        return estado == EstadoParticipante.PENDIENTE ? monto.subtract(montoPagado).max(BigDecimal.ZERO)
+                : BigDecimal.ZERO;
+    }
+
+    /**
+     * Me pagó {@code pago} con esta devolución. Si cubre lo que debía, o si se da por saldado (la diferencia no se
+     * reclama), queda pagado; si no, sigue pendiente por la diferencia.
+     */
+    void recibir(BigDecimal pago, Long devolucionId, LocalDateTime cuando, boolean saldado) {
+        verificarPendiente();
+        this.montoPagado = montoPagado.add(pago);
+        this.devolucionId = devolucionId;
+        if (saldado || montoPagado.compareTo(monto) >= 0) {
+            this.estado = EstadoParticipante.PAGADO;
+            this.pagadoEn = cuando;
+        }
     }
 
     void renombrar(String nuevo) {
@@ -83,13 +109,6 @@ public class Participante {
 
     void repartido(BigDecimal nuevo) {
         this.monto = nuevo;
-    }
-
-    void pagado(Long devolucionId, LocalDateTime cuando) {
-        verificarPendiente();
-        this.estado = EstadoParticipante.PAGADO;
-        this.devolucionId = devolucionId;
-        this.pagadoEn = cuando;
     }
 
     void perdido(Long gastoId) {
@@ -122,6 +141,10 @@ public class Participante {
 
     public BigDecimal getMonto() {
         return monto;
+    }
+
+    public BigDecimal getMontoPagado() {
+        return montoPagado;
     }
 
     public boolean isMontoAMano() {

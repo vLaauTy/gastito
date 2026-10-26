@@ -16,7 +16,13 @@ public record VistaJuntada(Long movimientoId, Long juntadaId, String descripcion
         LocalDateTime fechaHora, BigDecimal totalPagado, BigDecimal miParte, BigDecimal aCobrar, int personas,
         String billetera, boolean guardada, List<Persona> participantes) {
 
-    public record Persona(Long id, String nombre, BigDecimal monto, EstadoParticipante estado, boolean montoAMano) {
+    /**
+     * @param monto    su parte
+     * @param pagado   lo que ya me pagó (puede ser menos que su parte si quedó debiendo, o si se dio por saldado)
+     * @param restante lo que todavía me debe (cero si ya no está pendiente)
+     */
+    public record Persona(Long id, String nombre, BigDecimal monto, BigDecimal pagado, BigDecimal restante,
+            EstadoParticipante estado, boolean montoAMano) {
     }
 
     public List<Persona> pendientes() {

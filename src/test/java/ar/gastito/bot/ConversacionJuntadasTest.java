@@ -47,16 +47,19 @@ class ConversacionJuntadasTest {
     private VistaJuntada asado(boolean guardada) {
         return new VistaJuntada(ID, 9L, "Asado", "Salidas", AHORA, new BigDecimal("48000.00"),
                 new BigDecimal("8000.00"), new BigDecimal("32000.00"), 6, "Mercado Pago", guardada, List.of(
-                        new VistaJuntada.Persona(MARTIN, "Martín", new BigDecimal("8000.00"),
-                                EstadoParticipante.PENDIENTE, false),
-                        new VistaJuntada.Persona(2L, "Sofi", new BigDecimal("8000.00"), EstadoParticipante.PENDIENTE,
-                                false),
-                        new VistaJuntada.Persona(PABLO, "Pablo", new BigDecimal("8000.00"), EstadoParticipante.PAGADO,
-                                false),
-                        new VistaJuntada.Persona(4L, "Persona 5", new BigDecimal("8000.00"),
-                                EstadoParticipante.PENDIENTE, false),
-                        new VistaJuntada.Persona(5L, "Persona 6", new BigDecimal("8000.00"),
-                                EstadoParticipante.PERDIDO, false)));
+                        persona(MARTIN, "Martín", "0", EstadoParticipante.PENDIENTE),
+                        persona(2L, "Sofi", "0", EstadoParticipante.PENDIENTE),
+                        persona(PABLO, "Pablo", "8000", EstadoParticipante.PAGADO),
+                        persona(4L, "Persona 5", "0", EstadoParticipante.PENDIENTE),
+                        persona(5L, "Persona 6", "0", EstadoParticipante.PERDIDO)));
+    }
+
+    /** Alguien con una parte de $8.000, lo que ya pagó y su estado. */
+    private static VistaJuntada.Persona persona(long id, String nombre, String pagado, EstadoParticipante estado) {
+        BigDecimal parte = new BigDecimal("8000.00");
+        BigDecimal ya = new BigDecimal(pagado);
+        BigDecimal debe = estado == EstadoParticipante.PENDIENTE ? parte.subtract(ya) : BigDecimal.ZERO;
+        return new VistaJuntada.Persona(id, nombre, parte, ya, debe, estado, false);
     }
 
     private Movimiento pendiente;
@@ -200,8 +203,9 @@ class ConversacionJuntadasTest {
         Movimiento devolucion = mock(Movimiento.class);
         when(devolucion.getMonto()).thenReturn(new BigDecimal("8000.00"));
         when(devolucion.getDescripcion()).thenReturn("Martín, de Asado");
-        when(servicio.cobrar(ID, MARTIN)).thenReturn(new JuntadaService.Cobro(devolucion, asado(true),
-                new BigDecimal("8000.00")));
+        when(servicio.faltante(ID, MARTIN)).thenReturn(BigDecimal.ZERO);
+        when(servicio.cobrar(ID, MARTIN, false)).thenReturn(new JuntadaService.Cobro(devolucion, asado(true),
+                new BigDecimal("8000.00"), BigDecimal.ZERO));
 
         Accion.Editar editar = (Accion.Editar) conversacion.boton(CHAT, TARJETA, Tarjetas.DEVOLUCION_DE, ID, MARTIN)
                 .get(0);
@@ -212,5 +216,87 @@ class ConversacionJuntadasTest {
                 📥 De Asado te falta cobrar <b>$32.000</b>.
 
                 <i>Es una devolución: no cuenta como ingreso.</i>""");
+    }
+
+    // --- Pago de otro monto ---
+
+    private Movimiento devolucionDe(String monto, String descripcion) {
+        Movimiento devolucion = mock(Movimiento.class);
+        when(devolucion.getMonto()).thenReturn(new BigDecimal(monto));
+        when(devolucion.getDescripcion()).thenReturn(descripcion);
+        return devolucion;
+    }
+
+    @Test
+    void siPagaMenosPreguntaSiQuedaDebiendoOSiEstaSaldado() {
+        when(servicio.faltante(ID, MARTIN)).thenReturn(new BigDecimal("2000.00"));
+        Movimiento devolucion = devolucionDe("6000.00", "Devolución");
+        when(movimientos.buscar(ID)).thenReturn(devolucion);
+
+        Accion.Editar pregunta = (Accion.Editar) conversacion.boton(CHAT, TARJETA, Tarjetas.DEVOLUCION_DE, ID, MARTIN)
+                .get(0);
+
+        assertThat(pregunta.html()).isEqualTo("↩️ Te pasaron <b>$6.000</b>, pero te debía $8.000.\n\n¿Cómo queda?");
+        assertThat(pregunta.teclado().botones()).extracting(Teclado.Boton::texto)
+                .containsExactly("⏳ Queda debiendo $2.000", "✅ Está saldado", "❌ Cancelar");
+        assertThat(datos(pregunta.teclado())).containsExactly("jq:15:1", "js:15:1", "c:15");
+        verify(servicio, never()).cobrar(any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void quedaDebiendoLaDiferencia() {
+        Movimiento devolucion = devolucionDe("6000.00", "Martín, de Asado");
+        when(servicio.cobrar(ID, MARTIN, false)).thenReturn(new JuntadaService.Cobro(
+                devolucion, asado(true), new BigDecimal("8000.00"),
+                new BigDecimal("2000.00")));
+
+        Accion.Editar editar = (Accion.Editar) conversacion.boton(CHAT, TARJETA, Tarjetas.DEVOLUCION_QUEDA_DEBIENDO,
+                ID, MARTIN).get(0);
+
+        assertThat(editar.html()).startsWith("✅ <b>Cobrado</b>\nMartín, de Asado: $6.000\n"
+                + "⏳ Te sigue debiendo <b>$2.000</b>.");
+    }
+
+    @Test
+    void estaSaldadoYLaDiferenciaNoSeReclama() {
+        Movimiento devolucion = devolucionDe("6000.00", "Martín, de Asado");
+        when(servicio.cobrar(ID, MARTIN, true)).thenReturn(new JuntadaService.Cobro(
+                devolucion, asado(true), new BigDecimal("8000.00"),
+                BigDecimal.ZERO));
+
+        Accion.Editar editar = (Accion.Editar) conversacion.boton(CHAT, TARJETA, Tarjetas.DEVOLUCION_SALDADO, ID,
+                MARTIN).get(0);
+
+        assertThat(editar.html()).startsWith("✅ <b>Cobrado</b>\nMartín, de Asado: $6.000\n"
+                + "✅ Saldado: los $2.000 que faltaban no se reclaman.");
+    }
+
+    @Test
+    void siPagaDeMasSeGuardaConElAvisoDeLaDiferencia() {
+        when(servicio.faltante(ID, MARTIN)).thenReturn(BigDecimal.ZERO);
+        Movimiento devolucion = devolucionDe("9000.00", "Martín, de Asado");
+        when(servicio.cobrar(ID, MARTIN, false)).thenReturn(new JuntadaService.Cobro(
+                devolucion, asado(true), new BigDecimal("8000.00"),
+                BigDecimal.ZERO));
+
+        Accion.Editar editar = (Accion.Editar) conversacion.boton(CHAT, TARJETA, Tarjetas.DEVOLUCION_DE, ID, MARTIN)
+                .get(0);
+
+        assertThat(editar.html()).startsWith("✅ <b>Cobrado</b>\nMartín, de Asado: $9.000 (te debía $8.000: te pasó "
+                + "$1.000 de más)");
+    }
+
+    @Test
+    void quienPagoUnaParteMuestraCuantoPagoYCuantoDebe() {
+        VistaJuntada j = asado(true);
+        VistaJuntada conParcial = new VistaJuntada(j.movimientoId(), j.juntadaId(), j.descripcion(), j.categoria(),
+                j.fechaHora(), j.totalPagado(), j.miParte(), j.aCobrar(), j.personas(), j.billetera(), true, List.of(
+                        persona(MARTIN, "Martín", "6000", EstadoParticipante.PENDIENTE),
+                        persona(2L, "Sofi", "6000", EstadoParticipante.PAGADO)));
+
+        assertThat(tarjetas.personas(conParcial))
+                .contains("• Martín: $8.000 ⏳ (pagó $6.000, debe $2.000)")
+                .contains("• Sofi: $8.000 ✅ saldado con $6.000");
+        assertThat(conversacion.mensajeParaElGrupo(conParcial)).contains("• Martín: $2.000");
     }
 }

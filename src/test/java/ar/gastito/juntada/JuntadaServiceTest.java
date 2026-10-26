@@ -211,6 +211,97 @@ class JuntadaServiceTest {
         assertThat(juntadas.deudores("Juan", null, null)).hasSize(7);
     }
 
+    // --- Pago de otro monto ---
+
+    private Movimiento devolucion(String monto) {
+        return juntadas.devolucionPendiente(new BigDecimal(monto), null, null, AHORA, Origen.TEXTO, "me pasó");
+    }
+
+    @Test
+    void siPagaMenosYQuedaDebiendoSiguePendientePorLaDiferencia() {
+        VistaJuntada v = guardada(asado("48000", 6, "Martín"));
+        Long martin = v.participantes().get(0).id();
+        Movimiento primera = devolucion("6000");
+        assertThat(juntadas.faltante(primera.getId(), martin)).isEqualByComparingTo("2000");
+
+        JuntadaService.Cobro cobro = juntadas.cobrar(primera.getId(), martin, false);
+
+        assertThat(cobro.debia()).isEqualByComparingTo("8000");
+        assertThat(cobro.sigueDebiendo()).isEqualByComparingTo("2000");
+        VistaJuntada.Persona p = cobro.juntada().participantes().get(0);
+        assertThat(p.estado()).isEqualTo(EstadoParticipante.PENDIENTE);
+        assertThat(p.pagado()).isEqualByComparingTo("6000");
+        assertThat(p.restante()).isEqualByComparingTo("2000");
+        assertThat(cobro.juntada().aCobrar()).isEqualByComparingTo("34000");
+        // A quién imputar la próxima devolución: lo que le falta, $2.000.
+        assertThat(juntadas.deudores("Martín", null, new BigDecimal("2000"))).singleElement()
+                .satisfies(d -> assertThat(d.monto()).isEqualByComparingTo("2000"));
+
+        // Con los $2.000 que faltaban, queda pagado.
+        Movimiento segunda = devolucion("2000");
+        assertThat(juntadas.faltante(segunda.getId(), martin)).isZero();
+        JuntadaService.Cobro resto = juntadas.cobrar(segunda.getId(), martin);
+        assertThat(resto.juntada().participantes().get(0).estado()).isEqualTo(EstadoParticipante.PAGADO);
+        assertThat(resto.juntada().aCobrar()).isEqualByComparingTo("32000");
+        assertThat(repositorio.totalIngresos(ASADO.toLocalDate().atStartOfDay(), AHORA.plusHours(1))).isZero();
+    }
+
+    @Test
+    void siPagaMenosYEstaSaldadoQuedaPagadoYLaDiferenciaNoSeReclama() {
+        VistaJuntada v = guardada(asado("48000", 6, "Martín"));
+        Long martin = v.participantes().get(0).id();
+
+        JuntadaService.Cobro cobro = juntadas.cobrar(devolucion("6000").getId(), martin, true);
+
+        VistaJuntada.Persona p = cobro.juntada().participantes().get(0);
+        assertThat(p.estado()).isEqualTo(EstadoParticipante.PAGADO);
+        assertThat(p.pagado()).isEqualByComparingTo("6000");
+        assertThat(cobro.sigueDebiendo()).isZero();
+        assertThat(cobro.juntada().aCobrar()).isEqualByComparingTo("32000");
+    }
+
+    @Test
+    void siPagaDeMasQuedaPagado() {
+        VistaJuntada v = guardada(asado("48000", 6, "Martín"));
+        Long martin = v.participantes().get(0).id();
+        Movimiento devolucion = devolucion("9000");
+
+        assertThat(juntadas.faltante(devolucion.getId(), martin)).isZero();
+        JuntadaService.Cobro cobro = juntadas.cobrar(devolucion.getId(), martin);
+
+        assertThat(cobro.debia()).isEqualByComparingTo("8000");
+        assertThat(cobro.juntada().participantes().get(0).estado()).isEqualTo(EstadoParticipante.PAGADO);
+        assertThat(repositorio.findById(devolucion.getId()).orElseThrow().getMonto()).isEqualByComparingTo("9000");
+    }
+
+    @Test
+    void quienPagoUnaParteYNoPagaMasSoloPierdeLoQueFaltaba() {
+        VistaJuntada v = guardada(asado("48000", 6, "Martín"));
+        Long martin = v.participantes().get(0).id();
+        juntadas.cobrar(devolucion("6000").getId(), martin, false);
+
+        juntadas.darPorPerdido(martin);
+
+        Long gastoId = juntadaDe(v).getParticipantes().get(0).getGastoPerdidoId();
+        assertThat(repositorio.findById(gastoId).orElseThrow().getMonto()).isEqualByComparingTo("2000");
+        // Mi parte (8.000) más lo que no pagó Martín (2.000).
+        assertThat(repositorio.totalGastos(ASADO.toLocalDate().atStartOfDay(), AHORA)).isEqualByComparingTo("10000");
+    }
+
+    @Test
+    void quienYaPagoUnaParteQuedaFijoAlRepartir() {
+        VistaJuntada v = guardada(asado("48000", 6, "Martín"));
+        Long martin = v.participantes().get(0).id();
+        juntadas.cobrar(devolucion("6000").getId(), martin, false);
+
+        // Otro total: la parte de Martín (8.000) no se toca, porque ya pagó una parte.
+        VistaJuntada otroTotal = juntadas.cambiarTotal(v.movimientoId(), new BigDecimal("58000"));
+        assertThat(otroTotal.participantes().get(0).monto()).isEqualByComparingTo("8000");
+        // Y su parte no puede bajar de lo que ya pagó.
+        assertThatThrownBy(() -> juntadas.cambiarParte(martin, new BigDecimal("5000")))
+                .hasMessageContaining("ya te pagó más que eso");
+    }
+
     private Juntada juntadaDe(VistaJuntada v) {
         return juntadasRepo.findByMovimientoId(v.movimientoId()).orElseThrow();
     }

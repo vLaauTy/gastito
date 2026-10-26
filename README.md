@@ -328,14 +328,18 @@ partes de los demás van redondeadas a peso, para abajo, y la diferencia del red
   para que el total siga cerrando. Cambiar el monto de la tarjeta cambia el total y reparte de nuevo.
 - **Cobrar:** "Pablo me pasó 8000" o "me devolvieron 8000 del asado". Se guarda como `DEVOLUCION` (no es ingreso)
   y Pablo queda pagado. Se busca por el nombre, por la juntada y por el monto; si queda más de una posible,
-  pregunta con botones.
+  pregunta con botones. Si paga **menos** de lo que debe, pregunta: **Queda debiendo $X** (sigue pendiente por la
+  diferencia, y la próxima devolución se compara con eso) o **Está saldado** (queda pagado y la diferencia no se
+  reclama). Si paga **de más**, se guarda con el aviso de la diferencia. Si no hay juntadas con plata a cobrar,
+  por ahora avisa y no guarda nada.
 - **💬 Armar mensaje** da un texto listo para copiar y mandar al grupo, con quién debe cuánto. El bot no les
   escribe a otras personas.
 - **🚫 Dar por perdido:** esa parte pasa a ser gasto tuyo, con la categoría, la billetera y la fecha de la juntada.
 - `/juntadas` muestra las que tienen plata a cobrar, cada una con sus botones.
 
 Los datos están en `juntada` (el gasto, el total, las personas y desde dónde se pagó) y `juntada_participante`
-(nombre, monto, si se cambió a mano, estado pendiente/pagado/perdido, fecha de pago, la devolución y el gasto de
+(nombre, monto, lo que ya pagó, si se cambió a mano, estado pendiente/pagado/perdido, fecha de pago, la última
+devolución y el gasto de
 una parte perdida).
 
 ### Ingresos

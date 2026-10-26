@@ -103,6 +103,9 @@ public class Juntada {
         if (monto == null || monto.signum() < 0) {
             throw new JuntadaInvalidaException("La parte de alguien no puede ser negativa");
         }
+        if (monto.compareTo(participante.getMontoPagado()) < 0) {
+            throw new JuntadaInvalidaException(participante.getNombre() + " ya te pagó más que eso");
+        }
         List<DivisionJuntada.Parte> partes = new ArrayList<>();
         for (Participante p : participantes) {
             partes.add(p == participante ? new DivisionJuntada.Parte(monto, true)
@@ -127,10 +130,9 @@ public class Juntada {
         movimiento.ajustarParteDeJuntada(reparto.miParte());
     }
 
-    /** Lo que todavía me deben (sin lo pagado ni lo perdido). */
+    /** Lo que todavía me deben: lo que le falta a cada uno (sin lo pagado, lo saldado ni lo perdido). */
     public BigDecimal aCobrar() {
-        return participantes.stream().filter(p -> p.getEstado() == EstadoParticipante.PENDIENTE)
-                .map(Participante::getMonto).reduce(BigDecimal.ZERO, BigDecimal::add);
+        return participantes.stream().map(Participante::getRestante).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     public Participante participante(Long participanteId) {

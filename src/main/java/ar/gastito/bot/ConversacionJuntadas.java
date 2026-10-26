@@ -96,7 +96,9 @@ public class ConversacionJuntadas {
                 case Tarjetas.JUNTADA_NOMBRES, Tarjetas.JUNTADA_PARTE, Tarjetas.JUNTADA_PERDIDO ->
                         elegido == null ? List.of(elegir(mensajeId, accion, id))
                                 : elegida(chatId, mensajeId, accion, id, elegido);
-                case Tarjetas.DEVOLUCION_DE -> cobrar(mensajeId, id, requerido(elegido));
+                case Tarjetas.DEVOLUCION_DE -> devolucionElegida(mensajeId, id, requerido(elegido));
+                case Tarjetas.DEVOLUCION_QUEDA_DEBIENDO -> cobrar(mensajeId, id, requerido(elegido), false);
+                case Tarjetas.DEVOLUCION_SALDADO -> cobrar(mensajeId, id, requerido(elegido), true);
                 default -> List.of(new Accion.Avisar("Botón inválido"));
             };
         } catch (JuntadaInvalidaException e) {
@@ -203,8 +205,9 @@ public class ConversacionJuntadas {
                 + ": fueron " + formato.pesos(j.totalPagado()) + " entre " + j.personas());
         sb.append(j.partesIguales() && !j.participantes().isEmpty()
                 ? ", " + formato.pesos(j.participantes().get(0).monto()) + " cada uno.\n" : ".\n");
+        // Lo que le falta a cada uno: si alguien ya pagó una parte, solo la diferencia.
         for (VistaJuntada.Persona p : j.pendientes()) {
-            sb.append("\n• ").append(p.nombre()).append(": ").append(formato.pesos(p.monto()));
+            sb.append("\n• ").append(p.nombre()).append(": ").append(formato.pesos(p.restante()));
         }
         sb.append("\n\n").append(j.billetera() == null ? "Me lo pueden pasar cuando puedan."
                 : "Me lo pueden pasar a " + j.billetera() + ".").append(" ¡Gracias!");
@@ -253,14 +256,43 @@ public class ConversacionJuntadas {
                 + DIA.format(d.juntada().fechaHora()) + " (te debía " + formato.pesos(d.monto()) + ")";
     }
 
-    private List<Accion> cobrar(int mensajeId, long devolucionId, long participanteId) {
-        JuntadaService.Cobro cobro = juntadas.cobrar(devolucionId, participanteId);
+    /**
+     * Se eligió de quién es la devolución. Si paga lo que debía, o más, se guarda; si paga menos, se pregunta si queda
+     * debiendo la diferencia o si está saldado.
+     */
+    private List<Accion> devolucionElegida(int mensajeId, long devolucionId, long participanteId) {
+        BigDecimal faltante = juntadas.faltante(devolucionId, participanteId);
+        if (faltante.signum() == 0) {
+            return cobrar(mensajeId, devolucionId, participanteId, false);
+        }
+        Movimiento devolucion = movimientos.buscar(devolucionId);
+        String datos = ":" + devolucionId + ":" + participanteId;
+        return List.of(new Accion.Editar(mensajeId, "↩️ Te pasaron <b>" + formato.pesos(devolucion.getMonto())
+                + "</b>, pero te debía " + formato.pesos(devolucion.getMonto().add(faltante)) + ".\n\n¿Cómo queda?",
+                Teclado.constructor()
+                        .fila(new Teclado.Boton("⏳ Queda debiendo " + formato.pesos(faltante),
+                                Tarjetas.DEVOLUCION_QUEDA_DEBIENDO + datos))
+                        .fila(new Teclado.Boton("✅ Está saldado", Tarjetas.DEVOLUCION_SALDADO + datos))
+                        .fila(new Teclado.Boton("❌ Cancelar", Tarjetas.CANCELAR + ":" + devolucionId))
+                        .build()));
+    }
+
+    /** @param saldado si pagó menos, la diferencia no se reclama */
+    private List<Accion> cobrar(int mensajeId, long devolucionId, long participanteId, boolean saldado) {
+        JuntadaService.Cobro cobro = juntadas.cobrar(devolucionId, participanteId, saldado);
         VistaJuntada j = cobro.juntada();
         BigDecimal pago = cobro.devolucion().getMonto();
         StringBuilder html = new StringBuilder("✅ <b>Cobrado</b>\n" + html(cobro.devolucion().getDescripcion())
                 + ": " + formato.pesos(pago));
-        if (pago.compareTo(cobro.debia()) != 0) {
-            html.append(" (te debía ").append(formato.pesos(cobro.debia())).append(')');
+        int comparacion = pago.compareTo(cobro.debia());
+        if (comparacion > 0) {
+            html.append(" (te debía ").append(formato.pesos(cobro.debia())).append(": te pasó ")
+                    .append(formato.pesos(pago.subtract(cobro.debia()))).append(" de más)");
+        } else if (cobro.sigueDebiendo().signum() > 0) {
+            html.append("\n⏳ Te sigue debiendo <b>").append(formato.pesos(cobro.sigueDebiendo())).append("</b>.");
+        } else if (comparacion < 0) {
+            html.append("\n✅ Saldado: los ").append(formato.pesos(cobro.debia().subtract(pago)))
+                    .append(" que faltaban no se reclaman.");
         }
         html.append(j.aCobrar().signum() > 0
                 ? "\n📥 De " + html(j.descripcion()) + " te falta cobrar <b>" + formato.pesos(j.aCobrar()) + "</b>."
