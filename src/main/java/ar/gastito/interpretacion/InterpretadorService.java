@@ -64,9 +64,18 @@ public class InterpretadorService {
      * El movimiento puede venir sin monto o sin categoría elegida (con candidatas): se completa en la tarjeta.
      *
      * @param usoIaId registro en uso_ia, o null si se resolvió sin IA
+     * @param juntada si pagó por un grupo (el monto es el total), o null
      */
-    public record Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId)
-            implements Resultado {
+    public record Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId,
+            PedidoJuntada juntada) implements Resultado {
+
+        public Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId) {
+            this(movimiento, confianza, usoIaId, null);
+        }
+    }
+
+    /** "Pablo me pasó 8000": una devolución de una juntada. Lo que dijo, ya controlado. */
+    public record Devolucion(ValidadorInterpretacion.Devolucion datos, Long usoIaId) implements Resultado {
     }
 
     public record NoEsGasto() implements Resultado {
@@ -140,6 +149,7 @@ public class InterpretadorService {
             case ValidadorInterpretacion.Pregunta p -> new Pregunta(texto, respuesta.usoIaId());
             case ValidadorInterpretacion.Dudosa d ->
                     new Dudoso(conHistorial(d.comoGasto(), catalogo, respuesta.usoIaId()));
+            case ValidadorInterpretacion.Devolucion d -> new Devolucion(d, respuesta.usoIaId());
         };
     }
 
@@ -148,8 +158,8 @@ public class InterpretadorService {
         Optional<HistorialCategorias.Aprendido> aprendido = historial.buscar(v.movimiento().descripcion(), catalogo);
         return aprendido.isPresent()
                 ? new Interpretado(v.movimiento().conCategoriaElegida(aprendido.get().categoria()), Confianza.ALTA,
-                        usoIaId)
-                : new Interpretado(v.movimiento(), v.confianza(), usoIaId);
+                        usoIaId, v.juntada())
+                : new Interpretado(v.movimiento(), v.confianza(), usoIaId, v.juntada());
     }
 
     private static Cuenta cuenta(MedioPago medio, Cuenta cuenta) {

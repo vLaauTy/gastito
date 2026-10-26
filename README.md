@@ -309,6 +309,35 @@ Gastito (cobros de fijos, cuotas) no se compara al crearse.
 La detección (`RepetidosService`, sobre una `Huella`: fecha, monto, categoría y comercio) está pensada para usarse
 también con los avisos del banco y el resumen de la tarjeta de la etapa 7.
 
+### Juntadas
+
+```
+pagué 48000 el asado, éramos 6, con mercado pago
+la pizza con Martín, Sofi y Pablo, 30000
+```
+
+La IA detecta la juntada y extrae el total y cuántas personas eran (o los nombres de los demás). Divide Java: las
+partes de los demás van redondeadas a peso, para abajo, y la diferencia del redondeo queda en la tuya.
+
+- **En tus gastos cuenta solo tu parte** ($8.000), con la marca `juntada`. El resto ($40.000) queda **a cobrar**,
+  anotado en la juntada junto con la cuenta o tarjeta desde donde salió el total. "Por billetera" muestra tu parte;
+  para cruzarla con un aviso o con el resumen de la tarjeta se usa el total (`juntada.total_pagado`).
+- La tarjeta dice **Pagaste / Tu gasto real / A cobrar** y la lista de personas. Sin nombres, quedan como
+  "Persona 2…6", y con **👥 Nombres** se renombran.
+- **💲 La parte de alguien** ("Martín no comió carne, puso 5000"): las demás partes que no se tocaron se acomodan
+  para que el total siga cerrando. Cambiar el monto de la tarjeta cambia el total y reparte de nuevo.
+- **Cobrar:** "Pablo me pasó 8000" o "me devolvieron 8000 del asado". Se guarda como `DEVOLUCION` (no es ingreso)
+  y Pablo queda pagado. Se busca por el nombre, por la juntada y por el monto; si queda más de una posible,
+  pregunta con botones.
+- **💬 Armar mensaje** da un texto listo para copiar y mandar al grupo, con quién debe cuánto. El bot no les
+  escribe a otras personas.
+- **🚫 Dar por perdido:** esa parte pasa a ser gasto tuyo, con la categoría, la billetera y la fecha de la juntada.
+- `/juntadas` muestra las que tienen plata a cobrar, cada una con sus botones.
+
+Los datos están en `juntada` (el gasto, el total, las personas y desde dónde se pagó) y `juntada_participante`
+(nombre, monto, si se cambió a mano, estado pendiente/pagado/perdido, fecha de pago, la devolución y el gasto de
+una parte perdida).
+
 ### Ingresos
 
 Tres comandos, uno por tipo. El aguinaldo va aparte del sueldo para que no infle la comparación entre meses;
@@ -395,6 +424,7 @@ Abajo del chat queda un menú fijo con estos comandos, que también están en el
 | 📅 Mes         | `/mes`       | Total del mes y barras por categoría             |
 | 💸 Costos IA   | `/costos`    | Lo gastado en IA este mes, en dólares            |
 |                | `/resumen`   | La semana hasta hoy; `/resumen mes`, el mes      |
+|                | `/juntadas`  | Quién te debe plata de las juntadas              |
 | 🖥 Dashboard   | `/dashboard` | El link del dashboard (se abre desde la PC)      |
 | ❓ Ayuda       | `/ayuda`     | Cómo cargar gastos e ingresos                    |
 |                | `/sueldo`, `/aguinaldo`, `/ingreso` | Cargar un ingreso                 |
@@ -576,6 +606,7 @@ ar.gastito
 ├── ticket           Fotos de tickets: achicar la imagen, leerla con Haiku, validar y guardar la foto
 ├── resumen          Resúmenes semanales y mensuales: cálculo, redacción con Haiku y registro de envíos
 ├── consulta         Preguntas en lenguaje natural: herramientas con SQL y conversación con tool use
+├── juntada          Juntadas: el reparto (en Java), lo que me deben, devoluciones y partes perdidas
 ├── catalogo         Categorías, medios de pago, cuentas, tarjeta de crédito y alias de comercios
 ├── movimiento       Gastos e ingresos, su ciclo pendiente → confirmado y los totales
 ├── dashboard        API REST del dashboard, sus cálculos y el acceso (127.0.0.1 o token)

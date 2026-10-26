@@ -44,8 +44,29 @@ public class ValidadorInterpretacion {
     public sealed interface Resultado {
     }
 
-    /** El movimiento puede venir sin monto o sin categoría elegida: se completa en la tarjeta. */
-    public record Valida(MovimientoInterpretado movimiento, Confianza confianza) implements Resultado {
+    /**
+     * El movimiento puede venir sin monto o sin categoría elegida: se completa en la tarjeta.
+     *
+     * @param juntada si pagó por un grupo (el monto es el total), o null
+     */
+    public record Valida(MovimientoInterpretado movimiento, Confianza confianza, PedidoJuntada juntada)
+            implements Resultado {
+
+        public Valida(MovimientoInterpretado movimiento, Confianza confianza) {
+            this(movimiento, confianza, null);
+        }
+    }
+
+    /**
+     * Alguien me devolvió plata ("Pablo me pasó 8000"): una DEVOLUCION, no un ingreso.
+     *
+     * @param monto   null si no se dijo cuánto
+     * @param persona quién, o null
+     * @param de      de qué juntada ("el asado"), o null
+     * @param cuenta  dónde entró, o null
+     */
+    public record Devolucion(BigDecimal monto, String persona, String de, Cuenta cuenta, MedioPago medio,
+            LocalDateTime fechaHora) implements Resultado {
     }
 
     public record NoEsGasto() implements Resultado {
@@ -66,7 +87,15 @@ public class ValidadorInterpretacion {
             case PREGUNTA -> new Pregunta();
             case GASTO -> comoGasto(ia, catalogo, ahora);
             case DUDOSO -> new Dudosa(comoGasto(ia, catalogo, ahora));
+            case DEVOLUCION -> new Devolucion(monto(ia.monto()).orElse(null), texto(ia.devolucionPersona()),
+                    texto(ia.devolucionDe()), buscar(ia.cuenta(), catalogo.cuentas()).orElse(null),
+                    buscar(ia.medioPago(), catalogo.mediosPago()).orElse(null),
+                    fechas.resolver(ia.fecha(), ia.hora(), ahora));
         };
+    }
+
+    private static String texto(String valor) {
+        return valor == null || valor.isBlank() ? null : valor.strip();
     }
 
     private Valida comoGasto(InterpretacionIa ia, Catalogo catalogo, LocalDateTime ahora) {
@@ -89,7 +118,7 @@ public class ValidadorInterpretacion {
                 ? MovimientoInterpretado.conCategoria(monto, descripcion, candidatas.get(0), medio, cuenta, tarjeta,
                         fechaHora)
                 : new MovimientoInterpretado(monto, descripcion, null, candidatas, medio, cuenta, tarjeta, fechaHora);
-        return new Valida(movimiento, confianza);
+        return new Valida(movimiento, confianza, PedidoJuntada.de(ia.juntadaPersonas(), ia.juntadaNombres()));
     }
 
     /**

@@ -11,6 +11,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
  */
 public record InterpretacionIa(
         @JsonPropertyDescription("GASTO si el mensaje carga un gasto; PREGUNTA si pregunta por sus gastos o ingresos; "
+                + "DEVOLUCION si alguien le devolvió plata (su parte de una juntada); "
                 + "OTRO si es un saludo, una prueba u otra cosa; DUDOSO si podría ser un gasto o una pregunta")
         String intencion,
 
@@ -40,5 +41,23 @@ public record InterpretacionIa(
         String fecha,
 
         @JsonPropertyDescription("Hora en formato HH:mm si el mensaje la menciona; si no, vacío")
-        String hora) {
+        String hora,
+        @JsonPropertyDescription("Si pagó por un grupo (una juntada: 'éramos 6', 'con Martín, Sofi y Pablo'): cuántas "
+                + "personas eran en total, contándolo a él, solo dígitos. Vacío si no es una juntada.")
+        String juntadaPersonas,
+        @JsonPropertyDescription("En una juntada, los nombres de los demás si los dice ('Martín', 'Sofi'). Vacío si no "
+                + "dice nombres o no es una juntada.")
+        List<String> juntadaNombres,
+        @JsonPropertyDescription("Si intencion es DEVOLUCION: quién le pasó la plata ('Pablo'), o vacío si no lo dice")
+        String devolucionPersona,
+        @JsonPropertyDescription("Si intencion es DEVOLUCION: de qué gasto era la plata, como lo dice ('el asado'), o "
+                + "vacío")
+        String devolucionDe) {
+
+    /** Sin los datos de juntadas ni devoluciones. */
+    public InterpretacionIa(String intencion, String monto, String descripcion, List<String> categorias,
+            String confianza, String medioPago, String cuenta, String fecha, String hora) {
+        this(intencion, monto, descripcion, categorias, confianza, medioPago, cuenta, fecha, hora, "", List.of(), "",
+                "");
+    }
 }

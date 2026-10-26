@@ -89,6 +89,9 @@ public class ProcesadorMensajes {
             /ingreso 25000 arreglo de PC a mercado pago (cualquier otro ingreso: una venta, un regalo…)
             Si no decís la cuenta, uso la del último ingreso de ese tipo. Te muestro la tarjeta y lo guardás con un toque.
 
+            <b>Juntadas</b>
+            "pagué 48000 el asado, éramos 6, con mercado pago": en tus gastos cuenta solo tu parte y el resto queda a cobrar. Cuando alguien te paga, decímelo: "Pablo me pasó 8000". Con /juntadas ves quién te debe.
+
             <b>Preguntas</b>
             Preguntame por escrito o por audio: "¿cuánto gasté en kiosco este mes?", "compará octubre con septiembre", "¿cuántas Seven Up compré?", "¿cuánto me queda disponible?". Los números los calculo con tu base, no los inventa la IA.
 
@@ -99,6 +102,7 @@ public class ProcesadorMensajes {
             /hoy – gastos de hoy y el total
             /mes – total del mes por categoría
             /resumen – tu semana hasta hoy, con lo que noté; /resumen mes, el mes
+            /juntadas – quién te debe plata de las juntadas
             /costos – lo gastado en IA este mes
             /dashboard – el link del dashboard, para ver tus gastos con gráficos
             /ayuda – este mensaje""";
@@ -116,6 +120,7 @@ public class ProcesadorMensajes {
     private final TicketService tickets;
     private final ResumenService resumenes;
     private final ConversacionRepetidos repetidos;
+    private final ConversacionJuntadas juntadas;
     private final FormatoResumen formatoResumen;
     private final ConsultaService consultas;
     private final FormatoConsulta formatoConsulta;
@@ -172,9 +177,10 @@ public class ProcesadorMensajes {
             FormatoMensajes formato, GraficoMes grafico, ComandosIngreso comandosIngreso,
             TranscripcionService transcripciones, TicketService tickets, ResumenService resumenes,
             FormatoResumen formatoResumen, ConsultaService consultas, FormatoConsulta formatoConsulta,
-            ConversacionRepetidos repetidos, GastitoProperties properties, DashboardProperties dashboard,
-            Clock clock) {
+            ConversacionRepetidos repetidos, ConversacionJuntadas juntadas, GastitoProperties properties,
+            DashboardProperties dashboard, Clock clock) {
         this.repetidos = repetidos;
+        this.juntadas = juntadas;
         this.consultas = consultas;
         this.formatoConsulta = formatoConsulta;
         this.tickets = tickets;
@@ -205,6 +211,14 @@ public class ProcesadorMensajes {
         String comando = comando(limpio);
         List<Accion> acciones = new ArrayList<>();
 
+        // La juntada esperaba un nombre o la parte de alguien.
+        if (juntadas.esperando(chatId)) {
+            if (comando == null) {
+                return juntadas.texto(chatId, limpio);
+            }
+            juntadas.olvidar(chatId);
+        }
+
         Espera espera = esperas.remove(chatId);
         if (espera != null) {
             if (comando == null) {
@@ -219,6 +233,8 @@ public class ProcesadorMensajes {
 
         if ("/resumen".equals(comando)) {
             acciones.add(resumen(limpio));
+        } else if ("/juntadas".equals(comando)) {
+            acciones.addAll(juntadas.abiertas());
         } else if (comando != null) {
             ClaseIngreso clase = ComandosIngreso.clase(comando);
             acciones.add(clase != null ? comandosIngreso.responder(clase, limpio) : responderComando(comando));
@@ -421,6 +437,8 @@ public class ProcesadorMensajes {
                                         new Teclado.Boton("❓ Es una pregunta", ES_PREGUNTA + ":" + id))
                                 .build());
             }
+            case InterpretadorService.Devolucion d ->
+                    juntadas.devolucion(d.datos(), origen, texto, audio ? escuche(texto) : "");
             case InterpretadorService.NoEsGasto _ -> Accion.Enviar.texto(audio
                     ? escuche(texto) + """
                             No encontré un gasto en lo que escuché 🤔
@@ -436,7 +454,8 @@ public class ProcesadorMensajes {
         if (i.usoIaId() != null) {
             usoIa.asociarMovimiento(i.usoIaId(), m.getId());
         }
-        return m;
+        // Una juntada sin monto queda como gasto común: sin el total no hay nada que repartir.
+        return i.juntada() != null && m.getMonto() != null ? juntadas.crear(m, i.juntada()) : m;
     }
 
     // --- Preguntas ---
@@ -523,7 +542,10 @@ public class ProcesadorMensajes {
 
     private Movimiento aplicar(long movimientoId, Valor valor) {
         return switch (valor) {
-            case Valor.Monto v -> movimientos.cambiarMonto(movimientoId, v.monto());
+            // En una juntada, el monto de la tarjeta es el total pagado: se reparte de nuevo.
+            case Valor.Monto v -> juntadas.esJuntada(movimientoId)
+                    ? juntadas.cambiarTotal(movimientoId, v.monto())
+                    : movimientos.cambiarMonto(movimientoId, v.monto());
             case Valor.Fecha v -> movimientos.cambiarFechaHora(movimientoId, v.fechaHora());
             case Valor.Descripcion v -> movimientos.cambiarDescripcion(movimientoId, v.descripcion());
         };
@@ -561,6 +583,7 @@ public class ProcesadorMensajes {
         }
 
         List<Accion> acciones = new ArrayList<>();
+        juntadas.olvidar(chatId);
         Espera previa = esperas.remove(chatId);
         if (previa != null && (previa.mensajeId() == null || previa.mensajeId() != mensajeId)) {
             acciones.addAll(restaurar(previa));
@@ -589,6 +612,9 @@ public class ProcesadorMensajes {
         return switch (accion) {
             case Tarjetas.GUARDAR -> {
                 MovimientoService.Confirmacion c = movimientos.confirmar(id);
+                if (c.movimiento().isJuntada()) {
+                    yield juntadas.guardada(mensajeId, c);
+                }
                 yield List.of(new Accion.Editar(mensajeId, tarjetas.guardado(c.movimiento(), c.totalMesCategoria()),
                         Teclado.NINGUNO), new Accion.Avisar("✅ Guardado"));
             }
@@ -617,6 +643,8 @@ public class ProcesadorMensajes {
             case Tarjetas.EDITAR_MONTO -> pedir(chatId, mensajeId, id, Campo.MONTO);
             case Tarjetas.EDITAR_FECHA -> pedir(chatId, mensajeId, id, Campo.FECHA);
             case Tarjetas.EDITAR_DESCRIPCION -> pedir(chatId, mensajeId, id, Campo.DESCRIPCION);
+            case Tarjetas.JUNTADA_NOMBRES, Tarjetas.JUNTADA_PARTE, Tarjetas.JUNTADA_PERDIDO, Tarjetas.JUNTADA_MENSAJE,
+                    Tarjetas.JUNTADA_VER, Tarjetas.DEVOLUCION_DE -> juntadas.boton(chatId, mensajeId, accion, id, elegido);
             case Tarjetas.UNIR -> repetidos.unir(mensajeId, id, requerido(elegido));
             case Tarjetas.DE_NUEVO -> repetidos.deNuevo(mensajeId, id)
                     .orElseGet(() -> List.of(principal(chatId, mensajeId, pendiente(id))));

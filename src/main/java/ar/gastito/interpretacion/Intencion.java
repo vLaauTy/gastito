@@ -11,9 +11,11 @@ public enum Intencion {
     /** Un saludo, una prueba, otra cosa. */
     OTRO,
     /** No se sabe si es un gasto o una pregunta: se le pregunta al usuario con dos botones. */
-    DUDOSO;
+    DUDOSO,
+    /** "Pablo me pasó 8000", "me devolvieron 8000 del asado": alguien devuelve su parte de una juntada. */
+    DEVOLUCION;
 
-    /** Lo que devolvió la IA; si no es ninguno de los cuatro, OTRO. */
+    /** Lo que devolvió la IA; si no es ninguno de estos, OTRO. */
     static Intencion de(String texto) {
         if (texto == null) {
             return OTRO;

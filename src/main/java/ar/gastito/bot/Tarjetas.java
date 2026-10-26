@@ -6,16 +6,21 @@ import java.math.BigDecimal;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Function;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.MedioPago;
+import ar.gastito.juntada.JuntadaService;
+import ar.gastito.juntada.VistaJuntada;
 import ar.gastito.movimiento.EstadoMovimiento;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoItem;
 import ar.gastito.movimiento.Origen;
+import ar.gastito.movimiento.TipoMovimiento;
 import ar.gastito.ticket.ControlesTicket;
 
 /**
@@ -41,6 +46,14 @@ public class Tarjetas {
     /** Compras repetidas: unir el nuevo con el que ya estaba, o guardar los dos. */
     static final String UNIR = "ru";
     static final String DE_NUEVO = "rd";
+    /** Juntadas: nombres, la parte de alguien, dar por perdido, armar el mensaje y volver a la tarjeta. */
+    static final String JUNTADA_NOMBRES = "jn";
+    static final String JUNTADA_PARTE = "jp";
+    static final String JUNTADA_PERDIDO = "jx";
+    static final String JUNTADA_MENSAJE = "jm";
+    static final String JUNTADA_VER = "jv";
+    /** Una devolución: de quién es ("jd:devolución:persona"). */
+    static final String DEVOLUCION_DE = "jd";
     /** Id de medio de pago que significa "sin medio de pago". */
     static final long SIN_MEDIO = 0;
 
@@ -76,6 +89,23 @@ public class Tarjetas {
     Tarjetas(FormatoMensajes formato, int largoMaximoTicket) {
         this.formato = formato;
         this.largoMaximoTicket = largoMaximoTicket;
+    }
+
+    /** De dónde salen los datos de una juntada (el total, las partes); sin juntadas, ninguna. */
+    private Function<Long, Optional<VistaJuntada>> juntadas = id -> Optional.empty();
+
+    @Autowired(required = false)
+    void usarJuntadas(JuntadaService servicio) {
+        usarJuntadas(servicio::vista);
+    }
+
+    void usarJuntadas(Function<Long, Optional<VistaJuntada>> fuente) {
+        this.juntadas = fuente;
+    }
+
+    private Optional<VistaJuntada> juntada(Movimiento m) {
+        return m.isJuntada() && m.getId() != null && m.getTipo() == TipoMovimiento.GASTO ? juntadas.apply(m.getId())
+                : Optional.empty();
     }
 
     // --- Textos ---
@@ -204,8 +234,23 @@ public class Tarjetas {
         if (m.isIngreso()) {
             return datosIngreso(m);
         }
+        if (m.getTipo() == TipoMovimiento.DEVOLUCION) {
+            return "💰 <b>" + formato.pesos(m.getMonto()) + "</b>\n📝 " + html(m.getDescripcion()) + "\n📅 "
+                    + formato.fecha(m.getFechaHora());
+        }
         List<String> lineas = new ArrayList<>();
-        lineas.add(m.getMonto() == null ? "💰 <i>Falta el monto</i>" : "💰 <b>" + formato.pesos(m.getMonto()) + "</b>");
+        Optional<VistaJuntada> juntada = juntada(m);
+        if (juntada.isPresent()) {
+            VistaJuntada j = juntada.get();
+            lineas.add("💸 Pagaste <b>" + formato.pesos(j.totalPagado()) + "</b>"
+                    + (j.billetera() == null ? "" : " · " + html(j.billetera())));
+            lineas.add("🙋 Tu gasto real <b>" + formato.pesos(j.miParte()) + "</b>");
+            lineas.add(j.aCobrar().signum() > 0 ? "📥 A cobrar <b>" + formato.pesos(j.aCobrar()) + "</b>"
+                    : "📥 Ya no te deben nada");
+        } else {
+            lineas.add(m.getMonto() == null ? "💰 <i>Falta el monto</i>"
+                    : "💰 <b>" + formato.pesos(m.getMonto()) + "</b>");
+        }
         if (m.getDescripcion() != null && !m.getDescripcion().isBlank()) {
             lineas.add("📝 " + html(m.getDescripcion()));
         }
@@ -214,7 +259,23 @@ public class Tarjetas {
                 : (c.getEmoji() == null ? "🏷" : c.getEmoji()) + " " + html(c.getNombre()));
         lineas.add("💳 " + html(FormatoMensajes.medio(m.getMedioPago(), m.getCuenta())));
         lineas.add("📅 " + formato.fecha(m.getFechaHora()));
+        juntada.ifPresent(j -> lineas.add("\n" + personas(j)));
         return String.join("\n", lineas);
+    }
+
+    /** "👥 Entre 6:" y cada uno con lo que pone y si ya pagó. */
+    String personas(VistaJuntada j) {
+        StringBuilder sb = new StringBuilder("👥 <b>Entre " + j.personas() + "</b> (vos " + formato.pesos(j.miParte())
+                + ")");
+        for (VistaJuntada.Persona p : j.participantes()) {
+            sb.append("\n• ").append(html(p.nombre())).append(": ").append(formato.pesos(p.monto())).append(' ')
+                    .append(switch (p.estado()) {
+                        case PENDIENTE -> "⏳";
+                        case PAGADO -> "✅";
+                        case PERDIDO -> "🚫 perdido";
+                    });
+        }
+        return sb.toString();
     }
 
     /**
@@ -358,7 +419,50 @@ public class Tarjetas {
             t.fila(boton("✅ Guardar", GUARDAR, id), boton("✏️ Editar", EDITAR, id),
                     boton("❌ Cancelar", CANCELAR, id));
         }
+        if (juntada(m).isPresent()) {
+            t.fila(boton("👥 Nombres", JUNTADA_NOMBRES, id), boton("💲 La parte de alguien", JUNTADA_PARTE, id));
+        }
         return t.build();
+    }
+
+    // --- Juntadas ---
+
+    /** Una juntada guardada: lo que se puede hacer mientras alguien debe. Si ya no debe nadie, nada. */
+    public Teclado juntadaGuardada(VistaJuntada j) {
+        if (j.pendientes().isEmpty()) {
+            return Teclado.NINGUNO;
+        }
+        long id = j.movimientoId();
+        return Teclado.constructor()
+                .fila(boton("💬 Armar mensaje", JUNTADA_MENSAJE, id), boton("👥 Nombres", JUNTADA_NOMBRES, id))
+                .fila(boton("💲 La parte de alguien", JUNTADA_PARTE, id),
+                        boton("🚫 Dar por perdido", JUNTADA_PERDIDO, id))
+                .build();
+    }
+
+    /**
+     * Para elegir a quién se renombra, a quién se le cambia la parte o qué parte se da por perdida. Para cambiar la
+     * parte o darla por perdida, solo los que todavía deben.
+     */
+    public Teclado elegirPersona(String accion, VistaJuntada j) {
+        long id = j.movimientoId();
+        Teclado.Constructor t = Teclado.constructor();
+        List<VistaJuntada.Persona> personas = accion.equals(JUNTADA_NOMBRES) ? j.participantes() : j.pendientes();
+        for (VistaJuntada.Persona p : personas) {
+            t.fila(boton(p.nombre() + " · " + formato.pesos(p.monto()), accion, id, p.id()));
+        }
+        t.fila(boton("↩️ Volver", JUNTADA_VER, id));
+        return t.build();
+    }
+
+    /** "¿Qué hacemos con esta juntada?": el texto de la tarjeta y lo que se pide arriba de los botones. */
+    public String juntadaPidiendo(Movimiento m, String pedido) {
+        return terminadoOPendiente(m) + "\n\n" + pedido;
+    }
+
+    /** La tarjeta de la juntada como está ahora: pendiente o guardada. */
+    public String terminadoOPendiente(Movimiento m) {
+        return m.isPendiente() ? pendiente(m) : conTitulo(m, "✅ <b>Guardado</b>");
     }
 
     public Teclado edicion(long id) {

@@ -35,3 +35,11 @@ Cómo completar cada dato:
   - "PREGUNTA": pregunta por sus gastos, ingresos o compras ("¿cuánto gasté en pan?", "en qué gasté más esta semana", "compará octubre con septiembre"). En ese caso dejá el resto vacío.
   - "OTRO": un saludo, una prueba, algo que no es ni un gasto ni una pregunta. En ese caso dejá el resto vacío.
   - "DUDOSO": podría ser cualquiera de los dos ("pan 3700?", "nafta ayer"). Completá igual los datos del gasto: si el usuario dice que es un gasto, se usan.
+  - "DEVOLUCION": alguien le devolvió plata o le pagó su parte de algo que pagó por un grupo ("Pablo me pasó 8000", "me devolvieron 8000 del asado", "Sofi me transfirió su parte"). Completá monto, cuenta (dónde le entró, si lo dice), fecha, devolucionPersona y devolucionDe; el resto vacío.
+- Juntadas: si pagó por un grupo ("pagué 48000 el asado, éramos 6", "la pizza con Martín, Sofi y Pablo, 30000"), es un GASTO y:
+  - monto es el TOTAL que pagó, no su parte. No dividas: la división la hace Gastito.
+  - juntadaPersonas: cuántas personas eran en total, contándolo a él ("éramos 6" → 6; "con Martín, Sofi y Pablo" → 4). Si no dice cuántos ni nombres, vacío.
+  - juntadaNombres: los nombres de los demás, si los dice, tal cual. Si no, vacío.
+  - Si no pagó por otros (un gasto común), juntadaPersonas y juntadaNombres van vacíos.
+- devolucionPersona: en una DEVOLUCION, quién le pasó la plata ("Pablo"), o vacío.
+- devolucionDe: en una DEVOLUCION, de qué gasto era, como lo dice ("el asado"), o vacío.

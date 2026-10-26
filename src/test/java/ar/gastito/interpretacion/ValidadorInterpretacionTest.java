@@ -234,4 +234,70 @@ class ValidadorInterpretacionTest {
                 "21:30");
         assertThat(valida(conFecha).fechaHora()).isEqualTo(LocalDateTime.of(2026, 10, 12, 21, 30));
     }
+
+    // --- Juntadas y devoluciones ---
+
+    private static InterpretacionIa juntada(String monto, String personas, List<String> nombres) {
+        return new InterpretacionIa("GASTO", monto, "Asado", List.of("Salidas"), "alta", "QR", "Mercado Pago", "", "",
+                personas, nombres, "", "");
+    }
+
+    private ValidadorInterpretacion.Valida comoGasto(InterpretacionIa ia) {
+        return (ValidadorInterpretacion.Valida) validador.validar(ia, catalogo, AHORA);
+    }
+
+    @Test
+    void unaJuntadaTraeElTotalComoMontoYCuantasPersonasEran() {
+        ValidadorInterpretacion.Valida v = comoGasto(juntada("48000", "6", List.of()));
+
+        assertThat(v.movimiento().monto()).isEqualByComparingTo("48000"); // el total: la parte la calcula Java
+        assertThat(v.juntada()).isEqualTo(new PedidoJuntada(6, List.of()));
+    }
+
+    @Test
+    void conNombresLasPersonasSonLosNombresMasYo() {
+        assertThat(comoGasto(juntada("30000", "", List.of("Martín", "sofi", "Pablo"))).juntada())
+                .isEqualTo(new PedidoJuntada(4, List.of("Martín", "Sofi", "Pablo")));
+        // Si dice menos personas que nombres, mandan los nombres.
+        assertThat(comoGasto(juntada("30000", "2", List.of("Martín", "Sofi"))).juntada().personas()).isEqualTo(3);
+        // Nombres repetidos o vacíos no cuentan.
+        assertThat(comoGasto(juntada("30000", "", List.of("Martín", "martín", " "))).juntada())
+                .isEqualTo(new PedidoJuntada(2, List.of("Martín")));
+    }
+
+    @Test
+    void unGastoComunNoEsJuntada() {
+        assertThat(comoGasto(juntada("1500", "", List.of())).juntada()).isNull();
+        assertThat(comoGasto(juntada("1500", "1", List.of())).juntada()).isNull();
+        assertThat(comoGasto(juntada("1500", "muchos", null)).juntada()).isNull();
+        assertThat(comoGasto(juntada("1500", "500", List.of())).juntada()).isNull(); // más de 50: no es creíble
+    }
+
+    @Test
+    void unaDevolucionConQuienYDeQue() {
+        InterpretacionIa ia = new InterpretacionIa("DEVOLUCION", "8000", "", List.of(), "", "", "Mercado Pago", "",
+                "", "", List.of(), "Pablo", "el asado");
+
+        ValidadorInterpretacion.Devolucion d = (ValidadorInterpretacion.Devolucion) validador.validar(ia, catalogo,
+                AHORA);
+
+        assertThat(d.monto()).isEqualByComparingTo("8000");
+        assertThat(d.persona()).isEqualTo("Pablo");
+        assertThat(d.de()).isEqualTo("el asado");
+        assertThat(d.cuenta().getNombre()).isEqualTo("Mercado Pago");
+        assertThat(d.fechaHora()).isEqualTo(AHORA);
+    }
+
+    @Test
+    void unaDevolucionSinMontoNiNombreLosDejaVacios() {
+        InterpretacionIa ia = new InterpretacionIa("devolucion", "", "", List.of(), "", "", "", "", "", "", List.of(),
+                " ", "");
+
+        ValidadorInterpretacion.Devolucion d = (ValidadorInterpretacion.Devolucion) validador.validar(ia, catalogo,
+                AHORA);
+
+        assertThat(d.monto()).isNull();
+        assertThat(d.persona()).isNull();
+        assertThat(d.de()).isNull();
+    }
 }

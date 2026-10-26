@@ -55,7 +55,9 @@ import ar.gastito.ia.RegistroUsoIa;
 import ar.gastito.ia.ResumenUsoIa;
 import ar.gastito.interpretacion.InterpretadorService;
 import ar.gastito.interpretacion.ParserIngreso;
+import ar.gastito.interpretacion.PedidoJuntada;
 import ar.gastito.interpretacion.ResolvedorFechas;
+import ar.gastito.interpretacion.ValidadorInterpretacion;
 import ar.gastito.movimiento.ClaseIngreso;
 import ar.gastito.movimiento.Confianza;
 import ar.gastito.movimiento.IngresoService;
@@ -88,6 +90,7 @@ class ProcesadorMensajesTest {
     private final ResumenService resumenes = mock(ResumenService.class);
     private final ConsultaService consultas = mock(ConsultaService.class);
     private final ConversacionRepetidos repetidos = mock(ConversacionRepetidos.class);
+    private final ConversacionJuntadas juntadas = mock(ConversacionJuntadas.class);
     private ProcesadorMensajes procesador;
 
     @BeforeEach
@@ -103,7 +106,7 @@ class ProcesadorMensajesTest {
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
                 tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, resumenes,
                 new FormatoResumen(formato, new GraficoMes(formato), dashboard), consultas, new FormatoConsulta(formato),
-                repetidos, properties, dashboard, RELOJ);
+                repetidos, juntadas, properties, dashboard, RELOJ);
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));
         when(tickets.tamanioMaximo()).thenReturn(DataSize.ofMegabytes(10));
     }
@@ -1104,5 +1107,48 @@ class ProcesadorMensajesTest {
         when(repetidos.deNuevo(TARJETA, ID)).thenReturn(Optional.empty());
         when(movimientos.buscar(ID)).thenReturn(conCategoria("1500", KIOSCO));
         assertThat(edicion(tocar("rd:" + ID)).html()).startsWith("🧾 <b>Nuevo gasto</b>");
+    }
+
+    // --- Juntadas ---
+
+    @Test
+    void unaJuntadaSeArmaAntesDeMostrarLaTarjeta() {
+        Movimiento pendiente = conCategoria("48000", SALIDAS);
+        PedidoJuntada pedido = new PedidoJuntada(6, List.of("Martín"));
+        when(interpretador.interpretar("pagué 48000 el asado, éramos 6", PropositoIa.TEXTO))
+                .thenReturn(new InterpretadorService.Interpretado(new MovimientoInterpretado(new BigDecimal("48000"),
+                        "Asado", SALIDAS, List.of(), null, null, null, AHORA), Confianza.ALTA, null, pedido));
+        when(movimientos.crearPendiente(any(), eq(Origen.TEXTO), anyString())).thenReturn(pendiente);
+        when(juntadas.crear(pendiente, pedido)).thenReturn(pendiente);
+
+        procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "pagué 48000 el asado, éramos 6");
+
+        verify(juntadas).crear(pendiente, pedido);
+    }
+
+    @Test
+    void unaDevolucionVaALaConversacionDeJuntadas() {
+        ValidadorInterpretacion.Devolucion datos = new ValidadorInterpretacion.Devolucion(new BigDecimal("8000"),
+                "Pablo", null, null, null, AHORA);
+        when(interpretador.interpretar("pablo me pasó 8000", PropositoIa.TEXTO))
+                .thenReturn(new InterpretadorService.Devolucion(datos, 3L));
+        Accion.Enviar tarjeta = Accion.Enviar.texto("↩️");
+        when(juntadas.devolucion(datos, Origen.TEXTO, "pablo me pasó 8000", "")).thenReturn(tarjeta);
+
+        assertThat(procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "pablo me pasó 8000")).containsExactly(tarjeta);
+        verify(movimientos, never()).crearPendiente(any(), any(), any());
+    }
+
+    @Test
+    void siLaJuntadaEsperaUnNombreElTextoEsParaElla() {
+        when(juntadas.esperando(CHAT)).thenReturn(true);
+        List<Accion> respuesta = List.of(new Accion.Avisar("ok"));
+        when(juntadas.texto(CHAT, "Pablito")).thenReturn(respuesta);
+
+        assertThat(procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "Pablito")).isSameAs(respuesta);
+        verifyNoInteractions(interpretador);
+        // Un comando no es el nombre: se deja de esperar y se responde el comando.
+        procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "/ayuda");
+        verify(juntadas).olvidar(CHAT);
     }
 }
