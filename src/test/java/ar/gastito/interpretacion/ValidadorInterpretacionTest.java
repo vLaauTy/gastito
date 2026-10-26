@@ -300,4 +300,37 @@ class ValidadorInterpretacionTest {
         assertThat(d.persona()).isNull();
         assertThat(d.de()).isNull();
     }
+
+    // --- Gastos fijos ---
+
+    private static InterpretacionIa fijo(String descripcion, String dia, String frecuencia, String variable) {
+        return new InterpretacionIa("FIJO", "32900", descripcion, List.of("Otros"), "alta", "Tarjeta de crédito", "",
+                "", "", "", List.of(), "", "", dia, frecuencia, variable);
+    }
+
+    @Test
+    void unFijoTraeElDiaLaFrecuenciaYSiEsVariable() {
+        ValidadorInterpretacion.AltaFijo alta = (ValidadorInterpretacion.AltaFijo) validador.validar(
+                fijo("Seguro de la moto", "4", "MENSUAL", "no"), catalogo, AHORA);
+
+        PedidoFijo p = alta.pedido();
+        assertThat(p.nombre()).isEqualTo("Seguro de la moto");
+        assertThat(p.monto()).isEqualByComparingTo("32900");
+        assertThat(p.diaDelMes()).isEqualTo(4);
+        assertThat(p.bimestral()).isFalse();
+        assertThat(p.variable()).isFalse();
+        assertThat(p.medioPago()).isEqualTo(CatalogoDePrueba.CREDITO);
+    }
+
+    @Test
+    void unDiaQueNoExisteQuedaVacioYLaLuzEsVariable() {
+        PedidoFijo luz = ((ValidadorInterpretacion.AltaFijo) validador.validar(fijo("Luz", "35", "bimestral", ""),
+                catalogo, AHORA)).pedido();
+
+        assertThat(luz.diaDelMes()).isNull();
+        assertThat(luz.bimestral()).isTrue();
+        assertThat(luz.variable()).isTrue(); // la luz es variable aunque la IA no lo diga
+        assertThat(((ValidadorInterpretacion.AltaFijo) validador.validar(fijo("Expensas", "10", "", "sí"), catalogo,
+                AHORA)).pedido().variable()).isTrue();
+    }
 }

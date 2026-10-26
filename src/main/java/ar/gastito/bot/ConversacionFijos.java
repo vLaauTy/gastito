@@ -1,0 +1,203 @@
+package ar.gastito.bot;
+
+import static ar.gastito.bot.FormatoMensajes.html;
+
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.springframework.stereotype.Component;
+
+import ar.gastito.catalogo.Categoria;
+import ar.gastito.catalogo.CatalogoService;
+import ar.gastito.fijo.Frecuencia;
+import ar.gastito.fijo.GastoFijoService;
+import ar.gastito.fijo.VistaFijo;
+import ar.gastito.interpretacion.ParserFijo;
+import ar.gastito.interpretacion.PedidoFijo;
+
+/**
+ * Los gastos fijos en el chat: el alta ("/fijo seguro 32900 tarjeta día 4" o "agregá un fijo: …") con su tarjeta
+ * para confirmar, y "/fijos" con la lista y la baja.
+ */
+@Component
+public class ConversacionFijos {
+
+    /** Botones del alta: guardar, cancelar y elegir la categoría; y la baja desde /fijos. */
+    static final String GUARDAR = "fa";
+    static final String CANCELAR = "fz";
+    static final String CATEGORIA = "fk";
+    static final String BAJA = "fb";
+    /** Cuántas altas sin responder se recuerdan (las más viejas se olvidan). */
+    static final int ALTAS_RECORDADAS = 10;
+
+    static final String COMO = "Decímelo así: <code>/fijo seguro 32900 tarjeta día 4</code> (o \"bimestral\", o "
+            + "\"variable\" si el monto cambia cada mes).";
+
+    private static final DateTimeFormatter DIA = DateTimeFormatter.ofPattern("EEEE d/M", Locale.forLanguageTag("es-AR"));
+
+    private final GastoFijoService fijos;
+    private final ParserFijo parser;
+    private final CatalogoService catalogos;
+    private final FormatoMensajes formato;
+
+    private final AtomicLong siguiente = new AtomicLong();
+    private final Map<Long, PedidoFijo> altas = Collections.synchronizedMap(new LinkedHashMap<>() {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<Long, PedidoFijo> mas) {
+            return size() > ALTAS_RECORDADAS;
+        }
+    });
+
+    public ConversacionFijos(GastoFijoService fijos, ParserFijo parser, CatalogoService catalogos,
+            FormatoMensajes formato) {
+        this.fijos = fijos;
+        this.parser = parser;
+        this.catalogos = catalogos;
+        this.formato = formato;
+    }
+
+    // --- Alta ---
+
+    /** "/fijo seguro 32900 tarjeta día 4" (sin IA). */
+    public Accion alta(String argumentos) {
+        return parser.parsear(argumentos, catalogos.cargar())
+                .map(p -> tarjetaDeAlta(p, ""))
+                .orElseGet(() -> Accion.Enviar.texto("📌 Para agregar un gasto fijo necesito el nombre, el monto y "
+                        + "el día del cobro. " + COMO));
+    }
+
+    /** "Agregá un fijo: el seguro, 32900 con tarjeta el 4" (lo entendió la IA). */
+    public Accion tarjetaDeAlta(PedidoFijo pedido, String prefijo) {
+        if (pedido.monto() == null || pedido.diaDelMes() == null) {
+            return Accion.Enviar.texto(prefijo + "📌 " + (pedido.monto() == null ? "¿Cuánto se paga?"
+                    : "¿Qué día del mes se cobra?") + " " + COMO);
+        }
+        long id = siguiente.incrementAndGet();
+        altas.put(id, pedido);
+        return Accion.Enviar.conBotones(prefijo + textoDeAlta(pedido), teclado(id, pedido));
+    }
+
+    String textoDeAlta(PedidoFijo p) {
+        StringBuilder sb = new StringBuilder("📌 <b>Nuevo gasto fijo</b>\n💰 <b>" + formato.pesos(p.monto())
+                + "</b> · " + (p.bimestral() ? "cada dos meses" : "todos los meses") + ", el día " + p.diaDelMes()
+                + "\n📝 " + html(p.nombre()));
+        sb.append("\n").append(p.categoria() == null ? "🏷 <b>¿Qué categoría?</b>"
+                : html(p.categoria().getNombreConEmoji()));
+        sb.append("\n💳 ").append(html(p.tarjeta() != null ? p.tarjeta().getNombre()
+                : FormatoMensajes.medio(p.medioPago(), p.cuenta())));
+        LocalDate primero = fijos.primerCobro(p.diaDelMes());
+        sb.append("\n📅 Primer cobro: ").append(DIA.format(primero));
+        if (p.variable()) {
+            sb.append("\n📈 Monto variable: cada mes te propongo el promedio de los últimos 3 cobros.");
+        }
+        return sb.toString();
+    }
+
+    private Teclado teclado(long id, PedidoFijo p) {
+        Teclado.Constructor t = Teclado.constructor();
+        if (p.categoria() == null) {
+            List<Categoria> opciones = p.candidatas().isEmpty() ? catalogos.cargar().categorias() : p.candidatas();
+            for (int i = 0; i < opciones.size(); i += 2) {
+                Categoria a = opciones.get(i);
+                if (i + 1 < opciones.size()) {
+                    Categoria b = opciones.get(i + 1);
+                    t.fila(boton(a.getNombreConEmoji(), CATEGORIA, id, a.getId()),
+                            boton(b.getNombreConEmoji(), CATEGORIA, id, b.getId()));
+                } else {
+                    t.fila(boton(a.getNombreConEmoji(), CATEGORIA, id, a.getId()));
+                }
+            }
+            t.fila(new Teclado.Boton("❌ Cancelar", CANCELAR + ":" + id));
+        } else {
+            t.fila(new Teclado.Boton("✅ Guardar", GUARDAR + ":" + id),
+                    new Teclado.Boton("❌ Cancelar", CANCELAR + ":" + id));
+        }
+        return t.build();
+    }
+
+    private static Teclado.Boton boton(String texto, String accion, long id, long elegido) {
+        return new Teclado.Boton(texto, accion + ":" + id + ":" + elegido);
+    }
+
+    // --- Botones ---
+
+    public boolean esBoton(String accion) {
+        return GUARDAR.equals(accion) || CANCELAR.equals(accion) || CATEGORIA.equals(accion) || BAJA.equals(accion);
+    }
+
+    public List<Accion> boton(int mensajeId, String accion, long id, Long elegido) {
+        if (BAJA.equals(accion)) {
+            VistaFijo f = fijos.vista(id);
+            fijos.darDeBaja(id);
+            return List.of(new Accion.Editar(mensajeId, textoDeLista(fijos.activos()), tecladoDeLista(fijos.activos())),
+                    new Accion.Avisar("🗑 " + f.nombre() + " ya no se cobra"));
+        }
+        PedidoFijo p = altas.get(id);
+        if (p == null) {
+            return List.of(new Accion.Editar(mensajeId, "📌 Esa alta ya no está pendiente. " + COMO, Teclado.NINGUNO));
+        }
+        return switch (accion) {
+            case CATEGORIA -> {
+                Categoria elegida = catalogos.cargar().categorias().stream()
+                        .filter(c -> elegido != null && c.getId() == elegido.longValue()).findFirst().orElse(null);
+                if (elegida == null) {
+                    yield List.of(new Accion.Avisar("Esa categoría no existe"));
+                }
+                PedidoFijo con = p.conCategoria(elegida);
+                altas.put(id, con);
+                yield List.of(new Accion.Editar(mensajeId, textoDeAlta(con), teclado(id, con)));
+            }
+            case CANCELAR -> {
+                altas.remove(id);
+                yield List.of(new Accion.Editar(mensajeId, "❌ <b>Cancelado</b>\n" + html(p.nombre())
+                        + ": no se agregó como gasto fijo.", Teclado.NINGUNO));
+            }
+            default -> {
+                altas.remove(id);
+                VistaFijo f = fijos.alta(new GastoFijoService.NuevoFijo(p.nombre(), p.monto(), p.categoria(),
+                        p.medioPago(), p.cuenta(), p.tarjeta(), p.diaDelMes(),
+                        p.bimestral() ? Frecuencia.BIMESTRAL : Frecuencia.MENSUAL, p.variable()));
+                yield List.of(new Accion.Editar(mensajeId, "✅ <b>Gasto fijo guardado</b>\n" + html(f.nombre()) + ": "
+                        + formato.pesos(f.montoEsperado()) + (f.frecuencia() == Frecuencia.BIMESTRAL
+                                ? " cada dos meses" : " por mes")
+                        + ", el día " + f.diaDelMes() + ".\n📅 Primer cobro: " + DIA.format(f.proximoCobro())
+                        + ". Ese día te pregunto si se cobró.", Teclado.NINGUNO), new Accion.Avisar("✅ Guardado"));
+            }
+        };
+    }
+
+    // --- Lista ---
+
+    /** "/fijos": los activos, con el próximo cobro y un botón para darlos de baja. */
+    public Accion lista() {
+        List<VistaFijo> activos = fijos.activos();
+        return Accion.Enviar.conBotones(textoDeLista(activos), tecladoDeLista(activos));
+    }
+
+    private String textoDeLista(List<VistaFijo> activos) {
+        if (activos.isEmpty()) {
+            return "📌 No tenés gastos fijos. " + COMO;
+        }
+        StringBuilder sb = new StringBuilder("📌 <b>Tus gastos fijos</b>");
+        for (VistaFijo f : activos) {
+            sb.append("\n• ").append(f.emoji() == null ? "" : f.emoji() + " ").append(html(f.nombre())).append(": ")
+                    .append(formato.pesos(f.montoPropuesto()))
+                    .append(f.montoVariable() ? " (promedio)" : "")
+                    .append(f.frecuencia() == Frecuencia.BIMESTRAL ? " cada dos meses" : "")
+                    .append(" · próximo cobro ").append(DIA.format(f.proximoCobro()));
+        }
+        return sb.toString();
+    }
+
+    private static Teclado tecladoDeLista(List<VistaFijo> activos) {
+        Teclado.Constructor t = Teclado.constructor();
+        activos.forEach(f -> t.fila(new Teclado.Boton("🗑 Dar de baja " + f.nombre(), BAJA + ":" + f.id())));
+        return t.build();
+    }
+}

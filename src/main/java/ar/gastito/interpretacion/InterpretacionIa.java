@@ -12,6 +12,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 public record InterpretacionIa(
         @JsonPropertyDescription("GASTO si el mensaje carga un gasto; PREGUNTA si pregunta por sus gastos o ingresos; "
                 + "DEVOLUCION si alguien le devolvió plata (su parte de una juntada); "
+                + "FIJO si pide agregar un gasto que se repite todos los meses (un gasto fijo); "
                 + "OTRO si es un saludo, una prueba u otra cosa; DUDOSO si podría ser un gasto o una pregunta")
         String intencion,
 
@@ -52,12 +53,29 @@ public record InterpretacionIa(
         String devolucionPersona,
         @JsonPropertyDescription("Si intencion es DEVOLUCION: de qué gasto era la plata, como lo dice ('el asado'), o "
                 + "vacío")
-        String devolucionDe) {
+        String devolucionDe,
+        @JsonPropertyDescription("Si intencion es FIJO: qué día del mes se cobra, solo dígitos del 1 al 31 ('el 4' → "
+                + "4). Vacío si no lo dice.")
+        String fijoDia,
+        @JsonPropertyDescription("Si intencion es FIJO: MENSUAL, o BIMESTRAL si dice que es cada dos meses. Vacío si "
+                + "no es FIJO.")
+        String fijoFrecuencia,
+        @JsonPropertyDescription("Si intencion es FIJO: si si el monto cambia todos los meses (la luz, el gas), no si "
+                + "es siempre el mismo. Vacío si no es FIJO.")
+        String fijoVariable) {
 
-    /** Sin los datos de juntadas ni devoluciones. */
+    /** Sin los datos de juntadas, devoluciones ni gastos fijos. */
     public InterpretacionIa(String intencion, String monto, String descripcion, List<String> categorias,
             String confianza, String medioPago, String cuenta, String fecha, String hora) {
         this(intencion, monto, descripcion, categorias, confianza, medioPago, cuenta, fecha, hora, "", List.of(), "",
                 "");
+    }
+
+    /** Sin los datos de gastos fijos. */
+    public InterpretacionIa(String intencion, String monto, String descripcion, List<String> categorias,
+            String confianza, String medioPago, String cuenta, String fecha, String hora, String juntadaPersonas,
+            List<String> juntadaNombres, String devolucionPersona, String devolucionDe) {
+        this(intencion, monto, descripcion, categorias, confianza, medioPago, cuenta, fecha, hora, juntadaPersonas,
+                juntadaNombres, devolucionPersona, devolucionDe, "", "", "");
     }
 }

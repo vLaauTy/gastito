@@ -69,6 +69,10 @@ public class ValidadorInterpretacion {
             LocalDateTime fechaHora) implements Resultado {
     }
 
+    /** "Agregá un fijo: …": el alta de un gasto fijo, para mostrar en su tarjeta antes de guardarlo. */
+    public record AltaFijo(PedidoFijo pedido) implements Resultado {
+    }
+
     public record NoEsGasto() implements Resultado {
     }
 
@@ -91,7 +95,27 @@ public class ValidadorInterpretacion {
                     texto(ia.devolucionDe()), buscar(ia.cuenta(), catalogo.cuentas()).orElse(null),
                     buscar(ia.medioPago(), catalogo.mediosPago()).orElse(null),
                     fechas.resolver(ia.fecha(), ia.hora(), ahora));
+            case FIJO -> new AltaFijo(comoFijo(ia, catalogo, ahora));
         };
+    }
+
+    /**
+     * Los datos del gasto (nombre, monto, categoría, medio) se controlan igual que en un gasto; el día tiene que ser
+     * del 1 al 31 (si no, queda vacío y se pregunta). La luz, el gas y el agua son variables aunque no se diga.
+     */
+    private PedidoFijo comoFijo(InterpretacionIa ia, Catalogo catalogo, LocalDateTime ahora) {
+        Valida v = comoGasto(ia, catalogo, ahora);
+        MovimientoInterpretado m = v.movimiento();
+        Integer dia = null;
+        String d = texto(ia.fijoDia());
+        if (d != null && d.matches("\\d{1,2}") && Integer.parseInt(d) >= 1 && Integer.parseInt(d) <= 31) {
+            dia = Integer.parseInt(d);
+        }
+        boolean bimestral = "BIMESTRAL".equalsIgnoreCase(texto(ia.fijoFrecuencia()));
+        boolean variable = Textos.normalizar(String.valueOf(texto(ia.fijoVariable()))).equals("si")
+                || PedidoFijo.esVariable(m.descripcion());
+        return new PedidoFijo(m.descripcion(), m.monto(), m.categoria(), m.candidatas(), m.medioPago(), m.cuenta(),
+                m.tarjeta(), dia, bimestral, variable);
     }
 
     private static String texto(String valor) {

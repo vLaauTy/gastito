@@ -55,6 +55,7 @@ import ar.gastito.ia.RegistroUsoIa;
 import ar.gastito.ia.ResumenUsoIa;
 import ar.gastito.interpretacion.InterpretadorService;
 import ar.gastito.interpretacion.ParserIngreso;
+import ar.gastito.interpretacion.PedidoFijo;
 import ar.gastito.interpretacion.PedidoJuntada;
 import ar.gastito.interpretacion.ResolvedorFechas;
 import ar.gastito.interpretacion.ValidadorInterpretacion;
@@ -91,6 +92,7 @@ class ProcesadorMensajesTest {
     private final ConsultaService consultas = mock(ConsultaService.class);
     private final ConversacionRepetidos repetidos = mock(ConversacionRepetidos.class);
     private final ConversacionJuntadas juntadas = mock(ConversacionJuntadas.class);
+    private final ConversacionFijos fijos = mock(ConversacionFijos.class);
     private ProcesadorMensajes procesador;
 
     @BeforeEach
@@ -106,7 +108,7 @@ class ProcesadorMensajesTest {
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
                 tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, resumenes,
                 new FormatoResumen(formato, new GraficoMes(formato), dashboard), consultas, new FormatoConsulta(formato),
-                repetidos, juntadas, properties, dashboard, RELOJ);
+                repetidos, juntadas, fijos, properties, dashboard, RELOJ);
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));
         when(tickets.tamanioMaximo()).thenReturn(DataSize.ofMegabytes(10));
     }
@@ -1150,5 +1152,24 @@ class ProcesadorMensajesTest {
         // Un comando no es el nombre: se deja de esperar y se responde el comando.
         procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "/ayuda");
         verify(juntadas).olvidar(CHAT);
+    }
+
+    // --- Gastos fijos ---
+
+    @Test
+    void elComandoFijoYElAltaDeLaIaVanALaConversacionDeFijos() {
+        Accion.Enviar tarjeta = Accion.Enviar.texto("📌");
+        when(fijos.alta("seguro 32900 tarjeta día 4")).thenReturn(tarjeta);
+        assertThat(procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "/fijo seguro 32900 tarjeta día 4"))
+                .containsExactly(tarjeta);
+
+        PedidoFijo pedido = new PedidoFijo("Seguro", new BigDecimal("32900"), null, List.of(), null, null, null, 4,
+                false, false);
+        when(interpretador.interpretar("agregá un fijo: el seguro, 32900 el 4", PropositoIa.TEXTO))
+                .thenReturn(new InterpretadorService.AltaFijo(pedido, 5L));
+        when(fijos.tarjetaDeAlta(pedido, "")).thenReturn(tarjeta);
+        assertThat(procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "agregá un fijo: el seguro, 32900 el 4"))
+                .containsExactly(tarjeta);
+        verify(movimientos, never()).crearPendiente(any(), any(), any());
     }
 }

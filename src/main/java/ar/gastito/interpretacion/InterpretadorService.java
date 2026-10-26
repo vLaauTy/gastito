@@ -78,6 +78,10 @@ public class InterpretadorService {
     public record Devolucion(ValidadorInterpretacion.Devolucion datos, Long usoIaId) implements Resultado {
     }
 
+    /** "Agregá un fijo: el seguro, 32900 con tarjeta el 4": el alta de un gasto fijo. */
+    public record AltaFijo(PedidoFijo pedido, Long usoIaId) implements Resultado {
+    }
+
     public record NoEsGasto() implements Resultado {
     }
 
@@ -150,6 +154,7 @@ public class InterpretadorService {
             case ValidadorInterpretacion.Dudosa d ->
                     new Dudoso(conHistorial(d.comoGasto(), catalogo, respuesta.usoIaId()));
             case ValidadorInterpretacion.Devolucion d -> new Devolucion(d, respuesta.usoIaId());
+            case ValidadorInterpretacion.AltaFijo a -> new AltaFijo(a.pedido(), respuesta.usoIaId());
         };
     }
 

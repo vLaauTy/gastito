@@ -92,6 +92,9 @@ public class ProcesadorMensajes {
             <b>Juntadas</b>
             "pagué 48000 el asado, éramos 6, con mercado pago": en tus gastos cuenta solo tu parte y el resto queda a cobrar. Cuando alguien te paga, decímelo: "Pablo me pasó 8000". Con /juntadas ves quién te debe.
 
+            <b>Gastos fijos</b>
+            "/fijo seguro 32900 tarjeta día 4" (o "agregá un fijo: …"). El día del cobro te pregunto si se cobró; la luz y el gas, con el promedio de los últimos cobros. Con /fijos los ves y los das de baja.
+
             <b>Preguntas</b>
             Preguntame por escrito o por audio: "¿cuánto gasté en kiosco este mes?", "compará octubre con septiembre", "¿cuántas Seven Up compré?", "¿cuánto me queda disponible?". Los números los calculo con tu base, no los inventa la IA.
 
@@ -103,6 +106,7 @@ public class ProcesadorMensajes {
             /mes – total del mes por categoría
             /resumen – tu semana hasta hoy, con lo que noté; /resumen mes, el mes
             /juntadas – quién te debe plata de las juntadas
+            /fijo – agregar un gasto fijo; /fijos, los que tenés
             /costos – lo gastado en IA este mes
             /dashboard – el link del dashboard, para ver tus gastos con gráficos
             /ayuda – este mensaje""";
@@ -121,6 +125,7 @@ public class ProcesadorMensajes {
     private final ResumenService resumenes;
     private final ConversacionRepetidos repetidos;
     private final ConversacionJuntadas juntadas;
+    private final ConversacionFijos fijos;
     private final FormatoResumen formatoResumen;
     private final ConsultaService consultas;
     private final FormatoConsulta formatoConsulta;
@@ -177,8 +182,9 @@ public class ProcesadorMensajes {
             FormatoMensajes formato, GraficoMes grafico, ComandosIngreso comandosIngreso,
             TranscripcionService transcripciones, TicketService tickets, ResumenService resumenes,
             FormatoResumen formatoResumen, ConsultaService consultas, FormatoConsulta formatoConsulta,
-            ConversacionRepetidos repetidos, ConversacionJuntadas juntadas, GastitoProperties properties,
-            DashboardProperties dashboard, Clock clock) {
+            ConversacionRepetidos repetidos, ConversacionJuntadas juntadas, ConversacionFijos fijos,
+            GastitoProperties properties, DashboardProperties dashboard, Clock clock) {
+        this.fijos = fijos;
         this.repetidos = repetidos;
         this.juntadas = juntadas;
         this.consultas = consultas;
@@ -235,6 +241,10 @@ public class ProcesadorMensajes {
             acciones.add(resumen(limpio));
         } else if ("/juntadas".equals(comando)) {
             acciones.addAll(juntadas.abiertas());
+        } else if ("/fijo".equals(comando)) {
+            acciones.add(fijos.alta(limpio.replaceFirst("^/\\S+\\s*", "")));
+        } else if ("/fijos".equals(comando)) {
+            acciones.add(fijos.lista());
         } else if (comando != null) {
             ClaseIngreso clase = ComandosIngreso.clase(comando);
             acciones.add(clase != null ? comandosIngreso.responder(clase, limpio) : responderComando(comando));
@@ -439,6 +449,7 @@ public class ProcesadorMensajes {
             }
             case InterpretadorService.Devolucion d ->
                     juntadas.devolucion(d.datos(), origen, texto, audio ? escuche(texto) : "");
+            case InterpretadorService.AltaFijo a -> fijos.tarjetaDeAlta(a.pedido(), audio ? escuche(texto) : "");
             case InterpretadorService.NoEsGasto _ -> Accion.Enviar.texto(audio
                     ? escuche(texto) + """
                             No encontré un gasto en lo que escuché 🤔
@@ -646,6 +657,8 @@ public class ProcesadorMensajes {
             case Tarjetas.JUNTADA_NOMBRES, Tarjetas.JUNTADA_PARTE, Tarjetas.JUNTADA_PERDIDO, Tarjetas.JUNTADA_MENSAJE,
                     Tarjetas.JUNTADA_VER, Tarjetas.DEVOLUCION_DE, Tarjetas.DEVOLUCION_QUEDA_DEBIENDO,
                     Tarjetas.DEVOLUCION_SALDADO -> juntadas.boton(chatId, mensajeId, accion, id, elegido);
+            case ConversacionFijos.GUARDAR, ConversacionFijos.CANCELAR, ConversacionFijos.CATEGORIA,
+                    ConversacionFijos.BAJA -> fijos.boton(mensajeId, accion, id, elegido);
             case Tarjetas.UNIR -> repetidos.unir(mensajeId, id, requerido(elegido));
             case Tarjetas.DE_NUEVO -> repetidos.deNuevo(mensajeId, id)
                     .orElseGet(() -> List.of(principal(chatId, mensajeId, pendiente(id))));

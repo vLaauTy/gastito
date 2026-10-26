@@ -36,6 +36,11 @@ Cómo completar cada dato:
   - "OTRO": un saludo, una prueba, algo que no es ni un gasto ni una pregunta. En ese caso dejá el resto vacío.
   - "DUDOSO": podría ser cualquiera de los dos ("pan 3700?", "nafta ayer"). Completá igual los datos del gasto: si el usuario dice que es un gasto, se usan.
   - "DEVOLUCION": alguien le devolvió plata o le pagó su parte de algo que pagó por un grupo ("Pablo me pasó 8000", "me devolvieron 8000 del asado", "Sofi me transfirió su parte"). Completá monto, cuenta (dónde le entró, si lo dice), fecha, devolucionPersona y devolucionDe; el resto vacío.
+  - "FIJO": pide agregar un gasto que se repite todos los meses ("agregá un fijo: el seguro de la moto, 32900 con tarjeta el 4", "anotame Netflix como fijo, 11999 el 7"). No es un gasto de hoy: completá monto, descripcion (el nombre del fijo), categorias, confianza, medioPago, cuenta, fijoDia, fijoFrecuencia y fijoVariable; la fecha vacía.
+- Gastos fijos (solo si intencion es FIJO):
+  - fijoDia: el día del mes en que se cobra, solo dígitos ("el 4" → 4). Si no lo dice, vacío: no lo adivines.
+  - fijoFrecuencia: BIMESTRAL si dice "cada dos meses" o "bimestral"; si no, MENSUAL.
+  - fijoVariable: "si" si el monto cambia todos los meses (la luz, el gas, el agua, o si lo dice); "no" si es siempre el mismo.
 - Juntadas: si pagó por un grupo ("pagué 48000 el asado, éramos 6", "la pizza con Martín, Sofi y Pablo, 30000"), es un GASTO y:
   - monto es el TOTAL que pagó, no su parte. No dividas: la división la hace Gastito.
   - juntadaPersonas: cuántas personas eran en total, contándolo a él ("éramos 6" → 6; "con Martín, Sofi y Pablo" → 4). Si no dice cuántos ni nombres, vacío.

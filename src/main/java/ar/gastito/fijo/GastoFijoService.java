@@ -81,6 +81,13 @@ public class GastoFijoService {
         return vista(fijo, hoy);
     }
 
+    /** Cuándo sería el primer cobro de un fijo que se da de alta hoy con ese día. */
+    public LocalDate primerCobro(int diaDelMes) {
+        LocalDate hoy = LocalDate.now(clock);
+        YearMonth mes = primerMes(diaDelMes, hoy);
+        return mes.atDay(Math.min(diaDelMes, mes.lengthOfMonth()));
+    }
+
     /** El primer mes de cobro: este, si el día todavía no pasó (o es hoy); si no, el que viene. */
     static YearMonth primerMes(int diaDelMes, LocalDate hoy) {
         YearMonth este = YearMonth.from(hoy);

@@ -13,7 +13,9 @@ public enum Intencion {
     /** No se sabe si es un gasto o una pregunta: se le pregunta al usuario con dos botones. */
     DUDOSO,
     /** "Pablo me pasó 8000", "me devolvieron 8000 del asado": alguien devuelve su parte de una juntada. */
-    DEVOLUCION;
+    DEVOLUCION,
+    /** "agregá un fijo: el seguro, 32900 con tarjeta el 4": dar de alta un gasto que se repite todos los meses. */
+    FIJO;
 
     /** Lo que devolvió la IA; si no es ninguno de estos, OTRO. */
     static Intencion de(String texto) {
