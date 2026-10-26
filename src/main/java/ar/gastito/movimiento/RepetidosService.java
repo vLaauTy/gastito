@@ -110,14 +110,26 @@ public class RepetidosService {
             throw new IllegalStateException("El movimiento " + existenteId + " no se puede unir");
         }
 
+        // Si uno es una juntada, el monto que queda es mi parte (lo de la juntada), aunque el otro sea más preciso:
+        // ese otro trae el total, que ya está en la juntada.
+        boolean nuevoEsJuntada = movimientos.totalDeJuntada(nuevo.getId()) != null;
+        boolean existenteEsJuntada = movimientos.totalDeJuntada(existente.getId()) != null;
+        BigDecimal miParte = nuevoEsJuntada ? nuevo.getMonto() : existenteEsJuntada ? existente.getMonto() : null;
+
         String fotoQueSobra = nuevo.getFotoTicket();
         existente.absorber(nuevo);
         if (fotoQueSobra != null && fotoQueSobra.equals(existente.getFotoTicket())) {
             fotoQueSobra = null;
         }
+        if (miParte != null) {
+            existente.ajustarParteDeJuntada(miParte);
+        }
         uniones.save(new MovimientoUnion(existente, nuevo.getOrigen(), nuevo.getMonto(), nuevo.getFechaHora(),
                 nuevo.getTextoOriginal(), LocalDateTime.now(clock)));
         movimientos.pasarUsoIa(nuevo.getId(), existente.getId());
+        if (nuevoEsJuntada && !existenteEsJuntada) {
+            movimientos.pasarJuntada(nuevo.getId(), existente.getId());
+        }
         movimientos.delete(nuevo);
         if (cobroDeFijo) {
             existente.confirmar();

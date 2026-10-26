@@ -44,6 +44,11 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
     @Query(nativeQuery = true, value = "SELECT total_pagado FROM juntada WHERE movimiento_id = :id")
     BigDecimal totalDeJuntada(@Param("id") Long id);
 
+    /** Al unir dos movimientos, la juntada del que se borra pasa al que queda. */
+    @Modifying
+    @Query(nativeQuery = true, value = "UPDATE juntada SET movimiento_id = :a WHERE movimiento_id = :de")
+    int pasarJuntada(@Param("de") Long de, @Param("a") Long a);
+
     /** Al unir dos movimientos, el uso de la IA del que se borra pasa al que queda. */
     @Modifying
     @Query(nativeQuery = true, value = "UPDATE uso_ia SET movimiento_id = :a WHERE movimiento_id = :de")

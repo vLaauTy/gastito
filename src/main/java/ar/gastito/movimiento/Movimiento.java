@@ -303,6 +303,65 @@ public class Movimiento {
         this.fotoTicket = null;
     }
 
+    // --- Juntadas ---
+
+    /** Un gasto pendiente pasa a ser una juntada: el monto es mi parte (lo que cuenta como gasto). */
+    public void prepararJuntada(BigDecimal miParte) {
+        verificarPendiente();
+        this.juntada = true;
+        this.monto = miParte;
+    }
+
+    /**
+     * Cambió el reparto de la juntada (otro total, la parte de alguien): mi parte es otra. Se puede aunque el gasto
+     * ya esté guardado, porque las partes de los demás se acomodan después ("Martín puso 5000").
+     */
+    public void ajustarParteDeJuntada(BigDecimal miParte) {
+        if (!juntada || tipo != TipoMovimiento.GASTO) {
+            throw new IllegalStateException("El movimiento " + id + " no es una juntada");
+        }
+        if (estado == EstadoMovimiento.CANCELADO) {
+            throw new MovimientoNoPendienteException(this);
+        }
+        this.monto = miParte;
+    }
+
+    /**
+     * Alguien me devolvió plata (su parte de una juntada): pendiente hasta que se elija de qué juntada es. No cuenta
+     * como ingreso.
+     *
+     * @param cuenta dónde entró, o null si no se dijo (se usa la de la juntada)
+     */
+    public static Movimiento devolucion(BigDecimal monto, String descripcion, Cuenta cuenta, MedioPago medio,
+            LocalDateTime fechaHora, Origen origen, String textoOriginal, LocalDateTime ahora) {
+        Movimiento m = new Movimiento();
+        m.tipo = TipoMovimiento.DEVOLUCION;
+        m.monto = monto;
+        m.descripcion = descripcion;
+        m.cuenta = cuenta;
+        m.medioPago = medio;
+        m.fechaHora = fechaHora;
+        m.origen = origen;
+        m.estado = EstadoMovimiento.PENDIENTE;
+        m.textoOriginal = textoOriginal != null && textoOriginal.length() > LARGO_MAXIMO_TEXTO_ORIGINAL
+                ? textoOriginal.substring(0, LARGO_MAXIMO_TEXTO_ORIGINAL)
+                : textoOriginal;
+        m.creadoEn = ahora;
+        return m;
+    }
+
+    /** Al elegir de quién es la devolución: la descripción ("Pablo, del Asado") y, si no se dijo, la cuenta. */
+    public void asignarDevolucion(String nuevaDescripcion, Cuenta cuentaSiFalta) {
+        verificarPendiente();
+        if (tipo != TipoMovimiento.DEVOLUCION) {
+            throw new IllegalStateException("El movimiento " + id + " no es una devolución");
+        }
+        this.descripcion = nuevaDescripcion;
+        if (cuenta == null && medioPago == null) {
+            this.cuenta = cuentaSiFalta;
+        }
+    }
+
     // --- Compras repetidas ---
 
     /**

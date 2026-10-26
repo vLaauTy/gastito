@@ -243,6 +243,43 @@ class RepetidosServiceTest {
         assertThat(queda.getOrigen()).isEqualTo(Origen.TEXTO);
     }
 
+    @Test
+    void alUnirConUnaJuntadaQuedaMiParteAunqueElOtroTraigaElTotal() {
+        Movimiento asado = nuevoTexto("48000", "Salidas", AHORA.minusHours(1));
+        asado.prepararJuntada(new BigDecimal("8000"));
+        movimientos.confirmar(asado.getId());
+        jdbc.update("INSERT INTO juntada (movimiento_id, total_pagado, personas, creado_en) VALUES (?, 48000, 6, ?)",
+                asado.getId(), AHORA);
+        Movimiento aviso = nuevoTexto("48000", "Salidas", AHORA);
+
+        repetidos.unir(aviso.getId(), asado.getId());
+
+        Movimiento queda = repositorio.findById(asado.getId()).orElseThrow();
+        assertThat(queda.getMonto()).isEqualByComparingTo("8000");
+        assertThat(queda.isJuntada()).isTrue();
+        assertThat(repositorio.totalDeJuntada(asado.getId())).isEqualByComparingTo("48000");
+    }
+
+    @Test
+    void siLaJuntadaEsLaNuevaPasaAlQueQueda() {
+        Movimiento ticket = nuevoTicket("48000", AHORA.minusHours(1));
+        movimientos.confirmar(ticket.getId());
+        Movimiento asado = nuevoTexto("48000", "Supermercado", AHORA);
+        asado.prepararJuntada(new BigDecimal("8000"));
+        repositorio.flush();
+        jdbc.update("INSERT INTO juntada (movimiento_id, total_pagado, personas, creado_en) VALUES (?, 48000, 6, ?)",
+                asado.getId(), AHORA);
+
+        repetidos.unir(asado.getId(), ticket.getId());
+
+        Movimiento queda = repositorio.findConDetalleById(ticket.getId()).orElseThrow();
+        assertThat(queda.getMonto()).isEqualByComparingTo("8000"); // mi parte, no el total del ticket
+        assertThat(queda.isJuntada()).isTrue();
+        assertThat(queda.getItems()).hasSize(1);
+        assertThat(repositorio.totalDeJuntada(ticket.getId())).isEqualByComparingTo("48000");
+        assertThat(repositorio.findById(asado.getId())).isEmpty();
+    }
+
     /** Un gasto fijo y su cobro de octubre, pendiente, como lo dejaría Gastito el día del cobro. */
     private long cobroDeFijoPendiente(String monto, LocalDate dia) {
         long categoria = categoria("Seguros").getId();
