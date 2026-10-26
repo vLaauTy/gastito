@@ -217,6 +217,14 @@ public class ProcesadorMensajes {
         String comando = comando(limpio);
         List<Accion> acciones = new ArrayList<>();
 
+        // El cobro de un fijo esperaba el monto ("Cambió el monto").
+        if (fijos.esperando(chatId)) {
+            if (comando == null) {
+                return fijos.texto(chatId, limpio);
+            }
+            fijos.olvidar(chatId);
+        }
+
         // La juntada esperaba un nombre o la parte de alguien.
         if (juntadas.esperando(chatId)) {
             if (comando == null) {
@@ -244,7 +252,7 @@ public class ProcesadorMensajes {
         } else if ("/fijo".equals(comando)) {
             acciones.add(fijos.alta(limpio.replaceFirst("^/\\S+\\s*", "")));
         } else if ("/fijos".equals(comando)) {
-            acciones.add(fijos.lista());
+            acciones.addAll(fijos.lista());
         } else if (comando != null) {
             ClaseIngreso clase = ComandosIngreso.clase(comando);
             acciones.add(clase != null ? comandosIngreso.responder(clase, limpio) : responderComando(comando));
@@ -595,6 +603,7 @@ public class ProcesadorMensajes {
 
         List<Accion> acciones = new ArrayList<>();
         juntadas.olvidar(chatId);
+        fijos.olvidar(chatId);
         Espera previa = esperas.remove(chatId);
         if (previa != null && (previa.mensajeId() == null || previa.mensajeId() != mensajeId)) {
             acciones.addAll(restaurar(previa));
@@ -659,6 +668,8 @@ public class ProcesadorMensajes {
                     Tarjetas.DEVOLUCION_SALDADO -> juntadas.boton(chatId, mensajeId, accion, id, elegido);
             case ConversacionFijos.GUARDAR, ConversacionFijos.CANCELAR, ConversacionFijos.CATEGORIA,
                     ConversacionFijos.BAJA -> fijos.boton(mensajeId, accion, id, elegido);
+            case ConversacionFijos.CONFIRMAR_COBRO, ConversacionFijos.CAMBIO_EL_MONTO, ConversacionFijos.ESTE_MES_NO ->
+                    fijos.botonDeCobro(chatId, mensajeId, accion, id);
             case Tarjetas.UNIR -> repetidos.unir(mensajeId, id, requerido(elegido));
             case Tarjetas.DE_NUEVO -> repetidos.deNuevo(mensajeId, id)
                     .orElseGet(() -> List.of(principal(chatId, mensajeId, pendiente(id))));

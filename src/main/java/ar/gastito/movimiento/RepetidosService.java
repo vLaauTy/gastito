@@ -135,11 +135,18 @@ public class RepetidosService {
             existente.confirmar();
         }
         movimientos.flush();
-        return new Union(conProductos(existente), fotoQueSobra);
+        return new Union(conProductos(existente), fotoQueSobra, cobroDeFijo);
     }
 
-    /** @param fotoQueSobra la foto del que se borró, si no pasó al que quedó; null si no hay */
-    public record Union(Movimiento movimiento, String fotoQueSobra) {
+    /**
+     * @param fotoQueSobra        la foto del que se borró, si no pasó al que quedó; null si no hay
+     * @param confirmoCobroDeFijo el que quedó era el cobro pendiente de un fijo y se confirmó al unir
+     */
+    public record Union(Movimiento movimiento, String fotoQueSobra, boolean confirmoCobroDeFijo) {
+
+        public Union(Movimiento movimiento, String fotoQueSobra) {
+            this(movimiento, fotoQueSobra, false);
+        }
     }
 
     /** Las uniones de un movimiento, de la más vieja a la más nueva. */

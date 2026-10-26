@@ -9,6 +9,7 @@ import static ar.gastito.bot.DatosDePrueba.conId;
 import static ar.gastito.bot.DatosDePrueba.confirmado;
 import static ar.gastito.bot.DatosDePrueba.ticket;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -20,6 +21,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import ar.gastito.fijo.GastoFijoService;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.RepetidosService;
@@ -30,8 +32,9 @@ class ConversacionRepetidosTest {
     private final RepetidosService repetidos = mock(RepetidosService.class);
     private final MovimientoService movimientos = mock(MovimientoService.class);
     private final TicketService tickets = mock(TicketService.class);
+    private final GastoFijoService fijos = mock(GastoFijoService.class);
     private final ConversacionRepetidos conversacion = new ConversacionRepetidos(repetidos, movimientos, tickets,
-            new Tarjetas(new FormatoMensajes(RELOJ)));
+            new Tarjetas(new FormatoMensajes(RELOJ)), fijos, new FormatoMensajes(RELOJ));
 
     private final Movimiento existente = conId(confirmado("8050", SUPER), 7L);
 
@@ -88,5 +91,25 @@ class ConversacionRepetidosTest {
         when(movimientos.buscar(15L)).thenReturn(conCategoria("1500", null));
         assertThat(conversacion.deNuevo(100, 15L)).isEmpty();
         verify(movimientos, never()).confirmar(15L);
+    }
+
+    @Test
+    void unirConElCobroDeUnFijoAvisaSiAumento() {
+        when(repetidos.unir(15L, 7L)).thenReturn(new RepetidosService.Union(existente, null, true));
+        when(fijos.alConfirmar(7L)).thenReturn(Optional.of(new GastoFijoService.Aumento("Seguro",
+                new BigDecimal("32900"), new BigDecimal("36100"), new BigDecimal("9.7"))));
+
+        Accion.Editar editar = (Accion.Editar) conversacion.unir(100, 15L, 7L).get(0);
+
+        assertThat(editar.html()).endsWith("📈 Seguro subió de $32.900 a $36.100 (+9,7%).");
+    }
+
+    @Test
+    void unirConUnGastoComunNoMiraLosFijos() {
+        when(repetidos.unir(15L, 7L)).thenReturn(new RepetidosService.Union(existente, null));
+
+        conversacion.unir(100, 15L, 7L);
+
+        verify(fijos, never()).alConfirmar(any());
     }
 }

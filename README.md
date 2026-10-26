@@ -342,6 +342,38 @@ Los datos están en `juntada` (el gasto, el total, las personas y desde dónde s
 devolución y el gasto de
 una parte perdida).
 
+### Gastos fijos
+
+Lo que se cobra todos los meses (el seguro, el streaming, la luz, el gas). El alta es con un comando, sin IA:
+
+```
+/fijo seguro 32900 tarjeta día 4
+/fijo luz 28.000 débito galicia el 10 bimestral
+/fijo netflix 12 mil tarjeta dia 7
+```
+
+o en lenguaje natural ("agregá un fijo: el seguro de la moto, 32900 con tarjeta el 4"). Llega una tarjeta con el
+nombre, el monto, la categoría (si no se reconoce, se elige con botones), el medio de pago y el primer cobro, para
+**Guardar** o **Cancelar**. Si el día de este mes ya pasó, el primer cobro es el mes que viene.
+
+- **El día del cobro** el bot crea el gasto pendiente y pregunta: "Se cobró el seguro de la moto: $32.900.
+  ¿Confirmás?", con **Confirmar**, **Cambió el monto** (y lo escribís) y **Este mes no** (ese mes no se vuelve a
+  pedir). Si el mes no tiene ese día (un 31), se cobra el último.
+- **Bimestral:** cada dos meses desde el primer cobro.
+- **Montos variables** (la luz, el gas y el agua lo son solos; cualquier otro, con "variable"): se propone el
+  promedio de los últimos 3 cobros confirmados.
+- **Aviso de aumento:** si el monto confirmado difiere más de un 5% del cobro anterior, "📈 El seguro subió de
+  $32.900 a $36.100 (+9,7%)". En los de monto fijo, lo confirmado pasa a ser el monto esperado.
+- **Con la PC apagada,** al arrancar se crean (y se preguntan) los cobros que quedaron sin registrar. Revisa al
+  arrancar y cada 10 minutos.
+- Los cobros son gastos normales, con el vínculo a su fijo (`movimiento.gasto_fijo_id` y `fijo_periodo`). Si cargás
+  a mano un gasto que coincide con un cobro pendiente del mes, el bot ofrece unirlos (ver Compras repetidas) y el
+  fijo queda confirmado con lo que cargaste.
+- `/fijos` muestra los que tenés con el próximo cobro, un botón para darlos de baja y, otra vez, la pregunta de
+  los cobros que no respondiste.
+- Para la etapa 7 ya está `GastoFijoService.confirmarDesdeResumen`: el resumen de la tarjeta va a confirmar el
+  cobro solo, con su monto.
+
 ### Ingresos
 
 Tres comandos, uno por tipo. El aguinaldo va aparte del sueldo para que no infle la comparación entre meses;
@@ -429,6 +461,7 @@ Abajo del chat queda un menú fijo con estos comandos, que también están en el
 | 💸 Costos IA   | `/costos`    | Lo gastado en IA este mes, en dólares            |
 |                | `/resumen`   | La semana hasta hoy; `/resumen mes`, el mes      |
 |                | `/juntadas`  | Quién te debe plata de las juntadas              |
+|                | `/fijo`, `/fijos` | Agregar un gasto fijo; los que tenés y su próximo cobro |
 | 🖥 Dashboard   | `/dashboard` | El link del dashboard (se abre desde la PC)      |
 | ❓ Ayuda       | `/ayuda`     | Cómo cargar gastos e ingresos                    |
 |                | `/sueldo`, `/aguinaldo`, `/ingreso` | Cargar un ingreso                 |
@@ -611,6 +644,7 @@ ar.gastito
 ├── resumen          Resúmenes semanales y mensuales: cálculo, redacción con Haiku y registro de envíos
 ├── consulta         Preguntas en lenguaje natural: herramientas con SQL y conversación con tool use
 ├── juntada          Juntadas: el reparto (en Java), lo que me deben, devoluciones y partes perdidas
+├── fijo             Gastos fijos: calendario de cobros, montos variables, aviso de aumento
 ├── catalogo         Categorías, medios de pago, cuentas, tarjeta de crédito y alias de comercios
 ├── movimiento       Gastos e ingresos, su ciclo pendiente → confirmado y los totales
 ├── dashboard        API REST del dashboard, sus cálculos y el acceso (127.0.0.1 o token)

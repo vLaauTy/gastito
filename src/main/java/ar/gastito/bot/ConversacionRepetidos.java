@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Component;
 
+import ar.gastito.fijo.GastoFijoService;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Origen;
@@ -22,13 +23,17 @@ public class ConversacionRepetidos {
     private final MovimientoService movimientos;
     private final TicketService tickets;
     private final Tarjetas tarjetas;
+    private final GastoFijoService fijos;
+    private final FormatoMensajes formato;
 
     public ConversacionRepetidos(RepetidosService repetidos, MovimientoService movimientos, TicketService tickets,
-            Tarjetas tarjetas) {
+            Tarjetas tarjetas, GastoFijoService fijos, FormatoMensajes formato) {
         this.repetidos = repetidos;
         this.movimientos = movimientos;
         this.tickets = tickets;
         this.tarjetas = tarjetas;
+        this.fijos = fijos;
+        this.formato = formato;
     }
 
     /** La tarjeta "Ya registrado / Nuevo", si el gasto recién creado se parece a otro; si no, vacío. */
@@ -49,7 +54,12 @@ public class ConversacionRepetidos {
         if (union.fotoQueSobra() != null) {
             tickets.borrarArchivoDeFoto(union.fotoQueSobra());
         }
-        return List.of(new Accion.Editar(mensajeId, tarjetas.unidos(union.movimiento()), Teclado.NINGUNO),
+        // Era el cobro de un fijo: queda confirmado con lo cargado, y se avisa si aumentó.
+        String aumento = union.confirmoCobroDeFijo()
+                ? fijos.alConfirmar(union.movimiento().getId())
+                        .map(a -> "\n\n" + ConversacionFijos.textoDeAumento(a, formato)).orElse("")
+                : "";
+        return List.of(new Accion.Editar(mensajeId, tarjetas.unidos(union.movimiento()) + aumento, Teclado.NINGUNO),
                 new Accion.Avisar("🔗 Unidos"));
     }
 

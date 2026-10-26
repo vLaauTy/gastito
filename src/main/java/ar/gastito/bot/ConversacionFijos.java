@@ -2,13 +2,18 @@ package ar.gastito.bot;
 
 import static ar.gastito.bot.FormatoMensajes.html;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.stereotype.Component;
@@ -18,8 +23,12 @@ import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.fijo.Frecuencia;
 import ar.gastito.fijo.GastoFijoService;
 import ar.gastito.fijo.VistaFijo;
+import ar.gastito.interpretacion.Montos;
 import ar.gastito.interpretacion.ParserFijo;
 import ar.gastito.interpretacion.PedidoFijo;
+import ar.gastito.movimiento.Movimiento;
+import ar.gastito.movimiento.MovimientoNoPendienteException;
+import ar.gastito.movimiento.MovimientoService;
 
 /**
  * Los gastos fijos en el chat: el alta ("/fijo seguro 32900 tarjeta día 4" o "agregá un fijo: …") con su tarjeta
@@ -44,6 +53,7 @@ public class ConversacionFijos {
     private final GastoFijoService fijos;
     private final ParserFijo parser;
     private final CatalogoService catalogos;
+    private final MovimientoService movimientos;
     private final FormatoMensajes formato;
 
     private final AtomicLong siguiente = new AtomicLong();
@@ -55,10 +65,11 @@ public class ConversacionFijos {
     });
 
     public ConversacionFijos(GastoFijoService fijos, ParserFijo parser, CatalogoService catalogos,
-            FormatoMensajes formato) {
+            MovimientoService movimientos, FormatoMensajes formato) {
         this.fijos = fijos;
         this.parser = parser;
         this.catalogos = catalogos;
+        this.movimientos = movimientos;
         this.formato = formato;
     }
 
@@ -172,12 +183,118 @@ public class ConversacionFijos {
         };
     }
 
+    // --- Cobros ---
+
+    /** Botones del cobro de un fijo: confirmar, cambió el monto, este mes no. */
+    static final String CONFIRMAR_COBRO = "fc";
+    static final String CAMBIO_EL_MONTO = "fm";
+    static final String ESTE_MES_NO = "fn";
+
+    /** Esperando el monto de un cobro ("Cambió el monto"): en qué mensaje está la tarjeta. */
+    record Espera(long movimientoId, int mensajeId) {
+    }
+
+    private final Map<Long, Espera> esperas = new ConcurrentHashMap<>();
+
+    /** "Se cobró el seguro: $32.900. ¿Confirmás?" */
+    public Accion.Enviar preguntaDeCobro(Movimiento m) {
+        return Accion.Enviar.conBotones(textoDeCobro(m), Teclado.constructor()
+                .fila(new Teclado.Boton("✅ Confirmar", CONFIRMAR_COBRO + ":" + m.getId()))
+                .fila(new Teclado.Boton("✏️ Cambió el monto", CAMBIO_EL_MONTO + ":" + m.getId()),
+                        new Teclado.Boton("⏭ Este mes no", ESTE_MES_NO + ":" + m.getId()))
+                .build());
+    }
+
+    String textoDeCobro(Movimiento m) {
+        VistaFijo f = fijos.vista(m.getGastoFijoId());
+        return "📌 <b>Se cobró " + html(minuscula(m.getDescripcion())) + ": " + formato.pesos(m.getMonto())
+                + ".</b> ¿Confirmás?\n📅 " + formato.fecha(m.getFechaHora()) + " · 💳 "
+                + html(m.getTarjeta() != null ? m.getTarjeta().getNombre()
+                        : FormatoMensajes.medio(m.getMedioPago(), m.getCuenta()))
+                + (f.montoVariable() ? "\n📈 Es el promedio de los últimos cobros: si fue otro, tocá Cambió el monto."
+                        : "");
+    }
+
+    private static String minuscula(String texto) {
+        return texto == null || texto.isEmpty() ? "el gasto fijo"
+                : "el " + Character.toLowerCase(texto.charAt(0)) + texto.substring(1);
+    }
+
+    public boolean esBotonDeCobro(String accion) {
+        return CONFIRMAR_COBRO.equals(accion) || CAMBIO_EL_MONTO.equals(accion) || ESTE_MES_NO.equals(accion);
+    }
+
+    public List<Accion> botonDeCobro(long chatId, int mensajeId, String accion, long movimientoId) {
+        try {
+            return switch (accion) {
+                case CONFIRMAR_COBRO -> confirmado(mensajeId, fijos.confirmar(movimientoId, null));
+                case CAMBIO_EL_MONTO -> {
+                    esperas.put(chatId, new Espera(movimientoId, mensajeId));
+                    yield List.of(new Accion.Editar(mensajeId, textoDeCobro(movimientos.buscar(movimientoId))
+                            + "\n\n✏️ <b>¿Cuánto se cobró?</b> Escribime el monto.", Teclado.NINGUNO));
+                }
+                default -> {
+                    Movimiento m = fijos.esteMesNo(movimientoId);
+                    yield List.of(new Accion.Editar(mensajeId, "⏭ <b>Este mes no</b>\n" + html(m.getDescripcion())
+                            + ": no se registra el cobro de " + formato.mes(YearMonth.from(
+                                    m.getFijoPeriodo())) + ".", Teclado.NINGUNO), new Accion.Avisar("⏭ Listo"));
+                }
+            };
+        } catch (MovimientoNoPendienteException e) {
+            return List.of(new Accion.Editar(mensajeId, "📌 Ese cobro ya estaba resuelto.", Teclado.NINGUNO));
+        }
+    }
+
+    public boolean esperando(long chatId) {
+        return esperas.containsKey(chatId);
+    }
+
+    public void olvidar(long chatId) {
+        esperas.remove(chatId);
+    }
+
+    /** El monto que se pidió con "Cambió el monto": el cobro se confirma con ese. */
+    public List<Accion> texto(long chatId, String texto) {
+        Espera e = esperas.get(chatId);
+        Optional<BigDecimal> monto = Montos.parsearConPalabras(texto.replaceAll("(?i)\\s*pesos$", "").strip());
+        if (monto.isEmpty()) {
+            return List.of(new Accion.Avisar("No entendí el monto: escribilo como 36100 o 36.100"));
+        }
+        esperas.remove(chatId);
+        try {
+            return confirmado(e.mensajeId(), fijos.confirmar(e.movimientoId(), monto.get()));
+        } catch (MovimientoNoPendienteException ex) {
+            return List.of(new Accion.Editar(e.mensajeId(), "📌 Ese cobro ya estaba resuelto.", Teclado.NINGUNO));
+        }
+    }
+
+    private List<Accion> confirmado(int mensajeId, GastoFijoService.Cobro cobro) {
+        Movimiento m = cobro.movimiento();
+        String html = "✅ <b>Guardado</b>\n📌 " + html(m.getDescripcion()) + ": " + formato.pesos(m.getMonto())
+                + cobro.aumento().map(a -> "\n" + textoDeAumento(a, formato)).orElse("");
+        return List.of(new Accion.Editar(mensajeId, html, Teclado.NINGUNO), new Accion.Avisar("✅ Guardado"));
+    }
+
+    /** "📈 El seguro subió de $32.900 a $36.100 (+9,7%)." */
+    public static String textoDeAumento(GastoFijoService.Aumento a, FormatoMensajes formato) {
+        String porcentaje = a.porcentaje().abs().stripTrailingZeros().toPlainString().replace('.', ',');
+        return (a.subio() ? "📈 " : "📉 ") + html(a.nombre()) + (a.subio() ? " subió" : " bajó") + " de "
+                + formato.pesos(a.anterior()) + " a " + formato.pesos(a.nuevo()) + " (" + (a.subio() ? "+" : "−")
+                + porcentaje + "%).";
+    }
+
     // --- Lista ---
 
-    /** "/fijos": los activos, con el próximo cobro y un botón para darlos de baja. */
-    public Accion lista() {
+    /**
+     * "/fijos": los activos, con el próximo cobro y un botón para darlos de baja; y, si hay cobros esperando
+     * respuesta (por si se perdió el mensaje), otra vez su pregunta.
+     */
+    public List<Accion> lista() {
         List<VistaFijo> activos = fijos.activos();
-        return Accion.Enviar.conBotones(textoDeLista(activos), tecladoDeLista(activos));
+        List<Accion> acciones = new ArrayList<>();
+        acciones.add(Accion.Enviar.conBotones(textoDeLista(activos), tecladoDeLista(activos)));
+        fijos.cobrosPendientes().forEach(m -> acciones.add(preguntaDeCobro(m)));
+        return acciones;
     }
 
     private String textoDeLista(List<VistaFijo> activos) {

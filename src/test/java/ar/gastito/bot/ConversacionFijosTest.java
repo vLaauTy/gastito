@@ -26,6 +26,10 @@ import ar.gastito.fijo.GastoFijoService;
 import ar.gastito.fijo.VistaFijo;
 import ar.gastito.interpretacion.CatalogoDePrueba;
 import ar.gastito.interpretacion.ParserFijo;
+import ar.gastito.movimiento.Movimiento;
+import ar.gastito.movimiento.MovimientoInterpretado;
+import ar.gastito.movimiento.MovimientoNoPendienteException;
+import ar.gastito.movimiento.MovimientoService;
 
 class ConversacionFijosTest {
 
@@ -35,8 +39,9 @@ class ConversacionFijosTest {
 
     private final GastoFijoService servicio = mock(GastoFijoService.class);
     private final CatalogoService catalogos = mock(CatalogoService.class);
+    private final MovimientoService movimientos = mock(MovimientoService.class);
     private final ConversacionFijos conversacion = new ConversacionFijos(servicio, new ParserFijo(), catalogos,
-            new FormatoMensajes(RELOJ));
+            movimientos, new FormatoMensajes(RELOJ));
 
     @BeforeEach
     void setUp() {
@@ -132,7 +137,7 @@ class ConversacionFijosTest {
                 "💡", null, 10, Frecuencia.BIMESTRAL, true, true, LocalDate.of(2026, 11, 10));
         when(servicio.activos()).thenReturn(List.of(seguro, luz));
 
-        Accion.Enviar lista = (Accion.Enviar) conversacion.lista();
+        Accion.Enviar lista = (Accion.Enviar) conversacion.lista().get(0);
 
         assertThat(lista.html()).isEqualTo("""
                 📌 <b>Tus gastos fijos</b>
@@ -144,5 +149,103 @@ class ConversacionFijosTest {
         List<Accion> baja = conversacion.boton(MENSAJE, ConversacionFijos.BAJA, 7, null);
         verify(servicio).darDeBaja(7L);
         assertThat(baja).contains(new Accion.Avisar("🗑 Seguro ya no se cobra"));
+    }
+
+    // --- Cobros ---
+
+    static final long COBRO = 15;
+    static final long CHAT = 42;
+
+    private Movimiento cobro(String monto) {
+        Movimiento m = Movimiento.cobroDeFijo(MovimientoInterpretado.conCategoria(new BigDecimal(monto),
+                "Seguro de la moto", SEGUROS, CatalogoDePrueba.CREDITO, null, null,
+                LocalDate.of(2026, 11, 4).atTime(9, 0)), 7L, LocalDate.of(2026, 11, 1), DatosDePrueba.AHORA);
+        return DatosDePrueba.conId(m, COBRO);
+    }
+
+    private VistaFijo seguro(boolean variable) {
+        return new VistaFijo(7L, "Seguro de la moto", new BigDecimal("32900.00"), new BigDecimal("32900.00"),
+                "Seguros", "🛡️", null, 4, Frecuencia.MENSUAL, variable, true, PRIMER_COBRO);
+    }
+
+    @Test
+    void laPreguntaDelCobroConSusTresBotones() {
+        when(servicio.vista(7L)).thenReturn(seguro(false));
+
+        Accion.Enviar pregunta = conversacion.preguntaDeCobro(cobro("32900"));
+
+        assertThat(pregunta.html()).startsWith("📌 <b>Se cobró el seguro de la moto: $32.900.</b> ¿Confirmás?\n📅 ")
+                .contains("💳 Tarjeta de crédito").doesNotContain("promedio");
+        assertThat(datos(pregunta.teclado())).containsExactly("fc:15", "fm:15", "fn:15");
+        when(servicio.vista(7L)).thenReturn(seguro(true));
+        assertThat(conversacion.preguntaDeCobro(cobro("32900")).html()).contains("Es el promedio de los últimos");
+    }
+
+    @Test
+    void confirmarAvisaSiAumento() {
+        Movimiento confirmado = cobro("36100");
+        when(servicio.confirmar(COBRO, null)).thenReturn(new GastoFijoService.Cobro(confirmado, Optional.of(
+                new GastoFijoService.Aumento("Seguro de la moto", new BigDecimal("32900"), new BigDecimal("36100"),
+                        new BigDecimal("9.7")))));
+
+        Accion.Editar editar = (Accion.Editar) conversacion.botonDeCobro(CHAT, MENSAJE,
+                ConversacionFijos.CONFIRMAR_COBRO, COBRO).get(0);
+
+        assertThat(editar.html()).isEqualTo("""
+                ✅ <b>Guardado</b>
+                📌 Seguro de la moto: $36.100
+                📈 Seguro de la moto subió de $32.900 a $36.100 (+9,7%).""");
+    }
+
+    @Test
+    void cambioElMontoPideElMontoYConfirmaConEse() {
+        when(servicio.vista(7L)).thenReturn(seguro(false));
+        when(movimientos.buscar(COBRO)).thenReturn(cobro("32900"));
+
+        Accion.Editar pedido = (Accion.Editar) conversacion.botonDeCobro(CHAT, MENSAJE,
+                ConversacionFijos.CAMBIO_EL_MONTO, COBRO).get(0);
+        assertThat(pedido.html()).endsWith("✏️ <b>¿Cuánto se cobró?</b> Escribime el monto.");
+        assertThat(conversacion.esperando(CHAT)).isTrue();
+
+        assertThat(conversacion.texto(CHAT, "no sé")).singleElement().isInstanceOf(Accion.Avisar.class);
+        when(servicio.confirmar(COBRO, new BigDecimal("36100"))).thenReturn(new GastoFijoService.Cobro(cobro("36100"),
+                Optional.empty()));
+        Accion.Editar listo = (Accion.Editar) conversacion.texto(CHAT, "36.100").get(0);
+
+        assertThat(listo.mensajeId()).isEqualTo(MENSAJE);
+        assertThat(listo.html()).isEqualTo("✅ <b>Guardado</b>\n📌 Seguro de la moto: $36.100");
+        assertThat(conversacion.esperando(CHAT)).isFalse();
+    }
+
+    @Test
+    void esteMesNoNoRegistraElCobro() {
+        Movimiento cancelado = cobro("32900");
+        when(servicio.esteMesNo(COBRO)).thenReturn(cancelado);
+
+        Accion.Editar editar = (Accion.Editar) conversacion.botonDeCobro(CHAT, MENSAJE, ConversacionFijos.ESTE_MES_NO,
+                COBRO).get(0);
+
+        assertThat(editar.html()).isEqualTo("⏭ <b>Este mes no</b>\nSeguro de la moto: no se registra el cobro de "
+                + "noviembre 2026.");
+    }
+
+    @Test
+    void unCobroYaResueltoLoDice() {
+        when(servicio.confirmar(COBRO, null)).thenThrow(new MovimientoNoPendienteException(cobro("32900")));
+
+        assertThat(((Accion.Editar) conversacion.botonDeCobro(CHAT, MENSAJE, ConversacionFijos.CONFIRMAR_COBRO, COBRO)
+                .get(0)).html()).isEqualTo("📌 Ese cobro ya estaba resuelto.");
+    }
+
+    @Test
+    void fijosVuelveAPreguntarPorLosCobrosSinResponder() {
+        when(servicio.activos()).thenReturn(List.of(seguro(false)));
+        when(servicio.vista(7L)).thenReturn(seguro(false));
+        when(servicio.cobrosPendientes()).thenReturn(List.of(cobro("32900")));
+
+        List<Accion> acciones = conversacion.lista();
+
+        assertThat(acciones).hasSize(2);
+        assertThat(((Accion.Enviar) acciones.get(1)).html()).startsWith("📌 <b>Se cobró el seguro de la moto");
     }
 }
