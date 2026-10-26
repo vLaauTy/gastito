@@ -303,6 +303,34 @@ public class Movimiento {
         this.fotoTicket = null;
     }
 
+    // --- Gastos fijos ---
+
+    /**
+     * El cobro de un gasto fijo de un mes, generado por Gastito el día del cobro: pendiente hasta que el usuario lo
+     * confirma (o, en la etapa 7, lo confirma el resumen de la tarjeta).
+     *
+     * @param periodo el mes del cobro (día 1)
+     */
+    public static Movimiento cobroDeFijo(MovimientoInterpretado interpretado, Long gastoFijoId, LocalDate periodo,
+            LocalDateTime ahora) {
+        Movimiento m = pendiente(interpretado, Origen.AUTOMATICO, null, ahora);
+        m.gastoFijoId = gastoFijoId;
+        m.fijoPeriodo = periodo.withDayOfMonth(1);
+        return m;
+    }
+
+    /** "Cambió el monto": el cobro de un fijo se confirma con otro monto. */
+    public void cambiarMontoDeCobro(BigDecimal nuevo) {
+        verificarPendiente();
+        if (gastoFijoId == null) {
+            throw new IllegalStateException("El movimiento " + id + " no es el cobro de un gasto fijo");
+        }
+        if (nuevo == null || nuevo.signum() <= 0) {
+            throw new IllegalArgumentException("El monto tiene que ser mayor a cero");
+        }
+        this.monto = nuevo;
+    }
+
     // --- Juntadas ---
 
     /** Un gasto pendiente pasa a ser una juntada: el monto es mi parte (lo que cuenta como gasto). */

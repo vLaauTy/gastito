@@ -23,6 +23,27 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
     @EntityGraph(attributePaths = {"categoria", "medioPago", "cuenta", "tarjeta", "candidatas"})
     Optional<Movimiento> findConDetalleById(Long id);
 
+    /** Los meses que ya tienen cobro de este fijo, en cualquier estado ("este mes no" también cuenta). */
+    @Query("select m.fijoPeriodo from Movimiento m where m.gastoFijoId = :fijo")
+    List<LocalDate> periodosDeFijo(@Param("fijo") Long gastoFijoId);
+
+    Optional<Movimiento> findFirstByGastoFijoIdAndFijoPeriodo(Long gastoFijoId, LocalDate fijoPeriodo);
+
+    /** Los cobros confirmados de un fijo, del más nuevo al más viejo. */
+    @Query("""
+            select m from Movimiento m
+            where m.gastoFijoId = :fijo and m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
+            order by m.fijoPeriodo desc, m.id desc""")
+    List<Movimiento> cobrosConfirmados(@Param("fijo") Long gastoFijoId, Pageable pagina);
+
+    /** Los cobros de fijos que esperan respuesta (el más viejo primero). */
+    @EntityGraph(attributePaths = {"categoria", "medioPago", "cuenta", "tarjeta"})
+    @Query("""
+            select m from Movimiento m
+            where m.gastoFijoId is not null and m.estado = ar.gastito.movimiento.EstadoMovimiento.PENDIENTE
+            order by m.fechaHora, m.id""")
+    List<Movimiento> cobrosDeFijosPendientes();
+
     /**
      * Los gastos contra los que se busca una compra repetida, como huellas (id, fecha, monto, categoría, comercio y 1
      * si es el cobro pendiente de un fijo):
