@@ -4,6 +4,14 @@ Bot de Telegram personal para registrar y analizar gastos e ingresos. Lo usa una
 
 Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier tarea.
 
+## Cómo trabajar (ahorro de tokens)
+
+- Durante el desarrollo, corré solo los tests de las clases que tocás (`./mvnw -q test -Dtest=...`). La suite completa, una vez por parte, y reportá solo el resumen (cuántos pasan/fallan; el detalle de qué falló solo si falla algo).
+- No releas archivos grandes enteros: buscá el método y leé solo ese tramo. Si una clase pasa de ~500 líneas, proponé dividirla.
+- La documentación (README y este archivo) se actualiza al terminar cada **etapa**, no cada parte; este archivo se mantiene corto, lo detallado va en `docs/`.
+- Los reportes de cierre de cada parte: máximo 10 líneas (qué se hizo, cómo probarlo, decisiones tomadas).
+- Antes de pausar o cambiar de parte, verificá que todo esté commiteado y subido.
+
 ## Stack
 
 - Java 25, Spring Boot 3 (Maven).
