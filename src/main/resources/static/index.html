@@ -19,8 +19,8 @@
       <a href="#resumen" data-view="resumen">Resumen</a>
       <a href="#movimientos" data-view="movimientos">Movimientos</a>
       <a href="#ingresos" data-view="ingresos">Ingresos</a>
-      <a class="off" aria-disabled="true">Fijos y cuotas <small>Próximamente</small></a>
-      <a class="off" aria-disabled="true">Juntadas <small>Próximamente</small></a>
+      <a href="#fijos" data-view="fijos">Fijos</a>
+      <a class="off" aria-disabled="true">Cuotas y juntadas <small>Próximamente</small></a>
     </div>
     <div class="ia" id="ia" aria-live="polite">
       <span id="ia-titulo">Costo de la IA</span>
@@ -208,6 +208,40 @@
         <div id="i-meses" class="lista"></div>
       </section>
     </div>
+
+    <!-- ===== Fijos ===== -->
+    <div class="view" id="v-fijos" hidden>
+      <header>
+        <div><h1>Fijos</h1><div class="sub" data-titulo-mes></div></div>
+        <div class="btns">
+          <button type="button" data-mes="-1">‹ <span data-nombre-mes="-1"></span></button>
+          <button type="button" data-mes="1" hidden><span data-nombre-mes="1"></span> ›</button>
+          <button type="button" class="primary" data-abrir-fijo>Agregar fijo</button>
+        </div>
+      </header>
+      <section class="cards" aria-label="Checklist del mes">
+        <div class="card"><div class="label">Cargado este mes</div><div class="big positivo" id="f-cargado">…</div></div>
+        <div class="card"><div class="label">Falta cargar</div><div class="big" id="f-faltan">…</div></div>
+      </section>
+      <section class="card table-card" aria-label="Checklist mensual">
+        <h2>Checklist del mes</h2>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Fijo</th><th>Estado</th><th class="num">Monto</th><th>Fecha / vencimiento</th><th></th></tr></thead>
+            <tbody id="f-checklist"></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="card table-card" aria-label="Tus gastos fijos">
+        <h2>Tus gastos fijos</h2>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Nombre</th><th>Categoría</th><th class="num">Monto esperado</th><th>Día</th><th>Frecuencia</th><th>Propone monto</th><th></th></tr></thead>
+            <tbody id="f-abm"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   </main>
 </div>
 
@@ -229,6 +263,41 @@
     <div class="btns fin">
       <button type="button" data-cerrar>Cancelar</button>
       <button type="submit" class="primary" id="form-guardar">Guardar</button>
+    </div>
+  </form>
+</div>
+
+<!-- ===== Alta / edición de un gasto fijo ===== -->
+<div class="modal" id="modal-fijo" hidden>
+  <form class="card dialog" id="form-fijo" aria-labelledby="form-fijo-titulo" novalidate>
+    <h2 id="form-fijo-titulo">Nuevo gasto fijo</h2>
+    <input type="hidden" id="f-id">
+    <label for="f-nombre">Nombre</label>
+    <input id="f-nombre" required maxlength="80" autocomplete="off">
+    <label for="f-monto">Monto esperado</label>
+    <input id="f-monto" inputmode="decimal" placeholder="32.900" required autocomplete="off">
+    <label for="f-categoria">Categoría</label>
+    <select id="f-categoria" data-categorias required></select>
+    <label for="f-dia">Día del cobro</label>
+    <input id="f-dia" type="number" min="1" max="31" required>
+    <label for="f-frecuencia">Frecuencia</label>
+    <select id="f-frecuencia">
+      <option value="MENSUAL">Todos los meses</option>
+      <option value="BIMESTRAL">Cada dos meses</option>
+    </select>
+    <label for="f-medio">Medio de pago</label>
+    <select id="f-medio"><option value="">—</option></select>
+    <label for="f-cuenta">Cuenta</label>
+    <select id="f-cuenta"><option value="">—</option></select>
+    <label class="check"><input type="checkbox" id="f-tarjeta"> Se paga con la tarjeta de crédito</label>
+    <label for="f-alias">Alias, para reconocerlo en un mensaje (separados por coma)</label>
+    <input id="f-alias" placeholder="edesur, factura de luz" autocomplete="off">
+    <label class="check"><input type="checkbox" id="f-variable"> El monto cambia todos los meses</label>
+    <label class="check"><input type="checkbox" id="f-proponer"> Proponerme el monto para confirmar (el flujo de siempre; si no, lo cargás vos y queda en el checklist)</label>
+    <p class="error" id="form-fijo-error" role="alert" hidden></p>
+    <div class="btns fin">
+      <button type="button" data-cerrar-fijo>Cancelar</button>
+      <button type="submit" class="primary" id="form-fijo-guardar">Guardar</button>
     </div>
   </form>
 </div>

@@ -135,7 +135,7 @@
 
   // --- Navegación ---
 
-  const VISTAS = ['resumen', 'movimientos', 'ingresos'];
+  const VISTAS = ['resumen', 'movimientos', 'ingresos', 'fijos'];
 
   function leerUrl() {
     const vista = location.hash.slice(1);
@@ -195,12 +195,17 @@
       } else if (estado.vista === 'movimientos') {
         texto('#m-sub', `${mesYAnio(resumen.mes)} · ${plural(resumen.cantidadGastos, 'gasto', 'gastos')} · ${pesos(resumen.gastado)}`);
         tareas.push(tablaMovimientos());
-      } else {
+      } else if (estado.vista === 'ingresos') {
         tareas.push(
           api(conMes('/api/ingresos')).then(vistaIngresos),
           api(`/api/ingresos/por-mes?hasta=${estado.mes}&meses=6`).then(ingresosPorMes),
         );
         disponible(resumen.disponible, '#i-disponible', '#i-disponible-barra', '#i-disponible-nota');
+      } else {
+        tareas.push(
+          api(conMes('/api/fijos/checklist')).then(vistaFijosChecklist),
+          api('/api/fijos').then(fijosAbm),
+        );
       }
       await Promise.all(tareas);
     } catch (error) {
@@ -614,6 +619,169 @@
     }
   }
 
+  // --- Fijos: checklist mensual ---
+
+  /** "32.900" o "32900,50" → 32900 / 32900.5, para mandar como número JSON. */
+  function numeroArg(texto) {
+    const limpio = String(texto).trim().replace(/\./g, '').replace(',', '.');
+    return Number(limpio);
+  }
+
+  function estadoChecklist(i) {
+    if (i.estado === 'CARGADO') return `✅ Cargado${i.porcentaje != null ? ` (${i.porcentaje > 0 ? '+' : ''}${i.porcentaje}%)` : ''}`;
+    if (i.estado === 'ESTE_MES_NO') return '➖ Este mes no';
+    return '⏳ Falta';
+  }
+
+  function accionesChecklist(i) {
+    if (i.estado === 'FALTA') {
+      return h('div', { class: 'row-btns' },
+        h('button', { type: 'button', class: 'mini', onclick: () => cargarFijo(i) }, 'Cargar monto'),
+        h('button', { type: 'button', class: 'mini', onclick: () => esteMesNoFijo(i) }, 'Este mes no'));
+    }
+    return h('div', { class: 'row-btns' },
+      h('button', { type: 'button', class: 'mini', onclick: () => deshacerFijo(i) }, 'Deshacer'));
+  }
+
+  function vistaFijosChecklist(data) {
+    texto('#f-cargado', pesos(data.cargado));
+    texto('#f-faltan', data.faltan);
+    const tbody = $('#f-checklist');
+    if (!data.items.length) { filaMensaje(tbody, 5, 'No tenés gastos fijos este mes.'); return; }
+    tbody.replaceChildren(...data.items.map((i) => h('tr', {},
+      h('td', {}, `${i.emoji ? i.emoji + ' ' : ''}${i.nombre}`),
+      h('td', {}, estadoChecklist(i)),
+      h('td', { class: 'amt' }, i.estado === 'CARGADO' ? pesos(i.monto) : i.montoAnterior != null ? `ref. ${pesos(i.montoAnterior)}` : '—'),
+      h('td', {}, i.estado === 'CARGADO' ? fechaCorta(i.fecha) : `vence el ${i.vencimiento.slice(-2)}`),
+      h('td', {}, accionesChecklist(i)),
+    )));
+  }
+
+  async function cargarFijo(item) {
+    const respuesta = window.prompt(`¿Cuánto gastaste en ${item.nombre}?`);
+    if (!respuesta) return;
+    const monto = numeroArg(respuesta);
+    if (!Number.isFinite(monto) || monto <= 0) { mostrarAviso('No entendí el monto.'); return; }
+    try {
+      await api(`/api/fijos/${item.fijoId}/cargar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ monto }),
+      });
+      cargar();
+    } catch (e) {
+      mostrarAviso(`No pude cargar el gasto: ${e.message}`);
+    }
+  }
+
+  async function esteMesNoFijo(item) {
+    try {
+      await api(`/api/fijos/${item.fijoId}/este-mes-no?mes=${estado.mes}`, { method: 'POST' });
+      cargar();
+    } catch (e) {
+      mostrarAviso(`No pude marcar "este mes no": ${e.message}`);
+    }
+  }
+
+  async function deshacerFijo(item) {
+    if (!confirm(`¿Deshacer ${item.nombre} de este mes?`)) return;
+    try {
+      await api(`/api/fijos/${item.fijoId}/deshacer?mes=${estado.mes}`, { method: 'POST' });
+      cargar();
+    } catch (e) {
+      mostrarAviso(`No pude deshacer: ${e.message}`);
+    }
+  }
+
+  // --- Fijos: ABM ---
+
+  function fijosAbm(lista) {
+    estado.fijos = lista;
+    const tbody = $('#f-abm');
+    if (!lista.length) { filaMensaje(tbody, 7, 'No tenés gastos fijos. Agregá el primero con el botón de arriba.'); return; }
+    tbody.replaceChildren(...lista.map((f) => h('tr', { class: f.activo ? null : 'inactivo' },
+      h('td', {}, f.nombre),
+      h('td', {}, f.categoria),
+      h('td', { class: 'amt' }, pesos(f.montoEsperado)),
+      h('td', {}, f.diaDelMes),
+      h('td', {}, f.frecuencia === 'BIMESTRAL' ? 'Cada dos meses' : 'Mensual'),
+      h('td', {}, f.proponerMonto ? 'Sí' : 'No'),
+      h('td', {}, h('div', { class: 'row-btns' },
+        h('button', { type: 'button', class: 'mini', onclick: () => abrirFormularioFijo(f) }, 'Editar'),
+        f.activo ? h('button', { type: 'button', class: 'mini', onclick: () => bajaFijo(f) }, 'Dar de baja') : null,
+      )),
+    )));
+  }
+
+  async function bajaFijo(f) {
+    if (!confirm(`¿Dar de baja ${f.nombre}? No se borra el historial.`)) return;
+    try {
+      await api(`/api/fijos/${f.id}`, { method: 'DELETE' });
+      cargar();
+    } catch (e) {
+      mostrarAviso(`No pude dar de baja el fijo: ${e.message}`);
+    }
+  }
+
+  function abrirFormularioFijo(f) {
+    const form = $('#form-fijo');
+    form.reset();
+    $('#form-fijo-error').hidden = true;
+    $('#f-id').value = f ? f.id : '';
+    $('#form-fijo-titulo').textContent = f ? `Editar ${f.nombre}` : 'Nuevo gasto fijo';
+    $('#f-nombre').value = f ? f.nombre : '';
+    $('#f-monto').value = f ? f.montoEsperado : '';
+    $('#f-categoria').value = f ? f.categoriaId : '';
+    $('#f-dia').value = f ? f.diaDelMes : '';
+    $('#f-frecuencia').value = f ? f.frecuencia : 'MENSUAL';
+    $('#f-medio').value = f && f.medioPagoId ? f.medioPagoId : '';
+    $('#f-cuenta').value = f && f.cuentaId ? f.cuentaId : '';
+    $('#f-tarjeta').checked = !!(f && f.tarjeta);
+    $('#f-alias').value = f && f.alias ? f.alias : '';
+    $('#f-variable').checked = !!(f && f.montoVariable);
+    $('#f-proponer').checked = !!(f && f.proponerMonto);
+    $('#modal-fijo').hidden = false;
+    $('#f-nombre').focus();
+  }
+
+  function cerrarFormularioFijo() { $('#modal-fijo').hidden = true; }
+
+  async function guardarFijo(evento) {
+    evento.preventDefault();
+    const boton = $('#form-fijo-guardar');
+    const error = $('#form-fijo-error');
+    error.hidden = true;
+    boton.disabled = true;
+    const id = $('#f-id').value;
+    const cuerpo = {
+      nombre: $('#f-nombre').value,
+      monto: numeroArg($('#f-monto').value),
+      categoriaId: Number($('#f-categoria').value),
+      medioPagoId: $('#f-medio').value ? Number($('#f-medio').value) : null,
+      cuentaId: $('#f-cuenta').value ? Number($('#f-cuenta').value) : null,
+      tarjeta: $('#f-tarjeta').checked,
+      diaDelMes: Number($('#f-dia').value),
+      frecuencia: $('#f-frecuencia').value,
+      montoVariable: $('#f-variable').checked,
+      alias: $('#f-alias').value || null,
+      proponerMonto: $('#f-proponer').checked,
+    };
+    try {
+      await api(id ? `/api/fijos/${id}` : '/api/fijos', {
+        method: id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cuerpo),
+      });
+      cerrarFormularioFijo();
+      cargar();
+    } catch (e) {
+      error.textContent = e.message;
+      error.hidden = false;
+    } finally {
+      boton.disabled = false;
+    }
+  }
+
   // --- Catálogo (filtros y formulario) ---
 
   function llenarCatalogo(c) {
@@ -626,6 +794,8 @@
       cl.clave === 'EXTRA' ? 'Extra (trabajo particular, una venta, un regalo…)' : cl.nombre)));
     $('#i-cuenta').replaceChildren(...c.cuentas.map((cu) => h('option', { value: cu.id }, cu.nombre)),
       h('option', { value: '' }, 'Efectivo'));
+    $('#f-medio').append(...c.mediosPago.map((m) => h('option', { value: m.id }, m.nombre)));
+    $('#f-cuenta').append(...c.cuentas.map((cu) => h('option', { value: cu.id }, cu.nombre)));
   }
 
   // --- Eventos ---
@@ -638,13 +808,18 @@
       if (mes) { cambiarMes(Number(mes.dataset.mes)); return; }
       if (e.target.closest('[data-abrir-ingreso]')) { abrirFormulario(); return; }
       if (e.target.closest('[data-cerrar]') || e.target.id === 'modal') cerrarFormulario();
+      if (e.target.closest('[data-abrir-fijo]')) { abrirFormularioFijo(null); return; }
+      if (e.target.closest('[data-cerrar-fijo]') || e.target.id === 'modal-fijo') cerrarFormularioFijo();
     });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !$('#modal').hidden) cerrarFormulario();
+      if (e.key !== 'Escape') return;
+      if (!$('#modal').hidden) cerrarFormulario();
+      if (!$('#modal-fijo').hidden) cerrarFormularioFijo();
     });
     window.addEventListener('hashchange', () => { leerUrl(); mostrarVista(); cargar(); });
     $('#reintentar').addEventListener('click', () => cargar());
     $('#form-ingreso').addEventListener('submit', guardarIngreso);
+    $('#form-fijo').addEventListener('submit', guardarFijo);
 
     const resumenFiltro = debounce(() => recargarTabla(ultimosMovimientos), 300);
     $('#r-q').addEventListener('input', resumenFiltro);

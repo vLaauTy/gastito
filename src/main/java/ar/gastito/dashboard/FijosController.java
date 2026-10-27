@@ -105,21 +105,19 @@ public class FijosController {
     // --- ABM ---
 
     public record FijoAbm(long id, String nombre, BigDecimal montoEsperado, Long categoriaId, String categoria,
-            Long medioPagoId, Long cuentaId, boolean tarjeta, String billetera, int diaDelMes, String frecuencia,
+            Long medioPagoId, Long cuentaId, boolean tarjeta, int diaDelMes, String frecuencia,
             boolean montoVariable, String alias, boolean proponerMonto, boolean activo) {
     }
 
     @GetMapping
     public List<FijoAbm> todos() {
-        Catalogo catalogo = catalogos.cargar();
-        return fijos.todos().stream().map(f -> aAbm(f, catalogo)).toList();
+        return fijos.todosParaAbm().stream().map(FijosController::aAbm).toList();
     }
 
-    private FijoAbm aAbm(VistaFijo f, Catalogo catalogo) {
-        Long categoriaId = catalogo.categorias().stream().filter(c -> c.getNombre().equals(f.categoria()))
-                .map(Categoria::getId).findFirst().orElse(null);
-        return new FijoAbm(f.id(), f.nombre(), f.montoEsperado(), categoriaId, f.categoria(), null, null, false,
-                f.billetera(), f.diaDelMes(), f.frecuencia().name(), f.montoVariable(), f.alias(),
+    private static FijoAbm aAbm(GastoFijoService.VistaAbm f) {
+        return new FijoAbm(f.id(), f.nombre(), f.montoEsperado(), f.categoria().getId(), f.categoria().getNombre(),
+                f.medioPago() == null ? null : f.medioPago().getId(), f.cuenta() == null ? null : f.cuenta().getId(),
+                f.tarjeta() != null, f.diaDelMes(), f.frecuencia().name(), f.montoVariable(), f.alias(),
                 f.proponerMonto(), f.activo());
     }
 

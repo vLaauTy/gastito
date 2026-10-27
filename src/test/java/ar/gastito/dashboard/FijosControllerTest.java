@@ -125,6 +125,19 @@ class FijosControllerTest {
     }
 
     @Test
+    void elListadoAbmTraeLosIdsDelCatalogo() throws Exception {
+        GastoFijoService.VistaAbm abm = new GastoFijoService.VistaAbm(2L, "Luz", new BigDecimal("28000.00"),
+                SERVICIOS, null, null, null, 27, Frecuencia.MENSUAL, true, "edesur", false, true);
+        when(fijos.todosParaAbm()).thenReturn(List.of(abm));
+
+        mvc.perform(get("/api/fijos")).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].nombre").value("Luz"))
+                .andExpect(jsonPath("$[0].categoriaId").value(5))
+                .andExpect(jsonPath("$[0].proponerMonto").value(false))
+                .andExpect(jsonPath("$[0].tarjeta").value(false));
+    }
+
+    @Test
     void laAltaResuelveLaCategoriaPorId() throws Exception {
         when(catalogos.cargar()).thenReturn(new Catalogo(List.of(SERVICIOS), List.of(), List.of(), Optional.empty()));
         VistaFijo creado = new VistaFijo(9L, "Luz", new BigDecimal("28000.00"), new BigDecimal("28000.00"),

@@ -162,8 +162,14 @@ input.crece { flex: 1 1 220px; }
 .modal[hidden] { display: none; }
 .dialog { width: min(420px, 100%); }
 .dialog label { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.dialog label.check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--fg); }
+.dialog label.check input { margin: 0; }
 .error { color: var(--warn); font-size: 14px; font-weight: 600; margin: 6px 0 0; }
 .error[hidden] { display: none; }
+
+/* --- Fijos --- */
+.row-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+tr.inactivo { opacity: .5; }
 
 /* --- Celular --- */
 @media (max-width: 720px) {

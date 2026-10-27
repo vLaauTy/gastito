@@ -296,6 +296,21 @@ public class GastoFijoService {
         return fijos.findAllByOrderByNombreAsc().stream().map(f -> vista(f, hoy)).toList();
     }
 
+    /** Para el ABM de la web: los datos con los ids del catálogo, no solo los nombres. */
+    public record VistaAbm(Long id, String nombre, BigDecimal montoEsperado, Categoria categoria,
+            MedioPago medioPago, Cuenta cuenta, TarjetaCredito tarjeta, int diaDelMes, Frecuencia frecuencia,
+            boolean montoVariable, String alias, boolean proponerMonto, boolean activo) {
+    }
+
+    @Transactional(readOnly = true)
+    public List<VistaAbm> todosParaAbm() {
+        return fijos.findAllByOrderByNombreAsc().stream()
+                .map(f -> new VistaAbm(f.getId(), f.getNombre(), f.getMontoEsperado(), f.getCategoria(),
+                        f.getMedioPago(), f.getCuenta(), f.getTarjeta(), f.getDiaDelMes(), f.getFrecuencia(),
+                        f.isMontoVariable(), f.getAlias(), f.isProponerMonto(), f.isActivo()))
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public VistaFijo vista(Long fijoId) {
         return vista(fijo(fijoId), LocalDate.now(clock));
