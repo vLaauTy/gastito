@@ -62,7 +62,14 @@ public record InterpretacionIa(
         String fijoFrecuencia,
         @JsonPropertyDescription("Si intencion es FIJO: si si el monto cambia todos los meses (la luz, el gas), no si "
                 + "es siempre el mismo. Vacío si no es FIJO.")
-        String fijoVariable) {
+        String fijoVariable,
+
+        @JsonPropertyDescription("Si paga algo en varias cuotas: cuántas son, solo dígitos. Vacío si no es en cuotas.")
+        String cuotasCantidad,
+
+        @JsonPropertyDescription("Si dice el valor de cada cuota en vez del total ('6 cuotas de 14000'): ese valor, "
+                + "solo dígitos y punto decimal. Vacío si dice el total, o si no es en cuotas.")
+        String cuotasValorCuota) {
 
     /** Sin los datos de juntadas, devoluciones ni gastos fijos. */
     public InterpretacionIa(String intencion, String monto, String descripcion, List<String> categorias,
@@ -71,11 +78,11 @@ public record InterpretacionIa(
                 "");
     }
 
-    /** Sin los datos de gastos fijos. */
+    /** Sin los datos de gastos fijos ni de cuotas. */
     public InterpretacionIa(String intencion, String monto, String descripcion, List<String> categorias,
             String confianza, String medioPago, String cuenta, String fecha, String hora, String juntadaPersonas,
             List<String> juntadaNombres, String devolucionPersona, String devolucionDe) {
         this(intencion, monto, descripcion, categorias, confianza, medioPago, cuenta, fecha, hora, juntadaPersonas,
-                juntadaNombres, devolucionPersona, devolucionDe, "", "", "");
+                juntadaNombres, devolucionPersona, devolucionDe, "", "", "", "", "");
     }
 }

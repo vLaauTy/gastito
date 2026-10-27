@@ -48,12 +48,13 @@ public class ValidadorInterpretacion {
      * El movimiento puede venir sin monto o sin categoría elegida: se completa en la tarjeta.
      *
      * @param juntada si pagó por un grupo (el monto es el total), o null
+     * @param cuotas  si es una compra en cuotas (el monto es el total), o null
      */
-    public record Valida(MovimientoInterpretado movimiento, Confianza confianza, PedidoJuntada juntada)
-            implements Resultado {
+    public record Valida(MovimientoInterpretado movimiento, Confianza confianza, PedidoJuntada juntada,
+            PedidoCuotas cuotas) implements Resultado {
 
         public Valida(MovimientoInterpretado movimiento, Confianza confianza) {
-            this(movimiento, confianza, null);
+            this(movimiento, confianza, null, null);
         }
     }
 
@@ -138,11 +139,22 @@ public class ValidadorInterpretacion {
         LocalDateTime fechaHora = fechas.resolver(ia.fecha(), ia.hora(), ahora);
         BigDecimal monto = monto(ia.monto()).orElse(null);
 
+        PedidoCuotas cuotas = PedidoCuotas.de(ia.cuotasCantidad(), ia.cuotasValorCuota(), monto);
+        if (cuotas != null) {
+            monto = cuotas.total();
+            if (tarjeta == null) {
+                tarjeta = catalogo.tarjetaCredito().orElse(null);
+                medio = catalogo.mediosPago().stream().filter(MedioPago::esTarjetaDeCredito).findFirst()
+                        .orElse(medio);
+                cuenta = null;
+            }
+        }
+
         MovimientoInterpretado movimiento = confianza == Confianza.ALTA
                 ? MovimientoInterpretado.conCategoria(monto, descripcion, candidatas.get(0), medio, cuenta, tarjeta,
                         fechaHora)
                 : new MovimientoInterpretado(monto, descripcion, null, candidatas, medio, cuenta, tarjeta, fechaHora);
-        return new Valida(movimiento, confianza, PedidoJuntada.de(ia.juntadaPersonas(), ia.juntadaNombres()));
+        return new Valida(movimiento, confianza, PedidoJuntada.de(ia.juntadaPersonas(), ia.juntadaNombres()), cuotas);
     }
 
     /**

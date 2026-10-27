@@ -65,12 +65,13 @@ public class InterpretadorService {
      *
      * @param usoIaId registro en uso_ia, o null si se resolvió sin IA
      * @param juntada si pagó por un grupo (el monto es el total), o null
+     * @param cuotas  si es una compra en cuotas (el monto es el total), o null
      */
     public record Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId,
-            PedidoJuntada juntada) implements Resultado {
+            PedidoJuntada juntada, PedidoCuotas cuotas) implements Resultado {
 
         public Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId) {
-            this(movimiento, confianza, usoIaId, null);
+            this(movimiento, confianza, usoIaId, null, null);
         }
     }
 
@@ -163,8 +164,8 @@ public class InterpretadorService {
         Optional<HistorialCategorias.Aprendido> aprendido = historial.buscar(v.movimiento().descripcion(), catalogo);
         return aprendido.isPresent()
                 ? new Interpretado(v.movimiento().conCategoriaElegida(aprendido.get().categoria()), Confianza.ALTA,
-                        usoIaId, v.juntada())
-                : new Interpretado(v.movimiento(), v.confianza(), usoIaId, v.juntada());
+                        usoIaId, v.juntada(), v.cuotas())
+                : new Interpretado(v.movimiento(), v.confianza(), usoIaId, v.juntada(), v.cuotas());
     }
 
     private static Cuenta cuenta(MedioPago medio, Cuenta cuenta) {

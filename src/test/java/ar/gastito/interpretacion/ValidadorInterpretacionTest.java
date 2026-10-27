@@ -14,6 +14,7 @@ import static ar.gastito.interpretacion.CatalogoDePrueba.TRANSPORTE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
@@ -235,6 +236,43 @@ class ValidadorInterpretacionTest {
         assertThat(valida(conFecha).fechaHora()).isEqualTo(LocalDateTime.of(2026, 10, 12, 21, 30));
     }
 
+    // --- Cuotas ---
+
+    private static InterpretacionIa cuotas(String monto, String cantidad, String valorCuota) {
+        return new InterpretacionIa("GASTO", monto, "Zapatillas", List.of("Otros"), "alta", "", "", "", "", "",
+                List.of(), "", "", "", "", "", cantidad, valorCuota);
+    }
+
+    @Test
+    void unPlanDeCuotasConElTotalDichoTraeElTotalComoMontoYLasCuotasResueltas() {
+        ValidadorInterpretacion.Valida v = comoGasto(cuotas("84000", "6", ""));
+
+        assertThat(v.movimiento().monto()).isEqualByComparingTo("84000");
+        assertThat(v.cuotas()).isEqualTo(new PedidoCuotas(6, new BigDecimal("84000.00"), new BigDecimal("14000.00")));
+    }
+
+    @Test
+    void siSoloDiceElValorDeLaCuotaElMontoDelMovimientoSaleDelTotalCalculado() {
+        ValidadorInterpretacion.Valida v = comoGasto(cuotas("", "6", "14000"));
+
+        assertThat(v.movimiento().monto()).isEqualByComparingTo("84000.00");
+        assertThat(v.cuotas().total()).isEqualByComparingTo("84000.00");
+    }
+
+    @Test
+    void unPlanDeCuotasSinMedioDichoUsaLaTarjetaDeCredito() {
+        ValidadorInterpretacion.Valida v = comoGasto(cuotas("84000", "6", ""));
+
+        assertThat(v.movimiento().medioPago()).isEqualTo(CREDITO);
+        assertThat(v.movimiento().cuenta()).isNull();
+    }
+
+    @Test
+    void unGastoComunNoTraeCuotas() {
+        assertThat(comoGasto(cuotas("1500", "", "")).cuotas()).isNull();
+        assertThat(comoGasto(cuotas("1500", "1", "")).cuotas()).isNull(); // 1 cuota no es un plan
+    }
+
     // --- Juntadas y devoluciones ---
 
     private static InterpretacionIa juntada(String monto, String personas, List<String> nombres) {
@@ -305,7 +343,7 @@ class ValidadorInterpretacionTest {
 
     private static InterpretacionIa fijo(String descripcion, String dia, String frecuencia, String variable) {
         return new InterpretacionIa("FIJO", "32900", descripcion, List.of("Otros"), "alta", "Tarjeta de crédito", "",
-                "", "", "", List.of(), "", "", dia, frecuencia, variable);
+                "", "", "", List.of(), "", "", dia, frecuencia, variable, "", "");
     }
 
     @Test

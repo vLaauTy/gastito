@@ -46,5 +46,11 @@ Cómo completar cada dato:
   - juntadaPersonas: cuántas personas eran en total, contándolo a él ("éramos 6" → 6; "con Martín, Sofi y Pablo" → 4). Si no dice cuántos ni nombres, vacío.
   - juntadaNombres: los nombres de los demás, si los dice, tal cual. Si no, vacío.
   - Si no pagó por otros (un gasto común), juntadaPersonas y juntadaNombres van vacíos.
+- Cuotas: si paga algo en varias cuotas ("zapatillas 84000 en 6 cuotas", "6 cuotas de 14000 con la tarjeta"), es un GASTO y:
+  - Si dice el total, monto es el total. No lo dividas: la cuenta la hace Gastito.
+  - Si solo dice el valor de cada cuota ("6 cuotas de 14000"), dejá monto vacío y completá cuotasValorCuota; no calcules el total.
+  - cuotasCantidad: cuántas cuotas son, solo dígitos.
+  - cuotasValorCuota: el valor de cada cuota si lo dice así, o vacío si dice el total.
+  - Si no es en cuotas, cuotasCantidad y cuotasValorCuota van vacíos.
 - devolucionPersona: en una DEVOLUCION, quién le pasó la plata ("Pablo"), o vacío.
 - devolucionDe: en una DEVOLUCION, de qué gasto era, como lo dice ("el asado"), o vacío.

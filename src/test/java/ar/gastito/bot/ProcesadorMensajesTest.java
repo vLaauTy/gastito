@@ -1119,7 +1119,7 @@ class ProcesadorMensajesTest {
         PedidoJuntada pedido = new PedidoJuntada(6, List.of("Martín"));
         when(interpretador.interpretar("pagué 48000 el asado, éramos 6", PropositoIa.TEXTO))
                 .thenReturn(new InterpretadorService.Interpretado(new MovimientoInterpretado(new BigDecimal("48000"),
-                        "Asado", SALIDAS, List.of(), null, null, null, AHORA), Confianza.ALTA, null, pedido));
+                        "Asado", SALIDAS, List.of(), null, null, null, AHORA), Confianza.ALTA, null, pedido, null));
         when(movimientos.crearPendiente(any(), eq(Origen.TEXTO), anyString())).thenReturn(pendiente);
         when(juntadas.crear(pendiente, pedido)).thenReturn(pendiente);
 
