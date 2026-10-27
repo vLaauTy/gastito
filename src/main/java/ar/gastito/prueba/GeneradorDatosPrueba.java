@@ -1,6 +1,7 @@
 package ar.gastito.prueba;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -36,11 +37,15 @@ import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.Cuenta;
 import ar.gastito.catalogo.MedioPago;
 import ar.gastito.config.GastitoProperties;
+import ar.gastito.fijo.Frecuencia;
+import ar.gastito.fijo.GastoFijoService;
+import ar.gastito.fijo.VistaFijo;
 import ar.gastito.movimiento.DatosTicket;
 import ar.gastito.movimiento.IngresoService;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
 import ar.gastito.movimiento.MovimientoService;
+import ar.gastito.movimiento.Origen;
 
 /**
  * Borra los datos de la base de prueba y la vuelve a llenar con {@link PlanDatosPrueba}. Solo existe con el perfil
@@ -65,11 +70,14 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
 
     private static final List<String> BORRAR = List.of(
             "UPDATE uso_ia SET movimiento_id = NULL",
+            "UPDATE juntada_participante SET gasto_perdido_id = NULL, devolucion_id = NULL",
             "DELETE FROM resumen_envio",
             "DELETE FROM resumen",
             "DELETE FROM movimiento_item",
             "DELETE FROM movimiento_categoria_candidata",
-            "DELETE FROM movimiento");
+            "DELETE FROM movimiento",
+            "DELETE FROM recordatorio_fijo",
+            "DELETE FROM gasto_fijo");
 
     private final DataSource dataSource;
     private final JdbcTemplate jdbc;
@@ -77,6 +85,7 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
     private final CatalogoService catalogos;
     private final MovimientoService movimientos;
     private final IngresoService ingresos;
+    private final GastoFijoService fijos;
     private final GastitoProperties properties;
     private final Environment entorno;
     private final ApplicationContext contexto;
@@ -84,13 +93,15 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
 
     public GeneradorDatosPrueba(DataSource dataSource, JdbcTemplate jdbc, TransactionTemplate transaccion,
             CatalogoService catalogos, MovimientoService movimientos, IngresoService ingresos,
-            GastitoProperties properties, Environment entorno, ApplicationContext contexto, Clock clock) {
+            GastoFijoService fijos, GastitoProperties properties, Environment entorno, ApplicationContext contexto,
+            Clock clock) {
         this.dataSource = dataSource;
         this.jdbc = jdbc;
         this.transaccion = transaccion;
         this.catalogos = catalogos;
         this.movimientos = movimientos;
         this.ingresos = ingresos;
+        this.fijos = fijos;
         this.properties = properties;
         this.entorno = entorno;
         this.contexto = contexto;
@@ -173,6 +184,34 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
             ingresos.cargar(i.clase(), i.monto(), i.descripcion(),
                     i.cuenta() == null ? null : buscar(cuentas, i.cuenta()).getId(), i.fecha());
         }
+        cargarFijos(categorias, catalogo.tarjetaCredito().orElse(null));
+    }
+
+    /**
+     * Unos gastos fijos para probar el checklist: el seguro sigue el flujo automático de siempre (puede quedar
+     * pendiente de confirmar este mes); la luz tiene dos meses cargados y este mes queda "Falta"; Netflix ya está
+     * cargado este mes.
+     */
+    private void cargarFijos(Map<String, Categoria> categorias, ar.gastito.catalogo.TarjetaCredito tarjeta) {
+        LocalDateTime ahora = LocalDateTime.now(clock);
+
+        fijos.alta(new GastoFijoService.NuevoFijo("Seguro de la moto", new BigDecimal("32900"),
+                buscar(categorias, "Seguros"), null, null, tarjeta, 4, Frecuencia.MENSUAL, false, "federa8", true));
+        fijos.generarCobros();
+
+        VistaFijo luz = fijos.alta(new GastoFijoService.NuevoFijo("Luz", new BigDecimal("28000"),
+                buscar(categorias, "Servicios (luz, gas, servicios sociales)"), null, null, null, 27,
+                Frecuencia.MENSUAL, true, "edesur,factura de luz", false));
+        fijos.cargarManual(luz.id(), new BigDecimal("26500"), ahora.minusMonths(2).withDayOfMonth(27),
+                Origen.DASHBOARD, null);
+        fijos.cargarManual(luz.id(), new BigDecimal("28900"), ahora.minusMonths(1).withDayOfMonth(27),
+                Origen.DASHBOARD, null);
+        // Este mes queda sin cargar a propósito: aparece como "Falta" en el checklist.
+
+        VistaFijo netflix = fijos.alta(new GastoFijoService.NuevoFijo("Netflix", new BigDecimal("7999"),
+                buscar(categorias, "Suscripciones"), null, null, tarjeta, 15, Frecuencia.MENSUAL, false,
+                "netflix.com", false));
+        fijos.cargarManual(netflix.id(), new BigDecimal("7999"), ahora.minusDays(2), Origen.DASHBOARD, null);
     }
 
     private static <T> Map<String, T> porNombre(List<T> elementos, Function<T, String> nombre) {
