@@ -278,6 +278,17 @@ public class GastoFijoService {
         return fijos.findByActivoTrueOrderByDiaDelMesAscNombreAsc().stream().map(f -> vista(f, hoy)).toList();
     }
 
+    /** Lo que se cargó en un mes, para el historial de un fijo. */
+    public record MesHistorial(YearMonth mes, BigDecimal monto) {
+    }
+
+    /** Los últimos 12 meses cargados de un fijo (confirmados), el más nuevo primero. */
+    @Transactional(readOnly = true)
+    public List<MesHistorial> historial(Long fijoId) {
+        return movimientos.cobrosConfirmados(fijoId, PageRequest.of(0, 12)).stream()
+                .map(m -> new MesHistorial(YearMonth.from(m.getFijoPeriodo()), m.getMonto())).toList();
+    }
+
     /** ABM: todos, activos e inactivos. */
     @Transactional(readOnly = true)
     public List<VistaFijo> todos() {
