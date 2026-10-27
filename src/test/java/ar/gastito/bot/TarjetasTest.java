@@ -29,6 +29,21 @@ class TarjetasTest {
     private final Tarjetas tarjetas = new Tarjetas(new FormatoMensajes(RELOJ));
 
     @Test
+    void tarjetaDeUnaCuotaMuestraElNumeroYElTotal() {
+        Movimiento m = conCategoria("14000", KIOSCO);
+        m.prepararCuota(9L, 1, 6);
+
+        assertThat(tarjetas.pendiente(m)).isEqualTo("""
+                🧾 <b>Nuevo gasto</b>
+                💰 <b>$14.000</b>
+                📝 Pan de pancho y papas (cuota 1 de 6)
+                🗂 Cuota 1 de 6 · total $84.000
+                🍬 Kiosco
+                💳 Efectivo
+                📅 Hoy 16:42""");
+    }
+
+    @Test
     void tarjetaConUnDatoPorLinea() {
         assertThat(tarjetas.pendiente(conCategoria("3700", KIOSCO))).isEqualTo("""
                 🧾 <b>Nuevo gasto</b>

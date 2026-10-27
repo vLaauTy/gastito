@@ -95,6 +95,7 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
                 new BotCommand("juntadas", "Quién te debe plata de las juntadas"),
                 new BotCommand("fijo", "Agregar un gasto fijo: /fijo seguro 32900 tarjeta día 4"),
                 new BotCommand("fijos", "Tus gastos fijos y su próximo cobro"),
+                new BotCommand("cuotas", "Tus compras en cuotas"),
                 new BotCommand("costos", "Lo gastado en IA este mes"),
                 new BotCommand("sueldo", "Cargar el sueldo: /sueldo 380.000 galicia"),
                 new BotCommand("aguinaldo", "Cargar el aguinaldo"),

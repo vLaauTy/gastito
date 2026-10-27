@@ -56,6 +56,7 @@ import ar.gastito.ia.ResumenUsoIa;
 import ar.gastito.interpretacion.InterpretadorService;
 import ar.gastito.interpretacion.ParserIngreso;
 import ar.gastito.interpretacion.PedidoFijo;
+import ar.gastito.interpretacion.PedidoCuotas;
 import ar.gastito.interpretacion.PedidoJuntada;
 import ar.gastito.interpretacion.ResolvedorFechas;
 import ar.gastito.interpretacion.ValidadorInterpretacion;
@@ -93,6 +94,7 @@ class ProcesadorMensajesTest {
     private final ConversacionRepetidos repetidos = mock(ConversacionRepetidos.class);
     private final ConversacionJuntadas juntadas = mock(ConversacionJuntadas.class);
     private final ConversacionFijos fijos = mock(ConversacionFijos.class);
+    private final ConversacionCuotas cuotas = mock(ConversacionCuotas.class);
     private ProcesadorMensajes procesador;
 
     @BeforeEach
@@ -108,7 +110,7 @@ class ProcesadorMensajesTest {
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
                 tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, resumenes,
                 new FormatoResumen(formato, new GraficoMes(formato), dashboard), consultas, new FormatoConsulta(formato),
-                repetidos, juntadas, fijos, properties, dashboard, RELOJ);
+                repetidos, juntadas, fijos, cuotas, properties, dashboard, RELOJ);
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));
         when(tickets.tamanioMaximo()).thenReturn(DataSize.ofMegabytes(10));
     }
@@ -1109,6 +1111,44 @@ class ProcesadorMensajesTest {
         when(repetidos.deNuevo(TARJETA, ID)).thenReturn(Optional.empty());
         when(movimientos.buscar(ID)).thenReturn(conCategoria("1500", KIOSCO));
         assertThat(edicion(tocar("rd:" + ID)).html()).startsWith("🧾 <b>Nuevo gasto</b>");
+    }
+
+    // --- Cuotas ---
+
+    @Test
+    void unPlanDeCuotasSeArmaAntesDeMostrarLaTarjeta() {
+        Movimiento pendiente = conCategoria("84000", SALIDAS);
+        PedidoCuotas pedido = new PedidoCuotas(6, new BigDecimal("84000.00"), new BigDecimal("14000.00"));
+        when(interpretador.interpretar("zapatillas 84000 en 6 cuotas", PropositoIa.TEXTO))
+                .thenReturn(new InterpretadorService.Interpretado(new MovimientoInterpretado(new BigDecimal("84000"),
+                        "Zapatillas", SALIDAS, List.of(), null, null, null, AHORA), Confianza.ALTA, null, null,
+                        pedido));
+        when(movimientos.crearPendiente(any(), eq(Origen.TEXTO), anyString())).thenReturn(pendiente);
+        when(cuotas.crear(pendiente, pedido)).thenReturn(pendiente);
+
+        procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "zapatillas 84000 en 6 cuotas");
+
+        verify(cuotas).crear(pendiente, pedido);
+    }
+
+    @Test
+    void alGuardarUnaCuotaVaALaConversacionDeCuotas() {
+        Movimiento guardado = conCategoria("14000", SALIDAS);
+        guardado.prepararCuota(9L, 1, 6);
+        guardado.confirmar();
+        when(movimientos.confirmar(ID)).thenReturn(new MovimientoService.Confirmacion(guardado,
+                new BigDecimal("14000")));
+        when(cuotas.guardada(eq(TARJETA), any())).thenReturn(List.of(new Accion.Avisar("✅ Guardado")));
+
+        assertThat(tocar("g:" + ID)).containsExactly(new Accion.Avisar("✅ Guardado"));
+    }
+
+    @Test
+    void laListaDeCuotasVaAlComando() {
+        when(cuotas.lista()).thenReturn(List.of(new Accion.Avisar("🗂 lista")));
+
+        assertThat(procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "/cuotas"))
+                .containsExactly(new Accion.Avisar("🗂 lista"));
     }
 
     // --- Juntadas ---

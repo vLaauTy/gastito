@@ -95,6 +95,9 @@ public class ProcesadorMensajes {
             <b>Gastos fijos</b>
             "/fijo seguro 32900 tarjeta día 4" (o "agregá un fijo: …"). El día del cobro te pregunto si se cobró; la luz y el gas, con el promedio de los últimos cobros. Con /fijos los ves y los das de baja.
 
+            <b>Compras en cuotas</b>
+            "zapatillas 84000 en 6 cuotas" (o "6 cuotas de 14000 con la tarjeta"): cada mes cuenta solo esa cuota. Con /cuotas las ves y podés cancelar un plan (se borran las cuotas futuras, no las que ya pasaron).
+
             <b>Preguntas</b>
             Preguntame por escrito o por audio: "¿cuánto gasté en kiosco este mes?", "compará octubre con septiembre", "¿cuántas Seven Up compré?", "¿cuánto me queda disponible?". Los números los calculo con tu base, no los inventa la IA.
 
@@ -107,6 +110,7 @@ public class ProcesadorMensajes {
             /resumen – tu semana hasta hoy, con lo que noté; /resumen mes, el mes
             /juntadas – quién te debe plata de las juntadas
             /fijo – agregar un gasto fijo; /fijos, los que tenés
+            /cuotas – tus compras en cuotas
             /costos – lo gastado en IA este mes
             /dashboard – el link del dashboard, para ver tus gastos con gráficos
             /ayuda – este mensaje""";
@@ -126,6 +130,7 @@ public class ProcesadorMensajes {
     private final ConversacionRepetidos repetidos;
     private final ConversacionJuntadas juntadas;
     private final ConversacionFijos fijos;
+    private final ConversacionCuotas cuotas;
     private final FormatoResumen formatoResumen;
     private final ConsultaService consultas;
     private final FormatoConsulta formatoConsulta;
@@ -183,8 +188,9 @@ public class ProcesadorMensajes {
             TranscripcionService transcripciones, TicketService tickets, ResumenService resumenes,
             FormatoResumen formatoResumen, ConsultaService consultas, FormatoConsulta formatoConsulta,
             ConversacionRepetidos repetidos, ConversacionJuntadas juntadas, ConversacionFijos fijos,
-            GastitoProperties properties, DashboardProperties dashboard, Clock clock) {
+            ConversacionCuotas cuotas, GastitoProperties properties, DashboardProperties dashboard, Clock clock) {
         this.fijos = fijos;
+        this.cuotas = cuotas;
         this.repetidos = repetidos;
         this.juntadas = juntadas;
         this.consultas = consultas;
@@ -253,6 +259,8 @@ public class ProcesadorMensajes {
             acciones.add(fijos.alta(limpio.replaceFirst("^/\\S+\\s*", "")));
         } else if ("/fijos".equals(comando)) {
             acciones.addAll(fijos.lista());
+        } else if ("/cuotas".equals(comando)) {
+            acciones.addAll(cuotas.lista());
         } else if (comando != null) {
             ClaseIngreso clase = ComandosIngreso.clase(comando);
             acciones.add(clase != null ? comandosIngreso.responder(clase, limpio) : responderComando(comando));
@@ -474,7 +482,13 @@ public class ProcesadorMensajes {
             usoIa.asociarMovimiento(i.usoIaId(), m.getId());
         }
         // Una juntada sin monto queda como gasto común: sin el total no hay nada que repartir.
-        return i.juntada() != null && m.getMonto() != null ? juntadas.crear(m, i.juntada()) : m;
+        if (i.juntada() != null && m.getMonto() != null) {
+            return juntadas.crear(m, i.juntada());
+        }
+        if (i.cuotas() != null && m.getMonto() != null) {
+            return cuotas.crear(m, i.cuotas());
+        }
+        return m;
     }
 
     // --- Preguntas ---
@@ -635,6 +649,9 @@ public class ProcesadorMensajes {
                 if (c.movimiento().isJuntada()) {
                     yield juntadas.guardada(mensajeId, c);
                 }
+                if (c.movimiento().getPlanCuotasId() != null) {
+                    yield cuotas.guardada(mensajeId, c);
+                }
                 yield List.of(new Accion.Editar(mensajeId, tarjetas.guardado(c.movimiento(), c.totalMesCategoria()),
                         Teclado.NINGUNO), new Accion.Avisar("✅ Guardado"));
             }
@@ -670,6 +687,7 @@ public class ProcesadorMensajes {
                     ConversacionFijos.BAJA -> fijos.boton(mensajeId, accion, id, elegido);
             case ConversacionFijos.CONFIRMAR_COBRO, ConversacionFijos.CAMBIO_EL_MONTO, ConversacionFijos.ESTE_MES_NO ->
                     fijos.botonDeCobro(chatId, mensajeId, accion, id);
+            case ConversacionCuotas.CANCELAR_PLAN -> cuotas.boton(mensajeId, id);
             case Tarjetas.UNIR -> repetidos.unir(mensajeId, id, requerido(elegido));
             case Tarjetas.DE_NUEVO -> repetidos.deNuevo(mensajeId, id)
                     .orElseGet(() -> List.of(principal(chatId, mensajeId, pendiente(id))));

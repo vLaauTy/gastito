@@ -257,6 +257,10 @@ public class Tarjetas {
         if (m.getDescripcion() != null && !m.getDescripcion().isBlank()) {
             lineas.add("📝 " + html(m.getDescripcion()));
         }
+        if (m.getCuotaTotal() != null) {
+            lineas.add("🗂 Cuota " + m.getCuotaActual() + " de " + m.getCuotaTotal() + " · total "
+                    + formato.pesos(m.getMonto().multiply(BigDecimal.valueOf(m.getCuotaTotal()))));
+        }
         Categoria c = m.getCategoria();
         lineas.add(c == null ? "🏷 <b>¿Qué categoría?</b>"
                 : (c.getEmoji() == null ? "🏷" : c.getEmoji()) + " " + html(c.getNombre()));
