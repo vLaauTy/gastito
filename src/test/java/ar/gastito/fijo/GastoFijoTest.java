@@ -14,7 +14,7 @@ class GastoFijoTest {
 
     private static GastoFijo fijo(int dia, Frecuencia frecuencia, YearMonth inicio) {
         return new GastoFijo("Seguro", new BigDecimal("32900"), null, null, null, null, dia, frecuencia, inicio, false,
-                LocalDateTime.now());
+                null, true, LocalDateTime.now());
     }
 
     @Test

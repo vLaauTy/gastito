@@ -12,5 +12,5 @@ import java.time.LocalDate;
  */
 public record VistaFijo(Long id, String nombre, BigDecimal montoEsperado, BigDecimal montoPropuesto,
         String categoria, String emoji, String billetera, int diaDelMes, Frecuencia frecuencia,
-        boolean montoVariable, boolean activo, LocalDate proximoCobro) {
+        boolean montoVariable, String alias, boolean proponerMonto, boolean activo, LocalDate proximoCobro) {
 }

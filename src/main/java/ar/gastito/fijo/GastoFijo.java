@@ -1,10 +1,14 @@
 package ar.gastito.fijo;
 
 import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.List;
+import java.util.regex.Pattern;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -68,6 +72,16 @@ public class GastoFijo {
     /** La luz o el gas: el monto cambia todos los meses. */
     private boolean montoVariable;
 
+    /** Nombres sueltos para reconocerlo en un mensaje ("edesur", "luz"), separados por coma, o null. */
+    private String alias;
+
+    /**
+     * Si sigue con el flujo automático de siempre (el día del cobro se propone un monto para confirmar): los de
+     * monto fijo que se debitan solos. Si es false, el checklist mensual espera que el usuario cargue el gasto y lo
+     * vincula por nombre o alias.
+     */
+    private boolean proponerMonto;
+
     private boolean activo = true;
 
     private LocalDateTime creadoEn;
@@ -77,7 +91,7 @@ public class GastoFijo {
 
     public GastoFijo(String nombre, BigDecimal montoEsperado, Categoria categoria, MedioPago medioPago, Cuenta cuenta,
             TarjetaCredito tarjeta, int diaDelMes, Frecuencia frecuencia, YearMonth mesInicio, boolean montoVariable,
-            LocalDateTime ahora) {
+            String alias, boolean proponerMonto, LocalDateTime ahora) {
         if (diaDelMes < 1 || diaDelMes > 31) {
             throw new IllegalArgumentException("El día del cobro tiene que ser del 1 al 31");
         }
@@ -92,7 +106,38 @@ public class GastoFijo {
         this.frecuencia = frecuencia;
         this.mesInicio = mesInicio.atDay(1);
         this.montoVariable = montoVariable;
+        this.alias = limpiarAlias(alias);
+        this.proponerMonto = proponerMonto;
         this.creadoEn = ahora;
+    }
+
+    private static String limpiarAlias(String alias) {
+        return alias == null || alias.strip().isEmpty() ? null : alias.strip();
+    }
+
+    // --- Reconocimiento en un mensaje ---
+
+    /** Si el nombre o algún alias aparece como palabra suelta en el texto (sin acentos ni mayúsculas). */
+    public boolean coincideCon(String texto) {
+        String normalizado = normalizar(texto);
+        if (contienePalabra(normalizado, normalizar(nombre))) {
+            return true;
+        }
+        if (alias == null) {
+            return false;
+        }
+        return Arrays.stream(alias.split(",")).map(String::strip).filter(a -> !a.isEmpty())
+                .anyMatch(a -> contienePalabra(normalizado, normalizar(a)));
+    }
+
+    static String normalizar(String texto) {
+        String sinAcentos = Normalizer.normalize(texto, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+        return sinAcentos.toLowerCase().strip();
+    }
+
+    private static boolean contienePalabra(String texto, String palabra) {
+        return !palabra.isEmpty()
+                && Pattern.compile("(?<![a-z0-9])" + Pattern.quote(palabra) + "(?![a-z0-9])").matcher(texto).find();
     }
 
     // --- Calendario ---
@@ -139,6 +184,27 @@ public class GastoFijo {
         this.activo = false;
     }
 
+    /** ABM: cambia todos los datos editables (el alta y la baja tienen su propio flujo). */
+    void editar(String nombre, BigDecimal montoEsperado, Categoria categoria, MedioPago medioPago, Cuenta cuenta,
+            TarjetaCredito tarjeta, int diaDelMes, Frecuencia frecuencia, boolean montoVariable, String alias,
+            boolean proponerMonto) {
+        if (diaDelMes < 1 || diaDelMes > 31) {
+            throw new IllegalArgumentException("El día del cobro tiene que ser del 1 al 31");
+        }
+        String limpio = nombre.strip();
+        this.nombre = limpio.length() > LARGO_MAXIMO_NOMBRE ? limpio.substring(0, LARGO_MAXIMO_NOMBRE) : limpio;
+        this.montoEsperado = montoEsperado;
+        this.categoria = categoria;
+        this.medioPago = medioPago;
+        this.cuenta = cuenta;
+        this.tarjeta = tarjeta;
+        this.diaDelMes = diaDelMes;
+        this.frecuencia = frecuencia;
+        this.montoVariable = montoVariable;
+        this.alias = limpiarAlias(alias);
+        this.proponerMonto = proponerMonto;
+    }
+
     public Long getId() {
         return id;
     }
@@ -181,6 +247,14 @@ public class GastoFijo {
 
     public boolean isMontoVariable() {
         return montoVariable;
+    }
+
+    public String getAlias() {
+        return alias;
+    }
+
+    public boolean isProponerMonto() {
+        return proponerMonto;
     }
 
     public boolean isActivo() {

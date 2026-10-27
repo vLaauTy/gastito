@@ -9,4 +9,8 @@ public interface GastoFijoRepository extends JpaRepository<GastoFijo, Long> {
 
     @EntityGraph(attributePaths = {"categoria", "medioPago", "cuenta", "tarjeta"})
     List<GastoFijo> findByActivoTrueOrderByDiaDelMesAscNombreAsc();
+
+    /** Para el ABM: todos, activos e inactivos. */
+    @EntityGraph(attributePaths = {"categoria", "medioPago", "cuenta", "tarjeta"})
+    List<GastoFijo> findAllByOrderByNombreAsc();
 }

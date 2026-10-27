@@ -319,6 +319,25 @@ public class Movimiento {
         return m;
     }
 
+    /**
+     * El gasto se carga a mano (por texto, audio o la web) y coincide con un fijo: queda vinculado al checklist
+     * mensual, igual que el cobro automático, pero sin pasar por "pendiente de confirmar".
+     */
+    public static Movimiento cobroManualDeFijo(MovimientoInterpretado interpretado, Long gastoFijoId,
+            LocalDate periodo, Origen origen, String textoOriginal, LocalDateTime ahora) {
+        Movimiento m = pendiente(interpretado, origen, textoOriginal, ahora);
+        m.gastoFijoId = gastoFijoId;
+        m.fijoPeriodo = periodo.withDayOfMonth(1);
+        return m;
+    }
+
+    /** Vincula un gasto ya pendiente (por ejemplo, de un mensaje con varios gastos) a su fijo. */
+    public void vincularFijo(Long gastoFijoId, LocalDate periodo) {
+        verificarPendiente();
+        this.gastoFijoId = gastoFijoId;
+        this.fijoPeriodo = periodo.withDayOfMonth(1);
+    }
+
     /** "Cambió el monto": el cobro de un fijo se confirma con otro monto. */
     public void cambiarMontoDeCobro(BigDecimal nuevo) {
         verificarPendiente();

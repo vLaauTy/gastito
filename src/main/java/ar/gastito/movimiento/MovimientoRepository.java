@@ -29,6 +29,9 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
 
     Optional<Movimiento> findFirstByGastoFijoIdAndFijoPeriodo(Long gastoFijoId, LocalDate fijoPeriodo);
 
+    /** Los movimientos de un fijo en un mes, el más nuevo primero (puede haber más de uno: "¿es otro pago?"). */
+    List<Movimiento> findByGastoFijoIdAndFijoPeriodoOrderByIdDesc(Long gastoFijoId, LocalDate fijoPeriodo);
+
     /** Los cobros confirmados de un fijo, del más nuevo al más viejo. */
     @Query("""
             select m from Movimiento m

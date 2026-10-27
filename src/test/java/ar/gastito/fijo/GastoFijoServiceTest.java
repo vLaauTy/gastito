@@ -22,6 +22,8 @@ import org.springframework.test.context.ActiveProfiles;
 
 import ar.gastito.catalogo.CategoriaRepository;
 import ar.gastito.catalogo.TarjetaCreditoRepository;
+import ar.gastito.fijo.GastoFijoService.EstadoChecklist;
+import ar.gastito.fijo.GastoFijoService.ItemChecklist;
 import ar.gastito.movimiento.EstadoMovimiento;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoRepository;
@@ -77,6 +79,13 @@ class GastoFijoServiceTest {
         return fijos.alta(new GastoFijoService.NuevoFijo("Luz", new BigDecimal("28000"),
                 categorias.findByNombre("Servicios (luz, gas, servicios sociales)").orElseThrow(), null, null, null, 27,
                 frecuencia, true));
+    }
+
+    /** Un fijo con checklist mensual: no propone monto, el usuario lo carga y se vincula por nombre o alias. */
+    private VistaFijo luzConChecklist(int dia, String alias) {
+        return fijos.alta(new GastoFijoService.NuevoFijo("Luz", new BigDecimal("28000"),
+                categorias.findByNombre("Servicios (luz, gas, servicios sociales)").orElseThrow(), null, null, null,
+                dia, Frecuencia.MENSUAL, true, alias, false));
     }
 
     private void ir(int anio, int mes, int dia) {
@@ -225,5 +234,97 @@ class GastoFijoServiceTest {
         Long id = fijos.generarCobros().get(0).getId();
 
         assertThatThrownBy(() -> fijos.confirmar(id, BigDecimal.ZERO)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // --- Checklist mensual, vínculo y carga manual (extra de la etapa 6) ---
+
+    @Test
+    void unFijoSinProponerMontoNoGeneraCobrosAutomaticos() {
+        luzConChecklist(27, "edesur");
+        ir(2026, 10, 27);
+
+        assertThat(fijos.generarCobros()).isEmpty();
+    }
+
+    @Test
+    void elVinculoEncuentraPorNombreOAliasSinAcentosNiMayusculas() {
+        luzConChecklist(27, "edesur, factura de luz");
+        seguro(28);
+
+        assertThat(fijos.vincular("pagué 70000 de EDESUR")).get().extracting(GastoFijo::getNombre)
+                .isEqualTo("Luz");
+        assertThat(fijos.vincular("90000 en luz")).isPresent();
+        assertThat(fijos.vincular("la factura de luz llegó cara")).isPresent();
+        assertThat(fijos.vincular("32900 el seguro de la moto")).get().extracting(GastoFijo::getNombre)
+                .isEqualTo("Seguro de la moto");
+        assertThat(fijos.vincular("3700 en pan y papas")).isEmpty();
+    }
+
+    @Test
+    void cargarManualConfirmaElGastoDelMesYAvisaSiYaHabiaUnoCargado() {
+        VistaFijo f = luzConChecklist(27, "edesur");
+
+        GastoFijoService.Carga primera = fijos.cargarManual(f.id(), new BigDecimal("28000"), HOY, Origen.TEXTO,
+                "pagué 28000 de luz");
+        assertThat(primera.movimiento().getEstado()).isEqualTo(EstadoMovimiento.CONFIRMADO);
+        assertThat(primera.movimiento().getGastoFijoId()).isEqualTo(f.id());
+        assertThat(primera.movimiento().getFijoPeriodo()).isEqualTo(LocalDate.of(2026, 10, 1));
+        assertThat(primera.yaCargado()).isEmpty();
+
+        // Otro pago el mismo mes: se guarda igual (puede ser otra factura) pero se avisa.
+        GastoFijoService.Carga segunda = fijos.cargarManual(f.id(), new BigDecimal("5000"), HOY, Origen.TEXTO,
+                "5000 más de luz");
+        assertThat(segunda.yaCargado()).get().isEqualTo(primera.movimiento());
+    }
+
+    @Test
+    void elChecklistMuestraFaltaCargadoYEsteMesNo() {
+        VistaFijo luz = luzConChecklist(27, "edesur");
+        VistaFijo seguro = seguro(28); // bimestral no: mensual con flujo automático
+
+        ir(2026, 10, 15);
+        assertThat(fijos.checklist(YearMonth.of(2026, 10))).hasSize(2)
+                .anySatisfy(i -> assertThat(i).satisfies(item -> {
+                    assertThat(item.fijoId()).isEqualTo(luz.id());
+                    assertThat(item.estado()).isEqualTo(EstadoChecklist.FALTA);
+                    assertThat(item.vencimiento()).isEqualTo(LocalDate.of(2026, 10, 27));
+                }))
+                .anySatisfy(i -> assertThat(i.fijoId()).isEqualTo(seguro.id()));
+
+        fijos.cargarManual(luz.id(), new BigDecimal("31000"), LocalDateTime.of(2026, 10, 20, 10, 0), Origen.TEXTO,
+                "31000 de luz");
+        ItemChecklist cargado = fijos.checklist(YearMonth.of(2026, 10)).stream()
+                .filter(i -> i.fijoId().equals(luz.id())).findFirst().orElseThrow();
+        assertThat(cargado.estado()).isEqualTo(EstadoChecklist.CARGADO);
+        assertThat(cargado.monto()).isEqualByComparingTo("31000");
+
+        ir(2026, 11, 1);
+        fijos.esteMesNoDelPeriodo(luz.id(), YearMonth.of(2026, 11));
+        ItemChecklist esteMesNo = fijos.checklist(YearMonth.of(2026, 11)).stream()
+                .filter(i -> i.fijoId().equals(luz.id())).findFirst().orElseThrow();
+        assertThat(esteMesNo.estado()).isEqualTo(EstadoChecklist.ESTE_MES_NO);
+
+        // Diciembre: la referencia es el último cargado (octubre), no el "este mes no" de noviembre.
+        ItemChecklist diciembre = fijos.checklist(YearMonth.of(2026, 12)).stream()
+                .filter(i -> i.fijoId().equals(luz.id())).findFirst().orElseThrow();
+        assertThat(diciembre.montoAnterior()).isEqualByComparingTo("31000");
+    }
+
+    @Test
+    void deshacerVuelveAFaltaYNoSePuedeSobreUnCobroAutomaticoPendiente() {
+        VistaFijo luz = luzConChecklist(27, "edesur");
+        ir(2026, 11, 1);
+        fijos.esteMesNoDelPeriodo(luz.id(), YearMonth.of(2026, 11));
+
+        fijos.deshacer(luz.id(), YearMonth.of(2026, 11));
+        assertThat(fijos.checklist(YearMonth.of(2026, 11)).stream().filter(i -> i.fijoId().equals(luz.id()))
+                .findFirst().orElseThrow().estado()).isEqualTo(EstadoChecklist.FALTA);
+
+        VistaFijo seguro = seguro(28); // el reloj ya está en noviembre: el primer cobro es el 28/11
+        ir(2026, 11, 28);
+        Long cobroId = fijos.generarCobros().get(0).getId();
+        assertThatThrownBy(() -> fijos.deshacer(seguro.id(), YearMonth.of(2026, 11)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(fijos.cobrosPendientes()).extracting(Movimiento::getId).containsExactly(cobroId);
     }
 }
