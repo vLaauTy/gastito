@@ -91,6 +91,9 @@ gastito:
   cuotas:
     # MISMO_MES: la primera cuota es la del mes de la compra. MES_SIGUIENTE: si la tarjeta cobra al mes siguiente.
     primera-cuota: MISMO_MES
+  fijos:
+    # Como máximo, cada cuánto se manda el recordatorio agrupado de fijos vencidos sin cargar.
+    intervalo-recordatorio: 3d
   consultas:
     modelo: claude-haiku-5-5
     max-tokens: 1024

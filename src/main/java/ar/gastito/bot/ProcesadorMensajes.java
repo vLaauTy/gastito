@@ -462,6 +462,9 @@ public class ProcesadorMensajes {
         return switch (resultado) {
             case InterpretadorService.Interpretado i -> {
                 Movimiento m = crearGasto(i, origen, texto);
+                if (m.isPendiente()) {
+                    gastosFijos.vincular(texto).ifPresent(fijo -> gastosFijos.vincular(m, fijo));
+                }
                 if (m.getMonto() == null) {
                     esperas.put(chatId, new Espera(m.getId(), Campo.MONTO, null));
                     yield Accion.Enviar.tarjeta(tarjetas.pidiendoMontoFaltante(m), tarjetas.principal(m), m.getId());
@@ -731,7 +734,8 @@ public class ProcesadorMensajes {
                     Tarjetas.JUNTADA_VER, Tarjetas.DEVOLUCION_DE, Tarjetas.DEVOLUCION_QUEDA_DEBIENDO,
                     Tarjetas.DEVOLUCION_SALDADO -> juntadas.boton(chatId, mensajeId, accion, id, elegido);
             case ConversacionFijos.GUARDAR, ConversacionFijos.CANCELAR, ConversacionFijos.CATEGORIA,
-                    ConversacionFijos.BAJA -> fijos.boton(mensajeId, accion, id, elegido);
+                    ConversacionFijos.BAJA, ConversacionFijos.ESTE_MES_NO_CHECKLIST ->
+                    fijos.boton(mensajeId, accion, id, elegido);
             case ConversacionFijos.CONFIRMAR_COBRO, ConversacionFijos.CAMBIO_EL_MONTO, ConversacionFijos.ESTE_MES_NO ->
                     fijos.botonDeCobro(chatId, mensajeId, accion, id);
             case ConversacionCuotas.CANCELAR_PLAN -> cuotas.boton(mensajeId, id);

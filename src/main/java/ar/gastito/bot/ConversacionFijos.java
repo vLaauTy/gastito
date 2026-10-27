@@ -3,6 +3,7 @@ package ar.gastito.bot;
 import static ar.gastito.bot.FormatoMensajes.html;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
@@ -22,6 +23,7 @@ import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.fijo.Frecuencia;
 import ar.gastito.fijo.GastoFijoService;
+import ar.gastito.fijo.RecordatorioFijoService;
 import ar.gastito.fijo.VistaFijo;
 import ar.gastito.interpretacion.Montos;
 import ar.gastito.interpretacion.ParserFijo;
@@ -37,11 +39,13 @@ import ar.gastito.movimiento.MovimientoService;
 @Component
 public class ConversacionFijos {
 
-    /** Botones del alta: guardar, cancelar y elegir la categoría; y la baja desde /fijos. */
+    /** Botones del alta: guardar, cancelar y elegir la categoría; y la baja desde el ABM. */
     static final String GUARDAR = "fa";
     static final String CANCELAR = "fz";
     static final String CATEGORIA = "fk";
     static final String BAJA = "fb";
+    /** "Este mes no" desde el checklist de /fijos (todavía no se generó el cobro automático). */
+    static final String ESTE_MES_NO_CHECKLIST = "fe";
     /** Cuántas altas sin responder se recuerdan (las más viejas se olvidan). */
     static final int ALTAS_RECORDADAS = 10;
 
@@ -55,6 +59,7 @@ public class ConversacionFijos {
     private final CatalogoService catalogos;
     private final MovimientoService movimientos;
     private final FormatoMensajes formato;
+    private final Clock clock;
 
     private final AtomicLong siguiente = new AtomicLong();
     private final Map<Long, PedidoFijo> altas = Collections.synchronizedMap(new LinkedHashMap<>() {
@@ -65,12 +70,13 @@ public class ConversacionFijos {
     });
 
     public ConversacionFijos(GastoFijoService fijos, ParserFijo parser, CatalogoService catalogos,
-            MovimientoService movimientos, FormatoMensajes formato) {
+            MovimientoService movimientos, FormatoMensajes formato, Clock clock) {
         this.fijos = fijos;
         this.parser = parser;
         this.catalogos = catalogos;
         this.movimientos = movimientos;
         this.formato = formato;
+        this.clock = clock;
     }
 
     // --- Alta ---
@@ -139,15 +145,22 @@ public class ConversacionFijos {
     // --- Botones ---
 
     public boolean esBoton(String accion) {
-        return GUARDAR.equals(accion) || CANCELAR.equals(accion) || CATEGORIA.equals(accion) || BAJA.equals(accion);
+        return GUARDAR.equals(accion) || CANCELAR.equals(accion) || CATEGORIA.equals(accion) || BAJA.equals(accion)
+                || ESTE_MES_NO_CHECKLIST.equals(accion);
     }
 
     public List<Accion> boton(int mensajeId, String accion, long id, Long elegido) {
         if (BAJA.equals(accion)) {
             VistaFijo f = fijos.vista(id);
             fijos.darDeBaja(id);
-            return List.of(new Accion.Editar(mensajeId, textoDeLista(fijos.activos()), tecladoDeLista(fijos.activos())),
-                    new Accion.Avisar("🗑 " + f.nombre() + " ya no se cobra"));
+            return List.of(new Accion.Avisar("🗑 " + f.nombre() + " ya no se cobra"));
+        }
+        if (ESTE_MES_NO_CHECKLIST.equals(accion)) {
+            YearMonth mes = YearMonth.now(clock);
+            fijos.esteMesNoDelPeriodo(id, mes);
+            List<GastoFijoService.ItemChecklist> items = fijos.checklist(mes);
+            return List.of(new Accion.Editar(mensajeId, textoDeChecklist(mes, items), tecladoDeChecklist(items)),
+                    new Accion.Avisar("⏭ Listo"));
         }
         PedidoFijo p = altas.get(id);
         if (p == null) {
@@ -283,38 +296,74 @@ public class ConversacionFijos {
                 + porcentaje + "%).";
     }
 
-    // --- Lista ---
+    // --- Checklist mensual ---
 
     /**
-     * "/fijos": los activos, con el próximo cobro y un botón para darlos de baja; y, si hay cobros esperando
-     * respuesta (por si se perdió el mensaje), otra vez su pregunta.
+     * "/fijos": el checklist del mes en curso (lo cargado, lo que falta y lo salteado), con el total y un botón
+     * por cada uno que falta para "este mes no"; y, si hay cobros automáticos esperando respuesta (por si se
+     * perdió el mensaje), otra vez su pregunta.
      */
     public List<Accion> lista() {
-        List<VistaFijo> activos = fijos.activos();
+        YearMonth mes = YearMonth.now(clock);
+        List<GastoFijoService.ItemChecklist> items = fijos.checklist(mes);
         List<Accion> acciones = new ArrayList<>();
-        acciones.add(Accion.Enviar.conBotones(textoDeLista(activos), tecladoDeLista(activos)));
+        acciones.add(Accion.Enviar.conBotones(textoDeChecklist(mes, items), tecladoDeChecklist(items)));
         fijos.cobrosPendientes().forEach(m -> acciones.add(preguntaDeCobro(m)));
         return acciones;
     }
 
-    private String textoDeLista(List<VistaFijo> activos) {
-        if (activos.isEmpty()) {
+    private String textoDeChecklist(YearMonth mes, List<GastoFijoService.ItemChecklist> items) {
+        if (items.isEmpty()) {
             return "📌 No tenés gastos fijos. " + COMO;
         }
-        StringBuilder sb = new StringBuilder("📌 <b>Tus gastos fijos</b>");
-        for (VistaFijo f : activos) {
-            sb.append("\n• ").append(f.emoji() == null ? "" : f.emoji() + " ").append(html(f.nombre())).append(": ")
-                    .append(formato.pesos(f.montoPropuesto()))
-                    .append(f.montoVariable() ? " (promedio)" : "")
-                    .append(f.frecuencia() == Frecuencia.BIMESTRAL ? " cada dos meses" : "")
-                    .append(" · próximo cobro ").append(DIA.format(f.proximoCobro()));
+        StringBuilder sb = new StringBuilder("📋 <b>Fijos de " + formato.mes(mes) + "</b>");
+        BigDecimal cargado = BigDecimal.ZERO;
+        int faltan = 0;
+        for (GastoFijoService.ItemChecklist item : items) {
+            sb.append('\n');
+            switch (item.estado()) {
+                case CARGADO -> {
+                    sb.append("✅ ").append(html(item.nombre())).append(": ").append(formato.pesos(item.monto()));
+                    if (item.porcentaje() != null) {
+                        sb.append(" (").append(item.porcentaje().signum() > 0 ? "+" : "")
+                                .append(item.porcentaje().stripTrailingZeros().toPlainString().replace('.', ','))
+                                .append("%)");
+                    }
+                    cargado = cargado.add(item.monto());
+                }
+                case ESTE_MES_NO -> sb.append("➖ ").append(html(item.nombre())).append(": este mes no");
+                case FALTA -> {
+                    sb.append("⏳ ").append(html(item.nombre())).append(": vence el ")
+                            .append(item.vencimiento().getDayOfMonth());
+                    if (item.montoAnterior() != null) {
+                        sb.append(" (ref. ").append(formato.pesos(item.montoAnterior())).append(")");
+                    }
+                    faltan++;
+                }
+            }
+        }
+        sb.append("\n\nCargado: ").append(formato.pesos(cargado));
+        if (faltan > 0) {
+            sb.append(" · Falta: ").append(faltan);
         }
         return sb.toString();
     }
 
-    private static Teclado tecladoDeLista(List<VistaFijo> activos) {
+    private static Teclado tecladoDeChecklist(List<GastoFijoService.ItemChecklist> items) {
         Teclado.Constructor t = Teclado.constructor();
-        activos.forEach(f -> t.fila(new Teclado.Boton("🗑 Dar de baja " + f.nombre(), BAJA + ":" + f.id())));
+        items.stream().filter(i -> i.estado() == GastoFijoService.EstadoChecklist.FALTA)
+                .forEach(i -> t.fila(new Teclado.Boton("⏭ Este mes no: " + i.nombre(),
+                        ESTE_MES_NO_CHECKLIST + ":" + i.fijoId())));
         return t.build();
+    }
+
+    // --- Recordatorio agrupado ---
+
+    /** "Te falta cargar: luz (vence el 10), gas (vence el 12)." */
+    public Accion.Enviar recordatorio(List<RecordatorioFijoService.Vencido> vencidos) {
+        String lista = vencidos.stream()
+                .map(v -> html(v.nombre()) + " (vence el " + v.diaVencimiento() + ")")
+                .reduce((a, b) -> a + ", " + b).orElse("");
+        return Accion.Enviar.texto("📌 <b>Te falta cargar:</b> " + lista + ". Mandame el gasto cuando lo tengas.");
     }
 }

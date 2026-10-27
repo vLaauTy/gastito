@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
 
@@ -41,7 +42,7 @@ class ConversacionFijosTest {
     private final CatalogoService catalogos = mock(CatalogoService.class);
     private final MovimientoService movimientos = mock(MovimientoService.class);
     private final ConversacionFijos conversacion = new ConversacionFijos(servicio, new ParserFijo(), catalogos,
-            movimientos, new FormatoMensajes(RELOJ));
+            movimientos, new FormatoMensajes(RELOJ), RELOJ);
 
     @BeforeEach
     void setUp() {
@@ -131,25 +132,34 @@ class ConversacionFijosTest {
     }
 
     @Test
-    void laListaConElProximoCobroYLaBaja() {
-        VistaFijo seguro = new VistaFijo(7L, "Seguro", new BigDecimal("32900.00"), new BigDecimal("32900.00"),
-                "Seguros", "🛡️", "MasterCard Gold", 4, Frecuencia.MENSUAL, false, null, true, true, PRIMER_COBRO);
-        VistaFijo luz = new VistaFijo(8L, "Luz", new BigDecimal("28000.00"), new BigDecimal("30500.00"), "Servicios",
-                "💡", null, 10, Frecuencia.BIMESTRAL, true, null, true, true, LocalDate.of(2026, 11, 10));
-        when(servicio.activos()).thenReturn(List.of(seguro, luz));
+    void elChecklistMuestraCadaEstadoYElTotalConBotonParaEsteMesNo() {
+        GastoFijoService.ItemChecklist cargado = new GastoFijoService.ItemChecklist(7L, "Seguro", "🛡️",
+                GastoFijoService.EstadoChecklist.CARGADO, new BigDecimal("32900"), LocalDate.of(2026, 10, 4),
+                new BigDecimal("30000"), new BigDecimal("9.7"), LocalDate.of(2026, 10, 4), true);
+        GastoFijoService.ItemChecklist falta = new GastoFijoService.ItemChecklist(8L, "Luz", "💡",
+                GastoFijoService.EstadoChecklist.FALTA, null, null, new BigDecimal("28000"), null,
+                LocalDate.of(2026, 10, 27), false);
+        GastoFijoService.ItemChecklist esteMesNo = new GastoFijoService.ItemChecklist(9L, "Gimnasio", "🏋️",
+                GastoFijoService.EstadoChecklist.ESTE_MES_NO, null, null, null, null, LocalDate.of(2026, 10, 15),
+                false);
+        when(servicio.checklist(YearMonth.of(2026, 10))).thenReturn(List.of(cargado, falta, esteMesNo));
+        when(servicio.cobrosPendientes()).thenReturn(List.of());
 
         Accion.Enviar lista = (Accion.Enviar) conversacion.lista().get(0);
 
         assertThat(lista.html()).isEqualTo("""
-                📌 <b>Tus gastos fijos</b>
-                • 🛡️ Seguro: $32.900 · próximo cobro miércoles 4/11
-                • 💡 Luz: $30.500 (promedio) cada dos meses · próximo cobro martes 10/11""");
-        assertThat(datos(lista.teclado())).containsExactly("fb:7", "fb:8");
+                📋 <b>Fijos de octubre 2026</b>
+                ✅ Seguro: $32.900 (+9,7%)
+                ⏳ Luz: vence el 27 (ref. $28.000)
+                ➖ Gimnasio: este mes no
 
-        when(servicio.vista(7L)).thenReturn(seguro);
-        List<Accion> baja = conversacion.boton(MENSAJE, ConversacionFijos.BAJA, 7, null);
-        verify(servicio).darDeBaja(7L);
-        assertThat(baja).contains(new Accion.Avisar("🗑 Seguro ya no se cobra"));
+                Cargado: $32.900 · Falta: 1""");
+        assertThat(datos(lista.teclado())).containsExactly("fe:8");
+
+        when(servicio.checklist(YearMonth.of(2026, 10))).thenReturn(List.of(cargado));
+        List<Accion> resultado = conversacion.boton(MENSAJE, ConversacionFijos.ESTE_MES_NO_CHECKLIST, 8, null);
+        verify(servicio).esteMesNoDelPeriodo(8L, YearMonth.of(2026, 10));
+        assertThat(resultado).contains(new Accion.Avisar("⏭ Listo"));
     }
 
     // --- Cobros ---

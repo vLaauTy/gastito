@@ -11,6 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import ar.gastito.fijo.GastoFijoService;
+import ar.gastito.fijo.RecordatorioFijoService;
 import ar.gastito.movimiento.Movimiento;
 
 /**
@@ -26,11 +27,14 @@ public class FijosProgramados {
     private static final Logger log = LoggerFactory.getLogger(FijosProgramados.class);
 
     private final GastoFijoService fijos;
+    private final RecordatorioFijoService recordatorios;
     private final ConversacionFijos conversacion;
     private final GastitoBot bot;
 
-    public FijosProgramados(GastoFijoService fijos, ConversacionFijos conversacion, GastitoBot bot) {
+    public FijosProgramados(GastoFijoService fijos, RecordatorioFijoService recordatorios,
+            ConversacionFijos conversacion, GastitoBot bot) {
         this.fijos = fijos;
+        this.recordatorios = recordatorios;
         this.conversacion = conversacion;
         this.bot = bot;
     }
@@ -44,17 +48,28 @@ public class FijosProgramados {
     public synchronized void revisar() {
         try {
             List<Movimiento> cobros = fijos.generarCobros();
-            if (cobros.isEmpty()) {
-                return;
-            }
-            if (bot.enviarAlUsuario(cobros.stream().map(conversacion::preguntaDeCobro).toList())) {
-                log.info("{} cobro(s) de gastos fijos para confirmar", cobros.size());
-            } else {
-                log.warn("No se pudo preguntar por {} cobro(s) de gastos fijos: quedan pendientes (aparecen en /fijos)",
-                        cobros.size());
+            if (!cobros.isEmpty()) {
+                if (bot.enviarAlUsuario(cobros.stream().map(conversacion::preguntaDeCobro).toList())) {
+                    log.info("{} cobro(s) de gastos fijos para confirmar", cobros.size());
+                } else {
+                    log.warn(
+                            "No se pudo preguntar por {} cobro(s) de gastos fijos: quedan pendientes (aparecen en /fijos)",
+                            cobros.size());
+                }
             }
         } catch (RuntimeException e) {
             log.error("Falló la generación de los cobros de los gastos fijos", e);
+        }
+        try {
+            recordatorios.siCorresponde().ifPresent(vencidos -> {
+                if (bot.enviarAlUsuario(List.of(conversacion.recordatorio(vencidos)))) {
+                    log.info("Recordatorio de {} fijo(s) vencido(s) sin cargar", vencidos.size());
+                } else {
+                    log.warn("No se pudo mandar el recordatorio de fijos vencidos");
+                }
+            });
+        } catch (RuntimeException e) {
+            log.error("Falló el recordatorio de gastos fijos vencidos", e);
         }
     }
 }
