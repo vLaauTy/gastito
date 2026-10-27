@@ -74,7 +74,8 @@ class ConversacionFijosTest {
     void alGuardarSeDaDeAlta() {
         conversacion.alta("seguro 32900 tarjeta día 4");
         when(servicio.alta(any())).thenReturn(new VistaFijo(7L, "Seguro", new BigDecimal("32900.00"),
-                new BigDecimal("32900.00"), "Seguros", "🛡️", null, 4, Frecuencia.MENSUAL, false, true, PRIMER_COBRO));
+                new BigDecimal("32900.00"), "Seguros", "🛡️", null, 4, Frecuencia.MENSUAL, false, null, true, true,
+                PRIMER_COBRO));
 
         List<Accion> acciones = conversacion.boton(MENSAJE, ConversacionFijos.GUARDAR, 1, null);
 
@@ -132,9 +133,9 @@ class ConversacionFijosTest {
     @Test
     void laListaConElProximoCobroYLaBaja() {
         VistaFijo seguro = new VistaFijo(7L, "Seguro", new BigDecimal("32900.00"), new BigDecimal("32900.00"),
-                "Seguros", "🛡️", "MasterCard Gold", 4, Frecuencia.MENSUAL, false, true, PRIMER_COBRO);
+                "Seguros", "🛡️", "MasterCard Gold", 4, Frecuencia.MENSUAL, false, null, true, true, PRIMER_COBRO);
         VistaFijo luz = new VistaFijo(8L, "Luz", new BigDecimal("28000.00"), new BigDecimal("30500.00"), "Servicios",
-                "💡", null, 10, Frecuencia.BIMESTRAL, true, true, LocalDate.of(2026, 11, 10));
+                "💡", null, 10, Frecuencia.BIMESTRAL, true, null, true, true, LocalDate.of(2026, 11, 10));
         when(servicio.activos()).thenReturn(List.of(seguro, luz));
 
         Accion.Enviar lista = (Accion.Enviar) conversacion.lista().get(0);
@@ -165,7 +166,7 @@ class ConversacionFijosTest {
 
     private VistaFijo seguro(boolean variable) {
         return new VistaFijo(7L, "Seguro de la moto", new BigDecimal("32900.00"), new BigDecimal("32900.00"),
-                "Seguros", "🛡️", null, 4, Frecuencia.MENSUAL, variable, true, PRIMER_COBRO);
+                "Seguros", "🛡️", null, 4, Frecuencia.MENSUAL, variable, null, true, true, PRIMER_COBRO);
     }
 
     @Test

@@ -12,6 +12,7 @@ import static ar.gastito.bot.DatosDePrueba.conCategoria;
 import static ar.gastito.bot.DatosDePrueba.conId;
 import static ar.gastito.bot.DatosDePrueba.confirmado;
 import static ar.gastito.bot.DatosDePrueba.deAudio;
+import static ar.gastito.bot.DatosDePrueba.EFECTIVO;
 import static ar.gastito.bot.DatosDePrueba.dudoso;
 import static ar.gastito.bot.DatosDePrueba.PRODUCTOS;
 import static ar.gastito.bot.DatosDePrueba.ticket;
@@ -94,6 +95,8 @@ class ProcesadorMensajesTest {
     private final ConversacionRepetidos repetidos = mock(ConversacionRepetidos.class);
     private final ConversacionJuntadas juntadas = mock(ConversacionJuntadas.class);
     private final ConversacionFijos fijos = mock(ConversacionFijos.class);
+    private final ar.gastito.fijo.GastoFijoService gastosFijos = mock(ar.gastito.fijo.GastoFijoService.class);
+    private final ConversacionVarios varios = mock(ConversacionVarios.class);
     private final ConversacionCuotas cuotas = mock(ConversacionCuotas.class);
     private ProcesadorMensajes procesador;
 
@@ -110,7 +113,7 @@ class ProcesadorMensajesTest {
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
                 tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, resumenes,
                 new FormatoResumen(formato, new GraficoMes(formato), dashboard), consultas, new FormatoConsulta(formato),
-                repetidos, juntadas, fijos, cuotas, properties, dashboard, RELOJ);
+                repetidos, juntadas, fijos, gastosFijos, varios, cuotas, properties, dashboard, RELOJ);
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));
         when(tickets.tamanioMaximo()).thenReturn(DataSize.ofMegabytes(10));
     }
@@ -1210,6 +1213,46 @@ class ProcesadorMensajesTest {
         when(fijos.tarjetaDeAlta(pedido, "")).thenReturn(tarjeta);
         assertThat(procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "agregá un fijo: el seguro, 32900 el 4"))
                 .containsExactly(tarjeta);
+        verify(movimientos, never()).crearPendiente(any(), any(), any());
+    }
+
+    // --- Varios gastos en un mensaje ---
+
+    @Test
+    void variosGastosEnUnMensajeArmanUnaSolaTarjetaYSeVinculanPorFijo() {
+        String texto = "kiosco 1500 y super 2000";
+        Movimiento m1 = conCategoria("1500", KIOSCO);
+        Movimiento m2 = conCategoria("2000", SUPER);
+        MovimientoInterpretado i1 = new MovimientoInterpretado(new BigDecimal("1500"), "Kiosco", KIOSCO, List.of(),
+                EFECTIVO, null, null, AHORA);
+        MovimientoInterpretado i2 = new MovimientoInterpretado(new BigDecimal("2000"), "Super", SUPER, List.of(),
+                EFECTIVO, null, null, AHORA);
+        when(interpretador.interpretar("kiosco 1500", PropositoIa.TEXTO))
+                .thenReturn(new InterpretadorService.Interpretado(i1, Confianza.ALTA, null));
+        when(interpretador.interpretar("super 2000", PropositoIa.TEXTO))
+                .thenReturn(new InterpretadorService.Interpretado(i2, Confianza.ALTA, null));
+        when(movimientos.crearPendiente(any(), eq(Origen.TEXTO), eq("kiosco 1500"))).thenReturn(m1);
+        when(movimientos.crearPendiente(any(), eq(Origen.TEXTO), eq("super 2000"))).thenReturn(m2);
+        Accion.Enviar tarjetaCombinada = Accion.Enviar.conBotones("tarjeta", Teclado.NINGUNO);
+        when(varios.tarjeta(List.of(m1, m2), "")).thenReturn(tarjetaCombinada);
+
+        List<Accion> acciones = procesador.procesarTexto(CHAT, MENSAJE_USUARIO, texto);
+
+        assertThat(acciones).containsExactly(tarjetaCombinada);
+        verify(varios).tarjeta(List.of(m1, m2), "");
+    }
+
+    @Test
+    void siUnaParteNoEsUnGastoClaroCaeAlFlujoDeUnSoloGastoConElTextoCompleto() {
+        String texto = "kiosco 1500 y hola";
+        when(interpretador.interpretar("kiosco 1500", PropositoIa.TEXTO))
+                .thenReturn(new InterpretadorService.NoEsGasto());
+        when(interpretador.interpretar(texto, PropositoIa.TEXTO)).thenReturn(new InterpretadorService.NoEsGasto());
+
+        List<Accion> acciones = procesador.procesarTexto(CHAT, MENSAJE_USUARIO, texto);
+
+        assertThat(acciones).hasSize(1).first().isInstanceOf(Accion.Enviar.class);
+        verifyNoInteractions(varios);
         verify(movimientos, never()).crearPendiente(any(), any(), any());
     }
 }

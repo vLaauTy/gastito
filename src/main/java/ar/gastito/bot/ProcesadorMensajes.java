@@ -33,6 +33,9 @@ import ar.gastito.ia.IaNoDisponibleException;
 import ar.gastito.ia.PropositoIa;
 import ar.gastito.ia.RegistroUsoIa;
 import ar.gastito.ia.ResumenUsoIa;
+import ar.gastito.fijo.GastoFijo;
+import ar.gastito.fijo.GastoFijoService;
+import ar.gastito.interpretacion.DivisorDeGastos;
 import ar.gastito.interpretacion.InterpretadorService;
 import ar.gastito.interpretacion.Montos;
 import ar.gastito.interpretacion.ResolvedorFechas;
@@ -130,6 +133,8 @@ public class ProcesadorMensajes {
     private final ConversacionRepetidos repetidos;
     private final ConversacionJuntadas juntadas;
     private final ConversacionFijos fijos;
+    private final GastoFijoService gastosFijos;
+    private final ConversacionVarios varios;
     private final ConversacionCuotas cuotas;
     private final FormatoResumen formatoResumen;
     private final ConsultaService consultas;
@@ -188,8 +193,11 @@ public class ProcesadorMensajes {
             TranscripcionService transcripciones, TicketService tickets, ResumenService resumenes,
             FormatoResumen formatoResumen, ConsultaService consultas, FormatoConsulta formatoConsulta,
             ConversacionRepetidos repetidos, ConversacionJuntadas juntadas, ConversacionFijos fijos,
-            ConversacionCuotas cuotas, GastitoProperties properties, DashboardProperties dashboard, Clock clock) {
+            GastoFijoService gastosFijos, ConversacionVarios varios, ConversacionCuotas cuotas,
+            GastitoProperties properties, DashboardProperties dashboard, Clock clock) {
         this.fijos = fijos;
+        this.gastosFijos = gastosFijos;
+        this.varios = varios;
         this.cuotas = cuotas;
         this.repetidos = repetidos;
         this.juntadas = juntadas;
@@ -435,6 +443,13 @@ public class ProcesadorMensajes {
 
     private Accion nuevoGasto(long chatId, String texto, Origen origen) {
         boolean audio = origen == Origen.AUDIO;
+        List<String> partes = DivisorDeGastos.separar(texto);
+        if (partes.size() > 1) {
+            Optional<Accion> varios = intentarVarios(partes, origen, texto, audio);
+            if (varios.isPresent()) {
+                return varios.get();
+            }
+        }
         InterpretadorService.Resultado resultado;
         try {
             resultado = interpretador.interpretar(texto, audio ? PropositoIa.AUDIO : PropositoIa.TEXTO);
@@ -474,6 +489,38 @@ public class ProcesadorMensajes {
                             No encontré un gasto en el mensaje 🤔
                             Probá con algo como "kiosco 1500" o mirá /ayuda""");
         };
+    }
+
+    /**
+     * Varios gastos separados por {@link DivisorDeGastos}: se interpreta cada parte por separado (sin guardar
+     * nada) y, solo si todas resultan un gasto con monto, se crean los pendientes y se vinculan a su fijo si
+     * corresponde. Si alguna parte no es un gasto claro, se cae al camino de un solo gasto con el texto completo.
+     */
+    private Optional<Accion> intentarVarios(List<String> partes, Origen origen, String textoCompleto,
+            boolean audio) {
+        List<InterpretadorService.Interpretado> interpretados = new ArrayList<>();
+        for (String parte : partes) {
+            InterpretadorService.Resultado r;
+            try {
+                r = interpretador.interpretar(parte, audio ? PropositoIa.AUDIO : PropositoIa.TEXTO);
+            } catch (IaNoDisponibleException e) {
+                return Optional.empty();
+            }
+            if (!(r instanceof InterpretadorService.Interpretado i) || i.movimiento().monto() == null) {
+                return Optional.empty();
+            }
+            interpretados.add(i);
+        }
+        List<Movimiento> creados = new ArrayList<>();
+        for (int idx = 0; idx < partes.size(); idx++) {
+            Movimiento m = crearGasto(interpretados.get(idx), origen, partes.get(idx));
+            Optional<GastoFijo> fijo = gastosFijos.vincular(partes.get(idx));
+            if (fijo.isPresent() && m.isPendiente()) {
+                gastosFijos.vincular(m, fijo.get());
+            }
+            creados.add(m);
+        }
+        return Optional.of(varios.tarjeta(creados, audio ? escuche(textoCompleto) : ""));
     }
 
     private Movimiento crearGasto(InterpretadorService.Interpretado i, Origen origen, String texto) {
@@ -688,6 +735,8 @@ public class ProcesadorMensajes {
             case ConversacionFijos.CONFIRMAR_COBRO, ConversacionFijos.CAMBIO_EL_MONTO, ConversacionFijos.ESTE_MES_NO ->
                     fijos.botonDeCobro(chatId, mensajeId, accion, id);
             case ConversacionCuotas.CANCELAR_PLAN -> cuotas.boton(mensajeId, id);
+            case ConversacionVarios.GUARDAR_TODO, ConversacionVarios.CANCELAR_TODOS -> varios.boton(mensajeId,
+                    accion, id);
             case Tarjetas.UNIR -> repetidos.unir(mensajeId, id, requerido(elegido));
             case Tarjetas.DE_NUEVO -> repetidos.deNuevo(mensajeId, id)
                     .orElseGet(() -> List.of(principal(chatId, mensajeId, pendiente(id))));

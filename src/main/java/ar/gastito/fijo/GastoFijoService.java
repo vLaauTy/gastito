@@ -328,6 +328,13 @@ public class GastoFijoService {
         pendiente.vincularFijo(fijo.getId(), YearMonth.from(pendiente.getFechaHora()).atDay(1));
     }
 
+    /** Si ese fijo ya tiene un cobro confirmado ese mes ("Ya cargaste la luz este mes"). */
+    @Transactional(readOnly = true)
+    public Optional<Movimiento> yaCargadoEstePeriodo(Long fijoId, YearMonth mes) {
+        return movimientos.findByGastoFijoIdAndFijoPeriodoOrderByIdDesc(fijoId, mes.atDay(1)).stream()
+                .filter(m -> m.getEstado() == EstadoMovimiento.CONFIRMADO).findFirst();
+    }
+
     // --- Checklist mensual ---
 
     public enum EstadoChecklist {
