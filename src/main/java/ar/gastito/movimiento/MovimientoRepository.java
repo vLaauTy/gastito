@@ -136,6 +136,16 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
             order by m.fechaHora""")
     List<Movimiento> gastosConfirmados(@Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta);
 
+    // --- Compras en cuotas ---
+
+    /** Las cuotas ya generadas de un plan, de la 1 a la última. */
+    List<Movimiento> findByPlanCuotasIdOrderByCuotaActual(Long planCuotasId);
+
+    /** Al cancelar un plan: se borran las cuotas con fecha después de "hasta" (las futuras, no las que ya pasaron). */
+    @Modifying
+    @Query(nativeQuery = true, value = "DELETE FROM movimiento WHERE plan_cuotas_id = :plan AND fecha_hora > :hasta")
+    int borrarCuotasFuturas(@Param("plan") Long planCuotasId, @Param("hasta") LocalDateTime hasta);
+
     // --- Ingresos ---
 
     @EntityGraph(attributePaths = {"cuenta", "medioPago"})

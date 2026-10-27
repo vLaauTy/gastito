@@ -88,6 +88,9 @@ gastito:
   repetidos:
     # Un gasto nuevo se compara con los de esta ventana, antes y después (mismo monto con 1% o $50 de tolerancia).
     ventana: 3h
+  cuotas:
+    # MISMO_MES: la primera cuota es la del mes de la compra. MES_SIGUIENTE: si la tarjeta cobra al mes siguiente.
+    primera-cuota: MISMO_MES
   consultas:
     modelo: claude-haiku-5-5
     max-tokens: 1024

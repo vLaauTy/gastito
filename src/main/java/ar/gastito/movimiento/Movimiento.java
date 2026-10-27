@@ -331,6 +331,21 @@ public class Movimiento {
         this.monto = nuevo;
     }
 
+    // --- Compras en cuotas ---
+
+    /**
+     * Este gasto (pendiente) es una cuota de un plan: queda etiquetado y la descripción suma "(cuota X de N)". Se usa
+     * en la cuota 1 (recién interpretada) y, antes de confirmarlas, en las automáticas.
+     */
+    public void prepararCuota(Long planCuotasId, int cuotaActual, int cuotaTotal) {
+        verificarPendiente();
+        this.planCuotasId = planCuotasId;
+        this.cuotaActual = cuotaActual;
+        this.cuotaTotal = cuotaTotal;
+        this.descripcion = (descripcion == null ? "" : descripcion) + " (cuota " + cuotaActual + " de " + cuotaTotal
+                + ")";
+    }
+
     // --- Juntadas ---
 
     /** Un gasto pendiente pasa a ser una juntada: el monto es mi parte (lo que cuenta como gasto). */
