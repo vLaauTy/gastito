@@ -11,17 +11,19 @@
 <script src="/webjars/chart.js/dist/chart.umd.min.js" defer></script>
 <script src="/js/app.js" defer></script>
 <script src="/js/sueldo.js" defer></script>
+<script src="/js/movil.js" defer></script>
 </head>
 <body>
 <div class="app">
   <nav aria-label="Secciones">
     <div class="logo"><span aria-hidden="true">G</span>Gastito</div>
     <div class="links">
-      <a href="#resumen" data-view="resumen">Resumen</a>
-      <a href="#movimientos" data-view="movimientos">Movimientos</a>
-      <a href="#ingresos" data-view="ingresos">Ingresos</a>
-      <a href="#fijos" data-view="fijos">Fijos</a>
-      <a href="#costos-ia" data-view="costos-ia">Costos IA</a>
+      <a href="#resumen" data-view="resumen"><i class="ico" aria-hidden="true">▦</i><span>Resumen</span></a>
+      <a href="#movimientos" data-view="movimientos"><i class="ico" aria-hidden="true">☰</i><span>Movimientos</span></a>
+      <a href="#ingresos" data-view="ingresos"><i class="ico" aria-hidden="true">＋</i><span>Ingresos</span></a>
+      <a href="#fijos" data-view="fijos"><i class="ico" aria-hidden="true">✓</i><span>Fijos</span></a>
+      <a href="#costos-ia" data-view="costos-ia" class="en-mas"><i class="ico" aria-hidden="true">◎</i><span>Costos IA</span></a>
+      <button type="button" class="mas" id="nav-mas" aria-expanded="false"><i class="ico" aria-hidden="true">⋯</i><span>Más</span></button>
       <a class="off" aria-disabled="true">Cuotas y juntadas <small>Próximamente</small></a>
     </div>
     <div class="ia" id="ia" aria-live="polite">

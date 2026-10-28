@@ -172,19 +172,75 @@ input.crece { flex: 1 1 220px; }
 tr.inactivo { opacity: .5; }
 
 /* --- Celular --- */
-@media (max-width: 720px) {
-  /* Menú arriba y contenido abajo, cada uno a todo el ancho y sin estirarse para llenar la pantalla. */
-  .app { align-content: flex-start; }
-  nav { max-width: none; flex-basis: 100%; padding: 16px; gap: 12px; }
-  main { flex-basis: 100%; }
-  .cards { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-  nav .links { display: flex; flex-wrap: wrap; gap: 4px; }
-  nav a.off { display: none; }
-  .ia { margin-top: 0; }
-  main { padding: 16px 16px 32px; }
+.ico, button.mas { display: none; }
+
+@media (max-width: 719.98px) {
+  .app { display: block; }
+  main { padding: 16px 16px calc(88px + env(safe-area-inset-bottom)); gap: 16px; }
   h1 { font-size: 24px; }
+  header .btns { width: 100%; }
+  header .btns > * { flex: 1 1 auto; justify-content: center; }
+
+  /* Navegación abajo, fija. Lo que no entra va en "Más". */
+  nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; max-width: none; padding: 0 4px env(safe-area-inset-bottom); gap: 0; border-top: 1px solid var(--border); }
+  nav .logo, nav .ia, nav a.off { display: none; }
+  nav .links { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  nav a, nav button.mas { flex-direction: column; justify-content: center; gap: 2px; min-height: 60px; padding: 6px 2px; border: 0; border-radius: 10px; background: none; color: var(--nav-muted); font-size: 11px; font-weight: 600; text-align: center; }
+  nav a span, nav button.mas span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  nav .ico, nav button.mas .ico { display: block; font-style: normal; font-size: 20px; line-height: 1; }
+  nav button.mas { display: flex; }
+  nav button.mas.active, nav button.mas[aria-expanded="true"] { background: var(--nav-active); color: #fff; }
+  nav a.en-mas { display: none; }
+  nav.mas-abierto a.en-mas { display: flex; position: absolute; right: 8px; bottom: calc(68px + env(safe-area-inset-bottom)); width: 160px; min-height: 48px; flex-direction: row; justify-content: flex-start; gap: 10px; padding: 0 14px; font-size: 14px; background: var(--nav-box); border: 1px solid var(--border); box-shadow: 0 4px 16px rgba(0, 0, 0, .35); color: #fff; }
+
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .big { font-size: 20px; }
+  .card { padding: 14px; }
+  .cards > .card.dark { grid-column: 1 / -1; }
+  .table-card, aside { flex: none; }
   .grid2 { grid-template-columns: minmax(0, 1fr); }
-  .cat { grid-template-columns: minmax(0, 120px) minmax(0, 1fr) auto; }
+  .row2 { display: block; }
+  .row2 > * + * { margin-top: 16px; }
+  .cat { grid-template-columns: minmax(0, 110px) minmax(0, 1fr) auto; }
+  .grafico { height: 240px; }
+
+  /* Botones y campos de al menos 44 px */
+  button.mini { min-height: 44px; padding: 0 14px; }
+  input, select { min-height: 44px; font-size: 16px; }
+  input[type="checkbox"] { min-height: 0; width: 22px; height: 22px; }
+  .filters > :not(.sr) { flex: 1 1 100%; min-width: 0; width: 100%; }
+  .dialog { max-height: 100%; overflow-y: auto; }
+  .modal { padding: 8px; }
+  .pager .btns { width: 100%; }
+  .pager .btns > * { flex: 1; justify-content: center; }
+
+  /* Tablas → tarjetas */
+  .scroll { overflow-x: visible; }
+  table { min-width: 0; display: block; }
+  thead { display: none; }
+  tbody { display: grid; gap: 10px; }
+  tbody > tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  tbody > tr:has(button.desplegar) { cursor: pointer; }
+  td { display: block; padding: 0; border: 0; min-width: 0; overflow-wrap: anywhere; }
+  td.principal { flex: 1 1 0; min-width: 40%; font-size: 15px; }
+  td.amt { order: 1; font-size: 16px; margin-left: auto; }
+  td.date { order: 3; flex: 1 1 100%; }
+  td:not(.principal):not(.amt):not(.mensaje) { order: 2; font-size: 13px; color: var(--muted); }
+  td[data-label]:not(.principal):not(.amt):not(.date):not(:has(.chip))::before { content: attr(data-label) ": "; opacity: .8; }
+  td:has(button) { order: 3; flex: 1 1 100%; }
+  td:has(button) button { width: 100%; justify-content: center; }
+  td .row-btns { width: 100%; }
+  td .row-btns button { flex: 1; justify-content: center; }
+  td.mensaje { text-align: center; flex: 1 1 100%; padding: 12px 0; }
+  button.desplegar { margin: 6px 0 0; }
+  tbody > tr.detalle-ticket, tbody > tr.detalle-recibo { margin-top: -6px; background: var(--input-bg); }
+  tr.detalle-ticket td, tr.detalle-recibo td { flex: 1 1 100%; background: none; padding: 0; }
+  .productos, .pie-ticket, .avisos-ticket, .recibo { max-width: none; }
+
+  /* Calculadora de sueldo y escalas en una columna */
+  .calc-horas, .escala-form { grid-template-columns: minmax(0, 1fr); }
+  .sueldo-detalle { flex-direction: column; gap: 16px; }
+  input.corto { width: 100%; }
 }
 
 /* --- Recibos de sueldo --- */

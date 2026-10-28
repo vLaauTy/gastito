@@ -634,10 +634,24 @@ efectivo. Una cuenta o tarjeta nueva aparece sola (su color está en la columna 
 Lo que no tiene medio de pago ni cuenta queda en **Sin especificar**, en gris claro: son los gastos para
 corregir desde el bot. Fijos, Juntadas y "Lo que notó la IA" aparecen como *Próximamente*.
 
-Se adapta al celular y tiene modo oscuro según la configuración del sistema. Chart.js viene dentro del jar
+Se adapta al celular (ver más abajo) y tiene modo oscuro según la configuración del sistema. Chart.js viene dentro del jar
 (WebJar), así que anda sin internet.
 
-### Abrirlo en el celular (misma red Wi-Fi)
+### Abrirlo en el celular con Tailscale
+
+Es la forma recomendada: el dashboard sigue escuchando solo en `127.0.0.1` (no cambies `SERVER_ADDRESS`) y
+Tailscale lo publica únicamente para tus dispositivos, sin abrirlo a internet ni a la red local.
+
+1. Instalá [Tailscale](https://tailscale.com/download) en la PC y en el celular, e iniciá sesión con la misma cuenta.
+2. En la PC, con la aplicación prendida: `tailscale serve --bg http://127.0.0.1:8090` (si cambiaste `SERVER_PORT`,
+   usá ese puerto).
+3. `tailscale serve status` muestra la dirección (algo como `https://mi-pc.tu-red.ts.net`). Abrila en el celular.
+4. Para dejar de publicarlo: `tailscale serve reset`.
+
+En pantallas de menos de 720 px el dashboard muestra la navegación abajo (lo que no entra va en **Más**), las
+tablas como tarjetas (tocar una tarjeta con productos los despliega) y todo en una columna.
+
+### Alternativa: misma red Wi-Fi (sin Tailscale)
 
 Por defecto el servidor escucha solo en `127.0.0.1`: nadie más de la red ve tus gastos. Para abrirlo en el
 celular hacen falta las dos cosas juntas en el `.env` (sin token, la aplicación **no arranca** escuchando en la
