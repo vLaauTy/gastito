@@ -34,15 +34,24 @@ public class ReciboConcepto {
 
     private int orden;
 
+    /** El concepto del sueldo al que corresponde; null si es "otro" o no se pudo saber. */
+    private Long conceptoSueldoId;
+
     protected ReciboConcepto() {
     }
 
-    ReciboConcepto(ReciboSueldo recibo, String descripcion, GrupoConcepto grupo, BigDecimal importe, int orden) {
+    ReciboConcepto(ReciboSueldo recibo, String descripcion, GrupoConcepto grupo, BigDecimal importe, int orden,
+            Long conceptoSueldoId) {
         this.recibo = recibo;
         this.descripcion = descripcion;
         this.grupo = grupo;
         this.importe = importe;
         this.orden = orden;
+        this.conceptoSueldoId = conceptoSueldoId;
+    }
+
+    public Long getConceptoSueldoId() {
+        return conceptoSueldoId;
     }
 
     public String getDescripcion() {

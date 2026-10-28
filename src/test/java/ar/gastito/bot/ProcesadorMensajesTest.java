@@ -98,6 +98,7 @@ class ProcesadorMensajesTest {
     private final ConversacionVarios varios = mock(ConversacionVarios.class);
     private final ConversacionCuotas cuotas = mock(ConversacionCuotas.class);
     private final ConversacionRecibos recibos = mock(ConversacionRecibos.class);
+    private final ComandosSueldo comandosSueldo = mock(ComandosSueldo.class);
     private final ar.gastito.ia.CostosIaService costosIa = mock(ar.gastito.ia.CostosIaService.class);
     private ProcesadorMensajes procesador;
 
@@ -114,7 +115,7 @@ class ProcesadorMensajesTest {
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
                 tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, resumenes,
                 new FormatoResumen(formato, new GraficoMes(formato), dashboard), consultas, new FormatoConsulta(formato),
-                repetidos, juntadas, fijos, gastosFijos, varios, cuotas, recibos, new FormatoCostos(costosIa, formato, RELOJ), properties, dashboard,
+                repetidos, juntadas, fijos, gastosFijos, varios, cuotas, recibos, comandosSueldo, new FormatoCostos(costosIa, formato, RELOJ), properties, dashboard,
                 RELOJ);
         when(costosIa.panel(any())).thenReturn(panelDeCostos(0, "0"));
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));
@@ -1314,29 +1315,40 @@ class ProcesadorMensajesTest {
     }
 
     @Test
-    void alGuardarUnReciboConSueldoCargadoPreguntaAntesDeGuardar() {
-        List<Accion> pregunta = List.of(new Accion.Avisar("pregunta"));
-        when(recibos.preguntarSiYaHay(TARJETA, ID)).thenReturn(java.util.Optional.of(pregunta));
+    void elBotonDescartarBorraElRecibo() {
+        List<Accion> descartado = List.of(new Accion.Avisar("descartado"));
+        when(recibos.descartar(TARJETA, 15L)).thenReturn(descartado);
 
-        assertThat(tocar("g:15")).isEqualTo(pregunta);
+        assertThat(tocar("dr:15")).isEqualTo(descartado);
         verify(movimientos, never()).confirmar(any());
     }
 
     @Test
-    void elBotonReemplazarGuardaElDelRecibo() {
-        List<Accion> guardado = List.of(new Accion.Avisar("guardado"));
-        when(recibos.reemplazar(TARJETA, ID)).thenReturn(guardado);
+    void elComandoCalcularVaALaCalculadora() {
+        Accion tarjeta = Accion.Enviar.texto("calculado");
+        when(comandosSueldo.calcularDeComando("/calcular 10 6 30")).thenReturn(tarjeta);
 
-        assertThat(tocar("rr:15")).isEqualTo(guardado);
+        assertThat(procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "/calcular 10 6 30")).containsExactly(tarjeta);
+        verify(interpretador, never()).interpretar(any(), any());
     }
 
     @Test
-    void alCancelarSeAvisaALosRecibosParaBorrarElArchivo() {
-        Movimiento cancelado = conCategoria("3700", KIOSCO);
-        when(movimientos.cancelar(ID)).thenReturn(cancelado);
+    void unMensajeConLasHorasDelMesVaALaCalculadoraYNoEsUnGasto() {
+        String texto = "este mes hice 10 horas al 50, 6 al 100 y 30 nocturnas";
+        Accion tarjeta = Accion.Enviar.texto("calculado");
+        when(comandosSueldo.pareceCalculo(texto)).thenReturn(true);
+        when(comandosSueldo.calcularDeTexto(texto)).thenReturn(tarjeta);
 
-        tocar("c:15");
+        assertThat(procesador.procesarTexto(CHAT, MENSAJE_USUARIO, texto)).containsExactly(tarjeta);
+        verify(interpretador, never()).interpretar(any(), any());
+    }
 
-        verify(recibos).alCancelar(cancelado);
+    @Test
+    void losBotonesDeLaCalculadoraNoPasanPorLosDeLosGastos() {
+        List<Accion> guardado = List.of(new Accion.Avisar("guardado"));
+        when(comandosSueldo.boton(TARJETA, "cg:202610:10_6_30")).thenReturn(guardado);
+
+        assertThat(tocar("cg:202610:10_6_30")).isEqualTo(guardado);
+        verify(movimientos, never()).confirmar(any());
     }
 }

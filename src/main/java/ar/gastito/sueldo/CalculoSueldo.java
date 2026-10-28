@@ -11,6 +11,7 @@ import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -48,14 +49,15 @@ public class CalculoSueldo {
 
     private LocalDateTime calculadoEn;
 
-    @OneToMany(mappedBy = "calculo", cascade = CascadeType.ALL, orphanRemoval = true)
+    // Son una docena de renglones y se leen siempre juntos (el bot, el dashboard): sin cargarlos aparte.
+    @OneToMany(mappedBy = "calculo", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @OrderBy("orden")
     private List<Linea> lineas = new ArrayList<>();
 
     protected CalculoSueldo() {
     }
 
-    CalculoSueldo(YearMonth periodo, Long escalaId, CalculadoraSueldo.Resultado r, LocalDateTime ahora) {
+    public CalculoSueldo(YearMonth periodo, Long escalaId, CalculadoraSueldo.Resultado r, LocalDateTime ahora) {
         this.periodo = periodo.atDay(1);
         reemplazar(escalaId, r, ahora);
     }

@@ -10,6 +10,7 @@
 <!-- Chart.js viene dentro del jar (WebJar): el dashboard anda sin internet. -->
 <script src="/webjars/chart.js/dist/chart.umd.min.js" defer></script>
 <script src="/js/app.js" defer></script>
+<script src="/js/sueldo.js" defer></script>
 </head>
 <body>
 <div class="app">
@@ -208,6 +209,31 @@
         <div class="head"><h2>Sueldo de los últimos 12 meses</h2><span class="note">Según tus recibos de sueldo</span></div>
         <div id="i-recibos-variacion" class="variaciones"></div>
         <div class="grafico"><canvas id="grafico-recibos" role="img" aria-label="Bruto, descuentos y neto de cada mes"></canvas></div>
+      </section>
+      <section class="card" id="sueldo-seguimiento" aria-label="Sueldo mes por mes">
+        <div class="head"><h2>Sueldo: calculado, cobrado y recibo</h2><span class="note">Los últimos 12 meses</span></div>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Mes</th><th class="num">Calculado</th><th class="num">Cobrado</th><th class="num">Recibo</th><th>Diferencias</th><th></th></tr></thead>
+            <tbody id="sueldo-filas"></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="card" id="calculadora" aria-label="Calculadora de sueldo">
+        <div class="head"><h2>Calculadora de sueldo</h2><span class="note" id="calc-nota"></span></div>
+        <form id="form-calculo" class="calc-form" novalidate>
+          <div class="calc-horas" id="calc-horas"></div>
+          <div class="btns">
+            <button type="submit" class="primary" id="calc-guardar">Guardar cálculo</button>
+          </div>
+        </form>
+        <p class="error" id="calc-error" role="alert" hidden></p>
+        <div id="calc-resultado" class="recibo"></div>
+        <details id="calc-config">
+          <summary>Escalas y conceptos</summary>
+          <div id="calc-escalas"></div>
+          <div id="calc-conceptos"></div>
+        </details>
       </section>
       <section class="card">
         <h2>Ingresos de los últimos meses</h2>

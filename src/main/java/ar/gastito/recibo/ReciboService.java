@@ -9,61 +9,63 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Locale;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.unit.DataSize;
 
 import ar.gastito.config.GastitoProperties;
 import ar.gastito.ia.ClienteIa;
-import ar.gastito.ia.RegistroUsoIa;
 import ar.gastito.movimiento.Movimiento;
-import ar.gastito.movimiento.IngresoService;
-import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Periodo;
+import ar.gastito.sueldo.CalculoSueldo;
+import ar.gastito.sueldo.SueldoService;
 import ar.gastito.ticket.ImagenInvalidaException;
 import ar.gastito.ticket.ImagenTicket;
 
 /**
- * Del recibo al ingreso pendiente: lo lee con la IA (el texto del PDF, o la imagen si es un escaneo o una foto), lo
- * valida en Java y guarda el ingreso por el neto con el detalle de conceptos y el archivo en disco. Después sigue
- * el flujo de confirmación de siempre (Guardar / Editar / Cancelar).
+ * El recibo de sueldo como control, no como registro: lo lee con la IA (el texto del PDF, o la imagen si es un
+ * escaneo o una foto), lo valida en Java, lo guarda con su archivo y lo compara con lo cobrado, con el cálculo del
+ * mes y con el recibo anterior. El ingreso lo carga el usuario cuando cobra; el recibo llega una semana después.
  */
 @Service
 public class ReciboService {
 
     private static final Logger log = LoggerFactory.getLogger(ReciboService.class);
-    private static final Locale ES_AR = Locale.forLanguageTag("es-AR");
-    private static final int LARGO_MAXIMO_DESCRIPCION = 255;
 
     private final LectorPdf pdfs;
     private final ImagenTicket imagenes;
     private final LectorRecibo lector;
     private final ValidadorRecibo validador;
-    private final IngresoService ingresos;
-    private final MovimientoService movimientos;
+    private final MapeadorConceptos mapeador;
+    private final ControlRecibo control;
+    private final SueldoService sueldo;
     private final ReciboRepository recibos;
-    private final RegistroUsoIa usoIa;
     private final ArchivosRecibo archivos;
+    private final TransactionTemplate transaccion;
     private final DataSize tamanioMaximo;
     private final Clock clock;
 
     public ReciboService(LectorPdf pdfs, ImagenTicket imagenes, LectorRecibo lector, ValidadorRecibo validador,
-            IngresoService ingresos, MovimientoService movimientos, ReciboRepository recibos, RegistroUsoIa usoIa,
-            ArchivosRecibo archivos, GastitoProperties properties, Clock clock) {
+            MapeadorConceptos mapeador, ControlRecibo control, SueldoService sueldo, ReciboRepository recibos,
+            ArchivosRecibo archivos, GastitoProperties properties, PlatformTransactionManager transacciones,
+            Clock clock) {
         this.pdfs = pdfs;
         this.imagenes = imagenes;
         this.lector = lector;
         this.validador = validador;
-        this.ingresos = ingresos;
-        this.movimientos = movimientos;
+        this.mapeador = mapeador;
+        this.control = control;
+        this.sueldo = sueldo;
         this.recibos = recibos;
-        this.usoIa = usoIa;
         this.archivos = archivos;
+        this.transaccion = new TransactionTemplate(transacciones);
         this.tamanioMaximo = properties.ticket().tamanioMaximo();
         this.clock = clock;
     }
@@ -71,8 +73,8 @@ public class ReciboService {
     public sealed interface Resultado {
     }
 
-    /** El ingreso pendiente, con el detalle del recibo. */
-    public record Leido(Movimiento movimiento) implements Resultado {
+    /** El recibo guardado, con su control. {@code reemplazo}: ya había uno del mismo mes y tipo y se lo cambió. */
+    public record Leido(VistaRecibo recibo, boolean reemplazo) implements Resultado {
     }
 
     public record NoEsRecibo(TipoDocumento documento) implements Resultado {
@@ -81,13 +83,29 @@ public class ReciboService {
     public record Ilegible(ValidadorRecibo.Motivo motivo) implements Resultado {
     }
 
-    /** Un renglón de la tarjeta o del dashboard. */
-    public record Renglon(String descripcion, GrupoConcepto grupo, BigDecimal importe) {
+    /**
+     * Un renglón del recibo; el importe de un descuento es positivo y el grupo dice que resta.
+     *
+     * @param conceptoId el concepto del sueldo al que corresponde; null si es "otro"
+     */
+    public record Renglon(String descripcion, GrupoConcepto grupo, BigDecimal importe, Long conceptoId) {
     }
 
-    public record VistaRecibo(Long id, Long movimientoId, String empleador, YearMonth periodo, TipoRecibo tipo,
+    /**
+     * El sueldo cobrado que corresponde al recibo.
+     *
+     * @param aMano si se lo vinculó a mano (si no, se lo encontró por el período)
+     */
+    public record Cobro(Long movimientoId, BigDecimal monto, LocalDateTime fecha, boolean aMano) {
+    }
+
+    /**
+     * @param cobro    null si todavía no se cargó el sueldo de ese período
+     * @param calculado el neto total del cálculo del mes, o null si no hay cálculo
+     */
+    public record VistaRecibo(Long id, Cobro cobro, String empleador, YearMonth periodo, TipoRecibo tipo,
             LocalDate fechaPago, BigDecimal bruto, BigDecimal descuentos, BigDecimal neto, List<Renglon> conceptos,
-            String aviso, boolean conArchivo) {
+            String aviso, boolean conArchivo, BigDecimal calculado, ControlRecibo.Resultado control) {
     }
 
     public DataSize tamanioMaximo() {
@@ -140,125 +158,144 @@ public class ReciboService {
 
     private Resultado procesar(ClienteIa.Respuesta<LecturaReciboIa> respuesta, byte[] archivo, String extension) {
         return switch (validador.validar(respuesta.valor())) {
-            case ValidadorRecibo.Valido v -> new Leido(guardar(v.recibo(), respuesta.usoIaId(), archivo, extension));
+            case ValidadorRecibo.Valido v -> guardar(v.recibo(), archivo, extension, true);
             case ValidadorRecibo.NoEsRecibo n -> new NoEsRecibo(n.documento());
             case ValidadorRecibo.Ilegible i -> new Ilegible(i.motivo());
         };
     }
 
     /**
-     * Guarda el ingreso pendiente de un recibo ya validado, con su detalle y el archivo (si hay).
+     * Guarda un recibo ya validado con su archivo (si hay). Si ya había uno del mismo período y tipo, lo reemplaza
+     * (y borra su archivo). Después de leer cada renglón decide a qué concepto del sueldo corresponde.
      *
-     * @param usoIaId la llamada a la IA que lo leyó, o null
      * @param archivo el PDF o la imagen, o null si no hay archivo (datos de prueba)
+     * @param conIa   si puede preguntarle a la IA qué concepto es cada renglón que no reconoce
      */
-    public Movimiento guardar(ReciboLeido leido, Long usoIaId, byte[] archivo, String extension) {
-        Movimiento m = ingresos.crearPendienteDeRecibo(leido.tipo().claseIngreso(), leido.neto(),
-                descripcion(leido), fechaDelIngreso(leido));
-        ReciboSueldo recibo = recibos.save(new ReciboSueldo(m.getId(), leido));
-        if (usoIaId != null) {
-            usoIa.asociarMovimiento(usoIaId, m.getId());
-        }
-        if (archivo == null) {
-            return m;
-        }
-        try {
-            recibo.asociarArchivo(archivos.guardar(m.getId(), leido.periodo(), extension, archivo));
-            recibos.save(recibo);
-        } catch (IOException e) {
-            // Sin el archivo el ingreso sirve igual: solo no se va a poder abrir desde el dashboard.
-            log.warn("No se pudo guardar el archivo del recibo {}: {}", m.getId(), e.getMessage());
-        }
-        return m;
+    public Leido guardar(ReciboLeido leido, byte[] archivo, String extension, boolean conIa) {
+        // La IA se consulta antes de abrir la transacción: puede tardar.
+        List<Long> mapeados = mapeador.mapear(leido.conceptos(), sueldo.listarConceptos(), conIa);
+        return transaccion.execute(estado -> persistir(leido, mapeados, archivo, extension));
     }
 
-    /** "Sueldo octubre 2026 · Acme". */
-    static String descripcion(ReciboLeido leido) {
-        String mes = leido.periodo().getMonth().getDisplayName(java.time.format.TextStyle.FULL, ES_AR);
-        String texto = leido.tipo().getNombre() + " " + mes + " " + leido.periodo().getYear() + " · "
-                + leido.empleador();
-        return texto.length() > LARGO_MAXIMO_DESCRIPCION
-                ? texto.substring(0, LARGO_MAXIMO_DESCRIPCION) : texto;
+    private Leido persistir(ReciboLeido leido, List<Long> mapeados, byte[] archivo, String extension) {
+        List<ReciboSueldo> anteriores = recibos.findByPeriodoAndTipo(leido.periodo().atDay(1), leido.tipo());
+        anteriores.forEach(anterior -> archivos.borrar(anterior.getArchivo()));
+        recibos.deleteAll(anteriores);
+        recibos.flush();
+
+        ReciboSueldo recibo = recibos.save(new ReciboSueldo(leido, mapeados));
+        if (archivo != null) {
+            try {
+                recibo.asociarArchivo(archivos.guardar(recibo.getId(), leido.periodo(), extension, archivo));
+            } catch (IOException e) {
+                // Sin el archivo el recibo sirve igual: solo no se va a poder abrir desde el dashboard.
+                log.warn("No se pudo guardar el archivo del recibo {}: {}", recibo.getId(), e.getMessage());
+            }
+        }
+        return new Leido(vista(recibo), !anteriores.isEmpty());
+    }
+
+    // --- Cambios ---
+
+    /** Un recibo descartado no se guarda: tampoco su archivo, que tiene datos personales. */
+    @Transactional
+    public void descartar(Long reciboId) {
+        ReciboSueldo recibo = buscar(reciboId);
+        archivos.borrar(recibo.getArchivo());
+        recibos.delete(recibo);
     }
 
     /**
-     * El ingreso va en el mes del período. Si la fecha de pago cae en ese mes, es ese día; si no (el sueldo de
-     * octubre se cobra el 3 de noviembre), el último día del período, o hoy si todavía no llegó.
+     * Vincula el recibo a mano con un sueldo cobrado (por ejemplo, el que se cobró en otro mes que el período).
+     *
+     * @param movimientoId el ingreso guardado, o null para volver a buscarlo por período
+     * @throws IllegalArgumentException si no es un ingreso guardado
      */
-    LocalDateTime fechaDelIngreso(ReciboLeido leido) {
-        LocalDate hoy = LocalDate.now(clock);
-        LocalDate dia;
-        if (leido.fechaPago() != null && YearMonth.from(leido.fechaPago()).equals(leido.periodo())) {
-            dia = leido.fechaPago();
-        } else {
-            dia = leido.periodo().atEndOfMonth();
-        }
-        if (dia.isAfter(hoy)) {
-            dia = hoy.isBefore(leido.periodo().atDay(1)) ? leido.periodo().atDay(1) : hoy;
-        }
-        return dia.atStartOfDay().plusHours(12);
-    }
-
-    // --- Confirmación ---
-
-    /**
-     * El sueldo (o aguinaldo) ya guardado del mes del período, si lo hay: hay que preguntar antes de dejar dos.
-     * Solo para sueldos mensuales y aguinaldos.
-     */
-    @Transactional(readOnly = true)
-    public Optional<Movimiento> yaCargado(Long movimientoId) {
-        Optional<ReciboSueldo> recibo = recibos.findByMovimientoId(movimientoId);
-        if (recibo.isEmpty() || !recibo.get().getTipo().reemplazaCargaManual()) {
-            return Optional.empty();
-        }
-        Periodo mes = Periodo.delMes(recibo.get().getPeriodo());
-        return recibos.ingresosGuardados(recibo.get().getTipo().claseIngreso(), mes.desde(), mes.hasta(),
-                movimientoId).stream().findFirst();
-    }
-
-    /** Guarda el ingreso del recibo y borra (queda cancelado) el del mismo mes que ya estaba. */
     @Transactional
-    public MovimientoService.Confirmacion confirmarReemplazando(Long movimientoId) {
-        Optional<Movimiento> anterior = yaCargado(movimientoId);
-        // Primero se anula el anterior: el total del mes que se muestra al guardar ya no lo cuenta.
-        anterior.ifPresent(m -> ingresos.anular(m.getId()));
-        return movimientos.confirmar(movimientoId);
-    }
-
-    /** Un recibo cancelado no se guarda: tampoco su archivo, que tiene datos personales. */
-    @Transactional
-    public void descartar(Long movimientoId) {
-        recibos.findByMovimientoId(movimientoId).ifPresent(recibo -> {
-            archivos.borrar(recibo.getArchivo());
-            recibos.delete(recibo);
-        });
+    public VistaRecibo vincular(Long reciboId, Long movimientoId) {
+        ReciboSueldo recibo = buscar(reciboId);
+        if (movimientoId != null && recibos.ingresoGuardado(movimientoId).isEmpty()) {
+            throw new IllegalArgumentException("Ese no es un ingreso guardado");
+        }
+        recibo.vincular(movimientoId);
+        return vista(recibo);
     }
 
     // --- Consulta ---
 
     @Transactional(readOnly = true)
-    public Optional<VistaRecibo> vista(Long movimientoId) {
-        return recibos.findByMovimientoId(movimientoId).map(this::vista);
+    public Optional<VistaRecibo> vista(Long reciboId) {
+        return recibos.findById(reciboId).map(this::vista);
     }
 
-    /** Los recibos con ingreso guardado y período entre los dos meses (incluidos), del más viejo al más nuevo. */
+    /** Los recibos con período entre los dos meses (incluidos), del más viejo al más nuevo. */
     @Transactional(readOnly = true)
-    public List<VistaRecibo> guardadosEntre(YearMonth desde, YearMonth hasta) {
-        return recibos.guardadosEntre(desde.atDay(1), hasta.atDay(1)).stream().map(this::vista).toList();
+    public List<VistaRecibo> entre(YearMonth desde, YearMonth hasta) {
+        return recibos.entre(desde.atDay(1), hasta.atDay(1)).stream().map(this::vista).toList();
     }
 
-    /** El archivo del recibo de un ingreso (un PDF o un JPEG, según la extensión). */
+    /** El recibo de un período y tipo, si lo hay. */
     @Transactional(readOnly = true)
-    public Optional<Path> archivo(Long movimientoId) {
-        return recibos.findByMovimientoId(movimientoId).map(ReciboSueldo::getArchivo).flatMap(archivos::archivo);
+    public Optional<VistaRecibo> delPeriodo(YearMonth periodo, TipoRecibo tipo) {
+        return recibos.findByPeriodoAndTipo(periodo.atDay(1), tipo).stream().findFirst().map(this::vista);
+    }
+
+    /** El archivo de un recibo (un PDF o un JPEG, según la extensión). */
+    @Transactional(readOnly = true)
+    public Optional<Path> archivo(Long reciboId) {
+        return recibos.findById(reciboId).map(ReciboSueldo::getArchivo).flatMap(archivos::archivo);
+    }
+
+    /** El sueldo (o aguinaldo) cobrado que corresponde a un recibo: el vinculado a mano o el del período. */
+    @Transactional(readOnly = true)
+    public Optional<Cobro> cobroDe(Long reciboId) {
+        return Optional.ofNullable(cobro(buscar(reciboId)));
+    }
+
+    private Cobro cobro(ReciboSueldo r) {
+        if (r.getMovimientoId() != null) {
+            Optional<Movimiento> vinculado = recibos.ingresoGuardado(r.getMovimientoId());
+            if (vinculado.isPresent()) {
+                return cobro(vinculado.get(), true);
+            }
+        }
+        // Las vacaciones y las liquidaciones finales no se buscan solas: se confundirían con el sueldo del mes.
+        if (!r.getTipo().reemplazaCargaManual()) {
+            return null;
+        }
+        Periodo mes = Periodo.delMes(r.getPeriodo());
+        return recibos.ingresosGuardados(r.getTipo().claseIngreso(), mes.desde(), mes.hasta()).stream()
+                .findFirst().map(m -> cobro(m, false)).orElse(null);
+    }
+
+    private static Cobro cobro(Movimiento m, boolean aMano) {
+        return new Cobro(m.getId(), m.getMonto(), m.getFechaHora(), aMano);
     }
 
     private VistaRecibo vista(ReciboSueldo r) {
-        List<Renglon> conceptos = r.getConceptos().stream()
-                .map(c -> new Renglon(c.getDescripcion(), c.getGrupo(), c.getImporte())).toList();
-        return new VistaRecibo(r.getId(), r.getMovimientoId(), r.getEmpleador(), r.getPeriodo(), r.getTipo(),
-                r.getFechaPago(), r.getBruto(), r.getDescuentos(), r.getNeto(), conceptos, r.getAviso(),
-                archivos.archivo(r.getArchivo()).isPresent());
+        List<Renglon> conceptos = renglones(r);
+        Cobro cobro = cobro(r);
+        Optional<CalculoSueldo> calculo = r.getTipo() == TipoRecibo.SUELDO_MENSUAL
+                ? sueldo.calculoDelMes(r.getPeriodo()) : Optional.empty();
+        List<Renglon> anterior = recibos
+                .findFirstByPeriodoLessThanAndTipoOrderByPeriodoDescIdDesc(r.getPeriodo().atDay(1), r.getTipo())
+                .filter(a -> a.getPeriodo().equals(r.getPeriodo().minusMonths(1))).map(this::renglones).orElse(null);
+        ControlRecibo.Resultado resultado = control.revisar(new ControlRecibo.Datos(r.getTipo(), r.getNeto(),
+                r.getAviso(), conceptos, cobro == null ? null : cobro.monto(), calculo.orElse(null), anterior));
+        return new VistaRecibo(r.getId(), cobro, r.getEmpleador(), r.getPeriodo(), r.getTipo(), r.getFechaPago(),
+                r.getBruto(), r.getDescuentos(), r.getNeto(), conceptos, r.getAviso(),
+                archivos.archivo(r.getArchivo()).isPresent(), calculo.map(CalculoSueldo::getNetoTotal).orElse(null),
+                resultado);
+    }
+
+    private List<Renglon> renglones(ReciboSueldo r) {
+        return r.getConceptos().stream()
+                .map(c -> new Renglon(c.getDescripcion(), c.getGrupo(), c.getImporte(), c.getConceptoSueldoId()))
+                .toList();
+    }
+
+    private ReciboSueldo buscar(Long id) {
+        return recibos.findById(id).orElseThrow(() -> new NoSuchElementException("No existe el recibo " + id));
     }
 
     private LocalDateTime ahora() {

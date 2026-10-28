@@ -87,13 +87,6 @@ public class IngresoService {
         return crearPendiente(clase, monto, descripcion, cuenta, enEfectivo, fechaHora, Origen.TEXTO, textoOriginal);
     }
 
-    /** El neto de un recibo de sueldo: pendiente, en la cuenta del último ingreso de esa clase. */
-    @Transactional
-    public Movimiento crearPendienteDeRecibo(ClaseIngreso clase, BigDecimal neto, String descripcion,
-            LocalDateTime fechaHora) {
-        return crearPendiente(clase, neto, descripcion, null, false, fechaHora, Origen.RECIBO, null);
-    }
-
     private Movimiento crearPendiente(ClaseIngreso clase, BigDecimal monto, String descripcion, Cuenta cuenta,
             boolean enEfectivo, LocalDateTime fechaHora, Origen origen, String textoOriginal) {
         if (cuenta == null && !enEfectivo) {

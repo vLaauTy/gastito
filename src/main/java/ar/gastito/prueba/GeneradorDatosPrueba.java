@@ -7,9 +7,11 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -49,8 +51,11 @@ import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
 import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Origen;
+import ar.gastito.recibo.GrupoConcepto;
 import ar.gastito.recibo.ReciboLeido;
 import ar.gastito.recibo.ReciboService;
+import ar.gastito.sueldo.CalculoSueldo;
+import ar.gastito.sueldo.SueldoService;
 
 /**
  * Borra los datos de la base de prueba y la vuelve a llenar con {@link PlanDatosPrueba}. Solo existe con el perfil
@@ -83,8 +88,13 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
             "DELETE FROM resumen",
             "DELETE FROM movimiento_item",
             "DELETE FROM movimiento_categoria_candidata",
+            "DELETE FROM mapeo_concepto_recibo",
             "DELETE FROM recibo_concepto",
             "DELETE FROM recibo_sueldo",
+            "DELETE FROM calculo_sueldo_linea",
+            "DELETE FROM calculo_sueldo",
+            "DELETE FROM escala_valor",
+            "DELETE FROM escala_sueldo",
             "DELETE FROM movimiento",
             "DELETE FROM recordatorio_fijo",
             "DELETE FROM gasto_fijo");
@@ -97,6 +107,7 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
     private final IngresoService ingresos;
     private final GastoFijoService fijos;
     private final ReciboService recibos;
+    private final SueldoService sueldo;
     private final CalculadoraCostoIa calculadora;
     private final GastitoProperties properties;
     private final Environment entorno;
@@ -105,7 +116,7 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
 
     public GeneradorDatosPrueba(DataSource dataSource, JdbcTemplate jdbc, TransactionTemplate transaccion,
             CatalogoService catalogos, MovimientoService movimientos, IngresoService ingresos,
-            GastoFijoService fijos, ReciboService recibos, CalculadoraCostoIa calculadora,
+            GastoFijoService fijos, ReciboService recibos, SueldoService sueldo, CalculadoraCostoIa calculadora,
             GastitoProperties properties, Environment entorno, ApplicationContext contexto,
             Clock clock) {
         this.dataSource = dataSource;
@@ -116,6 +127,7 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
         this.ingresos = ingresos;
         this.fijos = fijos;
         this.recibos = recibos;
+        this.sueldo = sueldo;
         this.calculadora = calculadora;
         this.properties = properties;
         this.entorno = entorno;
@@ -206,7 +218,8 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
             ingresos.cargar(i.clase(), i.monto(), i.descripcion(),
                     i.cuenta() == null ? null : buscar(cuentas, i.cuenta()).getId(), i.fecha());
         }
-        cargarRecibos();
+        // En una transacción: el recibo de cada mes se arma desde las líneas del cálculo guardado.
+        transaccion.executeWithoutResult(estado -> cargarSueldos());
         cargarUsoIa();
         cargarFijos(categorias, catalogo.tarjetaCredito().orElse(null));
     }
@@ -223,15 +236,45 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
     }
 
     /**
-     * Seis meses de recibos de sueldo, con un aumento a mitad de camino y el aguinaldo. Cada uno es el ingreso del mes
-     * (en Galicia) con sus conceptos y un PDF inventado.
+     * Seis meses de sueldo: dos escalas (una paritaria a mitad de camino), el cálculo de cada mes, lo cobrado en
+     * Galicia y el recibo con un PDF inventado. El recibo de un mes trae la ley 19.032 al 2,5% (una cosa rara) y el
+     * último mes todavía no tiene recibo: se cobró 4.400 menos de lo calculado. Más el aguinaldo del semestre.
      */
-    private void cargarRecibos() {
+    private void cargarSueldos() {
+        YearMonth hasta = YearMonth.from(LocalDateTime.now(clock));
+        LocalDate hoy = LocalDate.now(clock);
         Cuenta galicia = buscar(porNombre(catalogos.cargar().cuentas(), Cuenta::getNombre), "Galicia");
-        for (ReciboLeido recibo : PlanRecibosPrueba.armar(YearMonth.from(LocalDateTime.now(clock)))) {
-            Movimiento m = recibos.guardar(recibo, null, PlanRecibosPrueba.pdf(recibo), "pdf");
-            jdbc.update("UPDATE movimiento SET cuenta_id = ? WHERE id = ?", galicia.getId(), m.getId());
-            movimientos.confirmar(m.getId());
+        Map<String, Long> conceptos = new HashMap<>();
+        sueldo.listarConceptos().forEach(c -> conceptos.put(c.getNombre(), c.getId()));
+        for (PlanSueldoPrueba.Escala e : PlanSueldoPrueba.escalas(hasta)) {
+            Map<Long, BigDecimal> valores = new HashMap<>();
+            e.montos().forEach((nombre, monto) -> valores.put(buscar(conceptos, nombre), monto));
+            sueldo.crearEscala(e.desde().atDay(1), e.valorHora(), valores);
+        }
+        BigDecimal mejorRemuneracion = BigDecimal.ZERO;
+        for (int i = 0; i < PlanSueldoPrueba.MESES; i++) {
+            YearMonth mes = hasta.minusMonths(PlanSueldoPrueba.MESES - 1L - i);
+            sueldo.guardar(mes, sueldo.horasPorOrden(PlanSueldoPrueba.horas(i)), Map.of());
+            CalculoSueldo calculo = sueldo.calculoDelMes(mes).orElseThrow();
+            LocalDate fechaCobro = mes.atEndOfMonth().isAfter(hoy) ? hoy : mes.atEndOfMonth();
+            BigDecimal cobrado;
+            if (mes.equals(hasta)) {
+                cobrado = calculo.getNetoTotal().subtract(PlanSueldoPrueba.DIFERENCIA_COBRO);
+            } else {
+                ReciboLeido recibo = PlanRecibosPrueba.sueldo(calculo, i == PlanSueldoPrueba.MES_RARO);
+                recibos.guardar(recibo, PlanRecibosPrueba.pdf(recibo), "pdf", false);
+                cobrado = recibo.neto();
+                mejorRemuneracion = mejorRemuneracion.max(recibo.conceptos().stream()
+                        .filter(c -> c.grupo() == GrupoConcepto.REMUNERATIVO).map(ReciboLeido.Concepto::importe)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add));
+            }
+            ingresos.cargar(ClaseIngreso.SUELDO, cobrado, "Sueldo " + mes, galicia.getId(), fechaCobro);
+            if (mes.getMonthValue() == 6 || mes.getMonthValue() == 12) {
+                ReciboLeido aguinaldo = PlanRecibosPrueba.aguinaldo(mes, mejorRemuneracion);
+                recibos.guardar(aguinaldo, PlanRecibosPrueba.pdf(aguinaldo), "pdf", false);
+                ingresos.cargar(ClaseIngreso.AGUINALDO, aguinaldo.neto(), "Aguinaldo " + mes, galicia.getId(),
+                        fechaCobro);
+            }
         }
     }
 

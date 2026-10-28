@@ -203,6 +203,7 @@
           api(conMes('/api/ingresos')).then(vistaIngresos),
           api(`/api/ingresos/por-mes?hasta=${estado.mes}&meses=6`).then(ingresosPorMes),
           api(`/api/recibos/serie?hasta=${estado.mes}&meses=12`).then(serieRecibos),
+          ...(window.Gastito.alCargarIngresos || []).map((f) => f(estado.mes)),
         );
         disponible(resumen.disponible, '#i-disponible', '#i-disponible-barra', '#i-disponible-nota');
       } else if (estado.vista === 'costos-ia') {
@@ -653,54 +654,7 @@
     });
   }
 
-  // --- Recibos de sueldo ---
-
-  const GRUPOS_DE_RECIBO = [
-    { clave: 'REMUNERATIVO', titulo: 'Remunerativo' },
-    { clave: 'NO_REMUNERATIVO', titulo: 'No remunerativo' },
-    { clave: 'DESCUENTO', titulo: 'Descuentos' },
-  ];
-
-  /** Abre (o cierra) debajo del ingreso los conceptos del recibo. Se piden a la API recién al abrir. */
-  async function desplegarRecibo(boton, fila, id) {
-    const abierta = fila.nextElementSibling;
-    if (abierta && abierta.classList.contains('detalle-recibo')) {
-      abierta.remove();
-      boton.setAttribute('aria-expanded', 'false');
-      return;
-    }
-    boton.disabled = true;
-    try {
-      const detalle = await api(`/api/recibos/${id}`);
-      fila.after(h('tr', { class: 'detalle-recibo' }, h('td', { colspan: 6 }, contenidoRecibo(detalle))));
-      boton.setAttribute('aria-expanded', 'true');
-    } catch (error) {
-      mostrarAviso(`No pude cargar el recibo: ${error.message}`);
-    } finally {
-      boton.disabled = false;
-    }
-  }
-
-  function contenidoRecibo(d) {
-    const bloques = GRUPOS_DE_RECIBO.map((g) => ({ ...g, conceptos: d.conceptos.filter((c) => c.grupo === g.clave) }))
-      .filter((g) => g.conceptos.length);
-    return h('div', { class: 'recibo' },
-      h('div', { class: 'sub' }, `${d.tipoNombre} ${mesYAnio(d.periodo)} · ${d.empleador}`),
-      ...bloques.flatMap((g) => [
-        h('h3', {}, g.titulo),
-        h('ul', {}, g.conceptos.map((c) => h('li', {},
-          h('span', {}, c.descripcion),
-          h('span', { class: 'money' }, (g.clave === 'DESCUENTO' ? '−' : '') + pesos(c.importe))))),
-      ]),
-      h('ul', {},
-        h('li', { class: 'total' }, h('span', {}, 'Bruto'), h('span', { class: 'money' }, pesos(d.bruto))),
-        h('li', {}, h('span', {}, 'Descuentos'), h('span', { class: 'money' }, '−' + pesos(d.descuentos))),
-        h('li', { class: 'total' }, h('span', {}, 'Neto'), h('span', { class: 'money' }, pesos(d.neto)))),
-      d.aviso ? h('p', { class: 'aviso-recibo' }, `⚠️ ${d.aviso}`) : null,
-      d.conArchivo
-        ? h('a', { class: 'ver-todos', href: `/api/recibos/${d.movimientoId}/archivo`, target: '_blank', rel: 'noopener' }, 'Ver recibo')
-        : null);
-  }
+  // --- Recibos de sueldo: la serie de 12 meses (el detalle y el control están en sueldo.js) ---
 
   /** Una línea: "Contra septiembre: +10% (+$89.000)". Los números llegan hechos; acá solo se formatean. */
   function lineaCambio(texto, c) {
@@ -754,19 +708,14 @@
   }
 
   function filaIngreso(i) {
-    const boton = i.origen === 'RECIBO'
-      ? h('button', { class: 'mini desplegar', type: 'button', 'aria-expanded': 'false' }, '💼 Recibo')
-      : null;
-    const fila = h('tr', {},
+    return h('tr', {},
       h('td', { class: 'date' }, fechaCorta(i.fecha)),
       h('td', {}, h('span', { class: `chip ${i.clase.toLowerCase()}` }, i.claseNombre)),
-      h('td', {}, i.descripcion || '—', boton),
+      h('td', {}, i.descripcion || '—'),
       h('td', { class: i.billetera === 'Sin especificar' ? 'sin-especificar' : null }, i.billetera),
       h('td', { class: 'amt' }, pesos(i.monto)),
       h('td', {}, h('button', { type: 'button', class: 'mini', onclick: () => borrarIngreso(i) }, 'Borrar')),
     );
-    if (boton) boton.addEventListener('click', () => desplegarRecibo(boton, fila, i.id));
-    return fila;
   }
 
   function ingresosPorMes(meses) {
@@ -1064,6 +1013,9 @@
     }
     await cargar();
   }
+
+  // Lo que sueldo.js necesita de acá (los formatos, la API y los avisos), sin repetirlo.
+  window.Gastito = Object.assign(window.Gastito || {}, { h, api, pesos, mostrarAviso, nombreMes, mesYAnio, mayuscula, numeroArg, estado });
 
   iniciar();
 })();

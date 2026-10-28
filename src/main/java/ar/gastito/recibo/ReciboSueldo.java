@@ -18,8 +18,9 @@ import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 
 /**
- * Un recibo de sueldo leído: de acá sale el ingreso (por el neto), que es su movimiento. A propósito no hay
- * campos para el CUIL, el CBU, el legajo ni el domicilio.
+ * Un recibo de sueldo leído. No crea el ingreso: es un control del sueldo cobrado, al que queda vinculado
+ * ({@code movimientoId}) cuando se lo vincula a mano; si no, se lo busca por el período. A propósito no hay campos
+ * para el CUIL, el CBU, el legajo ni el domicilio.
  */
 @Entity
 @Table(name = "recibo_sueldo")
@@ -29,6 +30,7 @@ public class ReciboSueldo {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** El sueldo cobrado al que se vinculó a mano; null si todavía no (se busca por período). */
     private Long movimientoId;
 
     private String empleador;
@@ -60,8 +62,8 @@ public class ReciboSueldo {
     protected ReciboSueldo() {
     }
 
-    ReciboSueldo(Long movimientoId, ReciboLeido leido) {
-        this.movimientoId = movimientoId;
+    /** @param conceptosMapeados el concepto del sueldo de cada renglón (null: "otro"), en el orden de la lista */
+    ReciboSueldo(ReciboLeido leido, List<Long> conceptosMapeados) {
         this.empleador = leido.empleador();
         this.periodo = leido.periodo().atDay(1);
         this.fechaPago = leido.fechaPago();
@@ -72,12 +74,18 @@ public class ReciboSueldo {
         this.aviso = leido.aviso();
         int orden = 0;
         for (ReciboLeido.Concepto c : leido.conceptos()) {
-            conceptos.add(new ReciboConcepto(this, c.descripcion(), c.grupo(), c.importe(), orden++));
+            conceptos.add(new ReciboConcepto(this, c.descripcion(), c.grupo(), c.importe(), orden,
+                    conceptosMapeados == null ? null : conceptosMapeados.get(orden)));
+            orden++;
         }
     }
 
     void asociarArchivo(String ruta) {
         this.archivo = ruta;
+    }
+
+    void vincular(Long movimientoId) {
+        this.movimientoId = movimientoId;
     }
 
     public Long getId() {

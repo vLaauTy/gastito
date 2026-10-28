@@ -22,11 +22,14 @@ import org.springframework.stereotype.Service;
 public class AnalisisRecibos {
 
     private static final BigDecimal CIEN = BigDecimal.valueOf(100);
+    private static final int MAXIMO_MESES_SEGUIMIENTO = 24;
 
     private final ReciboService recibos;
+    private final SeguimientoSueldo seguimiento;
 
-    public AnalisisRecibos(ReciboService recibos) {
+    public AnalisisRecibos(ReciboService recibos, SeguimientoSueldo seguimiento) {
         this.recibos = recibos;
+        this.seguimiento = seguimiento;
     }
 
     // --- Dashboard ---
@@ -97,7 +100,7 @@ public class AnalisisRecibos {
     /** Bruto, descuentos y neto de los sueldos mensuales de cada mes (si hay dos en un mes, se suman). */
     private Map<YearMonth, BigDecimal[]> sueldosPorMes(YearMonth desde, YearMonth hasta) {
         Map<YearMonth, BigDecimal[]> porMes = new LinkedHashMap<>();
-        for (ReciboService.VistaRecibo r : recibos.guardadosEntre(desde, hasta)) {
+        for (ReciboService.VistaRecibo r : recibos.entre(desde, hasta)) {
             if (r.tipo() != TipoRecibo.SUELDO_MENSUAL) {
                 continue;
             }
@@ -113,7 +116,7 @@ public class AnalisisRecibos {
     // --- Preguntas ---
 
     public record ReciboResumen(YearMonth periodo, String empleador, String tipo, BigDecimal bruto,
-            BigDecimal descuentos, BigDecimal neto) {
+            BigDecimal descuentos, BigDecimal neto, List<String> cosasRaras) {
     }
 
     /** Lo descontado por un mismo concepto en todos los recibos del rango, por ejemplo el impuesto a las ganancias. */
@@ -127,15 +130,15 @@ public class AnalisisRecibos {
      */
     public record ResumenRecibos(LocalDate desde, LocalDate hasta, int cantidad, List<ReciboResumen> recibos,
             BigDecimal totalBruto, BigDecimal totalDescuentos, BigDecimal totalNeto,
-            List<DescuentoTotal> descuentosPorConcepto, Cambio aumentoNeto) {
+            List<DescuentoTotal> descuentosPorConcepto, Cambio aumentoNeto, List<SeguimientoSueldo.Mes> sueldoMesAMes) {
     }
 
     /** Los recibos cuyo período cae entre los dos días (los meses de {@code desde} y {@code hasta}, completos). */
     public ResumenRecibos resumen(LocalDate desde, LocalDate hasta) {
-        List<ReciboService.VistaRecibo> lista = recibos.guardadosEntre(YearMonth.from(desde), YearMonth.from(hasta));
+        List<ReciboService.VistaRecibo> lista = recibos.entre(YearMonth.from(desde), YearMonth.from(hasta));
         List<ReciboResumen> resumenes = lista.stream()
                 .map(r -> new ReciboResumen(r.periodo(), r.empleador(), r.tipo().getNombre(), r.bruto(),
-                        r.descuentos(), r.neto()))
+                        r.descuentos(), r.neto(), r.control().hallazgos().stream().map(ControlRecibo.Hallazgo::texto).toList()))
                 .toList();
         BigDecimal bruto = BigDecimal.ZERO;
         BigDecimal descuentos = BigDecimal.ZERO;
@@ -168,7 +171,21 @@ public class AnalisisRecibos {
             aumento = comparar(primero.periodo(), primero.neto(), ultimo.neto());
         }
         return new ResumenRecibos(desde, hasta, lista.size(), resumenes, bruto, descuentos, neto, porConcepto,
-                aumento);
+                aumento, sueldoMesAMes(desde, hasta));
+    }
+
+    /** Los meses del rango con algún dato: lo calculado, lo cobrado y el recibo, con las diferencias. */
+    private List<SeguimientoSueldo.Mes> sueldoMesAMes(LocalDate desde, LocalDate hasta) {
+        List<SeguimientoSueldo.Mes> meses = new ArrayList<>();
+        YearMonth fin = YearMonth.from(hasta);
+        for (YearMonth mes = YearMonth.from(desde); !mes.isAfter(fin) && meses.size() < MAXIMO_MESES_SEGUIMIENTO;
+                mes = mes.plusMonths(1)) {
+            SeguimientoSueldo.Mes m = seguimiento.mes(mes);
+            if (m.calculado() != null || m.cobrado() != null || m.reciboId() != null) {
+                meses.add(m);
+            }
+        }
+        return meses;
     }
 
     private static final class DescuentoAcumulado {

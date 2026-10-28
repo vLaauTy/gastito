@@ -1,46 +1,45 @@
 package ar.gastito.bot;
 
-import static ar.gastito.bot.DatosDePrueba.AHORA;
-import static ar.gastito.bot.DatosDePrueba.ID;
 import static ar.gastito.bot.DatosDePrueba.RELOJ;
-import static ar.gastito.bot.DatosDePrueba.conId;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
-import java.util.Optional;
+import java.util.NoSuchElementException;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.util.unit.DataSize;
 
 import ar.gastito.ia.IaNoDisponibleException;
-import ar.gastito.movimiento.ClaseIngreso;
-import ar.gastito.movimiento.Movimiento;
-import ar.gastito.movimiento.MovimientoService;
-import ar.gastito.movimiento.Origen;
+import ar.gastito.recibo.ControlRecibo;
 import ar.gastito.recibo.PdfInvalidoException;
 import ar.gastito.recibo.ReciboService;
 import ar.gastito.recibo.TipoDocumento;
+import ar.gastito.recibo.TipoRecibo;
 import ar.gastito.recibo.ValidadorRecibo;
+import ar.gastito.sueldo.SueldoService;
 
 class ConversacionRecibosTest {
 
     private static final byte[] PDF = {'%', 'P', 'D', 'F'};
 
     private final ReciboService recibos = mock(ReciboService.class);
-    private final MovimientoService movimientos = mock(MovimientoService.class);
-    private final Tarjetas tarjetas = new Tarjetas(new FormatoMensajes(RELOJ));
-    private final ConversacionRecibos conversacion = new ConversacionRecibos(recibos, movimientos, tarjetas);
+    private final TarjetasRecibo tarjetas = new TarjetasRecibo(new FormatoMensajes(RELOJ), mock(SueldoService.class));
+    private final ConversacionRecibos conversacion = new ConversacionRecibos(recibos, tarjetas);
 
-    private static Movimiento ingreso(Origen origen, String monto) {
-        return conId(Movimiento.ingreso(ClaseIngreso.SUELDO, new BigDecimal(monto), "Sueldo octubre 2026", null, null,
-                AHORA, origen, null, AHORA), ID);
+    private static ReciboService.VistaRecibo vista() {
+        return new ReciboService.VistaRecibo(7L, null, "Empresa Ejemplo", YearMonth.of(2026, 10),
+                TipoRecibo.SUELDO_MENSUAL, LocalDate.of(2026, 11, 3), new BigDecimal("1250000"),
+                new BigDecimal("212500"), new BigDecimal("1037500"), List.of(), null, true, null,
+                new ControlRecibo.Resultado(List.of(), false, false));
     }
 
     private static PdfRecibido pdf() {
@@ -63,15 +62,15 @@ class ConversacionRecibosTest {
     }
 
     @Test
-    void unReciboLeidoQuedaComoTarjetaConGuardarEditarYCancelar() {
-        Movimiento m = ingreso(Origen.RECIBO, "1037500");
-        when(recibos.leerPdf(PDF, "el de octubre")).thenReturn(new ReciboService.Leido(m));
+    void unReciboLeidoYaEstaGuardadoYSoloSePuedeDescartar() {
+        when(recibos.leerPdf(PDF, "el de octubre")).thenReturn(new ReciboService.Leido(vista(), false));
 
         Accion.Enviar tarjeta = (Accion.Enviar) conversacion.leerPdf(pdf());
 
-        assertThat(tarjeta.tarjetaDeMovimiento()).isEqualTo(ID);
-        assertThat(tarjeta.teclado().botones()).extracting(Teclado.Boton::datos)
-                .containsExactly("g:15", "e:15", "c:15");
+        assertThat(tarjeta.html()).startsWith("💼 <b>Recibo · Octubre 2026 · Empresa Ejemplo</b>");
+        // No es la tarjeta de un gasto: no hay nada que guardar ni editar.
+        assertThat(tarjeta.tarjetaDeMovimiento()).isNull();
+        assertThat(tarjeta.teclado().botones()).extracting(Teclado.Boton::datos).containsExactly("dr:7");
     }
 
     @Test
@@ -96,11 +95,11 @@ class ConversacionRecibosTest {
     }
 
     @Test
-    void siLaIaNoEstaAvisaYOfreceCargarElSueldoAMano() {
+    void siLaIaNoEstaPideMandarloDeNuevoYNoGuardaNada() {
         when(recibos.leerPdf(any(), any())).thenThrow(new IaNoDisponibleException("Falta configurar la clave", null));
 
         assertThat(texto(conversacion.leerPdf(pdf()))).contains("No pude leer el recibo")
-                .contains("/sueldo 1.037.500 galicia");
+                .contains("no guardé nada");
     }
 
     @Test
@@ -136,59 +135,26 @@ class ConversacionRecibosTest {
         assertThat(texto(conversacion.leerPdf(pdf()))).contains("de qué mes es el recibo");
     }
 
-    // --- Confirmación ---
+    // --- Descartar ---
 
     @Test
-    void alGuardarConSueldoCargadoPreguntaSiLoReemplaza() {
-        Movimiento nuevo = ingreso(Origen.RECIBO, "1037500");
-        Movimiento anterior = ingreso(Origen.TEXTO, "1030000");
-        when(movimientos.buscar(ID)).thenReturn(nuevo);
-        when(recibos.yaCargado(ID)).thenReturn(Optional.of(anterior));
+    void descartarBorraElReciboYAvisa() {
+        List<Accion> acciones = conversacion.descartar(100, 7L);
 
-        List<Accion> acciones = conversacion.preguntarSiYaHay(100, ID).orElseThrow();
-
-        Accion.Editar pregunta = (Accion.Editar) acciones.get(0);
-        assertThat(pregunta.mensajeId()).isEqualTo(100);
-        assertThat(pregunta.html()).contains("Ya cargaste el sueldo de octubre 2026 ($1.030.000). ¿Lo reemplazo con el "
-                + "del recibo?");
-        assertThat(pregunta.teclado().botones()).extracting(Teclado.Boton::datos).containsExactly("rr:15", "c:15");
+        verify(recibos).descartar(7L);
+        Accion.Editar editada = (Accion.Editar) acciones.get(0);
+        assertThat(editada.mensajeId()).isEqualTo(100);
+        assertThat(editada.html()).startsWith("🗑 <b>Recibo descartado</b>");
+        assertThat(editada.teclado().isVacio()).isTrue();
+        assertThat(acciones.get(1)).isEqualTo(new Accion.Avisar("Descartado"));
     }
 
     @Test
-    void sinNadaQueReemplazarSeGuardaNormal() {
-        when(movimientos.buscar(ID)).thenReturn(ingreso(Origen.RECIBO, "1037500"));
-        when(recibos.yaCargado(ID)).thenReturn(Optional.empty());
+    void descartarUnReciboQueYaNoEstaSoloSacaLosBotones() {
+        doThrow(new NoSuchElementException("no existe")).when(recibos).descartar(7L);
 
-        assertThat(conversacion.preguntarSiYaHay(100, ID)).isEmpty();
-    }
+        List<Accion> acciones = conversacion.descartar(100, 7L);
 
-    @Test
-    void unIngresoQueNoEsDeUnReciboNuncaPregunta() {
-        when(movimientos.buscar(ID)).thenReturn(ingreso(Origen.TEXTO, "380000"));
-
-        assertThat(conversacion.preguntarSiYaHay(100, ID)).isEmpty();
-        verify(recibos, never()).yaCargado(any());
-    }
-
-    @Test
-    void reemplazarMuestraElGuardadoYAvisa() {
-        Movimiento m = ingreso(Origen.RECIBO, "1037500");
-        when(recibos.confirmarReemplazando(ID)).thenReturn(
-                new MovimientoService.Confirmacion(m, new BigDecimal("1037500")));
-
-        List<Accion> acciones = conversacion.reemplazar(100, ID);
-
-        assertThat(((Accion.Editar) acciones.get(0)).html()).startsWith("✅ <b>Guardado</b>");
-        assertThat(((Accion.Editar) acciones.get(0)).teclado().isVacio()).isTrue();
-        assertThat(acciones.get(1)).isEqualTo(new Accion.Avisar("✅ Guardado, reemplacé el anterior"));
-    }
-
-    @Test
-    void soloUnReciboCanceladoSeDescarta() {
-        conversacion.alCancelar(ingreso(Origen.TEXTO, "380000"));
-        verify(recibos, never()).descartar(any());
-
-        conversacion.alCancelar(ingreso(Origen.RECIBO, "1037500"));
-        verify(recibos).descartar(ID);
+        assertThat(acciones).containsExactly(new Accion.QuitarBotones(100), new Accion.Avisar("Ese recibo ya no está"));
     }
 }

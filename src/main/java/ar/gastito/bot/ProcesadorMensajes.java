@@ -90,8 +90,11 @@ public class ProcesadorMensajes {
             /ingreso 25000 arreglo de PC a mercado pago (cualquier otro ingreso: una venta, un regalo…)
             Si no decís la cuenta, uso la del último ingreso de ese tipo. Te muestro la tarjeta y lo guardás con un toque.
 
+            <b>Calculadora de sueldo</b> 🧮
+            "este mes hice 10 horas al 50, 6 al 100 y 30 nocturnas" o /calcular 10 6 30: calculo el sueldo del mes y lo guardás con un toque. /calculo muestra el del mes. Cuando cargás lo que cobraste con /sueldo, lo comparo con el cálculo.
+
             <b>Recibo de sueldo</b> 💼
-            Mandame el PDF del recibo (o una foto, con la palabra "recibo" en el texto): lo guardo como ingreso por el neto, con todos los conceptos. Si ya cargaste el sueldo de ese mes, te pregunto si lo reemplazo.
+            Mandame el PDF del recibo (o una foto, con la palabra "recibo" en el texto): lo guardo y te cuento si tiene algo raro contra tu cálculo y lo que cobraste. No carga ningún ingreso.
 
             <b>Juntadas</b>
             "pagué 48000 el asado, éramos 6, con mercado pago": en tus gastos cuenta solo tu parte y el resto queda a cobrar. Cuando alguien te paga, decímelo: "Pablo me pasó 8000". Con /juntadas ves quién te debe.
@@ -115,6 +118,7 @@ public class ProcesadorMensajes {
             /juntadas – quién te debe plata de las juntadas
             /fijo – agregar un gasto fijo; /fijos, los que tenés
             /cuotas – tus compras en cuotas
+            /calcular – calcula el sueldo del mes con tus horas; /calculo, el del mes
             /costos – lo gastado en IA este mes, lo que se proyecta y el tope
             /dashboard – el link del dashboard, para ver tus gastos con gráficos
             /ayuda – este mensaje""";
@@ -138,6 +142,7 @@ public class ProcesadorMensajes {
     private final ConversacionVarios varios;
     private final ConversacionCuotas cuotas;
     private final ConversacionRecibos recibos;
+    private final ComandosSueldo comandosSueldo;
     private final FormatoCostos formatoCostos;
     private final FormatoResumen formatoResumen;
     private final ConsultaService consultas;
@@ -197,12 +202,13 @@ public class ProcesadorMensajes {
             FormatoResumen formatoResumen, ConsultaService consultas, FormatoConsulta formatoConsulta,
             ConversacionRepetidos repetidos, ConversacionJuntadas juntadas, ConversacionFijos fijos,
             GastoFijoService gastosFijos, ConversacionVarios varios, ConversacionCuotas cuotas,
-            ConversacionRecibos recibos, FormatoCostos formatoCostos, GastitoProperties properties, DashboardProperties dashboard, Clock clock) {
+            ConversacionRecibos recibos, ComandosSueldo comandosSueldo, FormatoCostos formatoCostos, GastitoProperties properties, DashboardProperties dashboard, Clock clock) {
         this.fijos = fijos;
         this.gastosFijos = gastosFijos;
         this.varios = varios;
         this.cuotas = cuotas;
         this.recibos = recibos;
+        this.comandosSueldo = comandosSueldo;
         this.formatoCostos = formatoCostos;
         this.repetidos = repetidos;
         this.juntadas = juntadas;
@@ -274,11 +280,16 @@ public class ProcesadorMensajes {
             acciones.addAll(fijos.lista());
         } else if ("/cuotas".equals(comando)) {
             acciones.addAll(cuotas.lista());
+        } else if ("/calcular".equals(comando)) {
+            acciones.add(comandosSueldo.calcularDeComando(limpio));
+        } else if ("/calculo".equals(comando)) {
+            acciones.add(comandosSueldo.verCalculo());
         } else if (comando != null) {
             ClaseIngreso clase = ComandosIngreso.clase(comando);
             acciones.add(clase != null ? comandosIngreso.responder(clase, limpio) : responderComando(comando));
         } else {
-            acciones.add(nuevoGasto(chatId, limpio, Origen.TEXTO));
+            acciones.add(comandosSueldo.pareceCalculo(limpio) ? comandosSueldo.calcularDeTexto(limpio)
+                    : nuevoGasto(chatId, limpio, Origen.TEXTO));
         }
         return acciones;
     }
@@ -331,7 +342,8 @@ public class ProcesadorMensajes {
             }
             acciones.addAll(restaurar(espera));
         }
-        acciones.add(nuevoGasto(chatId, escuchado, Origen.AUDIO));
+        acciones.add(comandosSueldo.pareceCalculo(escuchado) ? comandosSueldo.calcularDeTexto(escuchado)
+                : nuevoGasto(chatId, escuchado, Origen.AUDIO));
         return acciones;
     }
 
@@ -679,6 +691,9 @@ public class ProcesadorMensajes {
         if (anteriores != null) {
             return verAnteriores(mensajeId, anteriores);
         }
+        if (ComandosSueldo.esBoton(datos)) {
+            return comandosSueldo.boton(mensajeId, datos);
+        }
         String[] partes = datos == null ? new String[0] : datos.split(":");
         Long id = partes.length >= 2 ? numero(partes[1]) : null;
         Long elegido = partes.length >= 3 ? numero(partes[2]) : null;
@@ -716,10 +731,6 @@ public class ProcesadorMensajes {
     private List<Accion> boton(long chatId, int mensajeId, String accion, long id, Long elegido) {
         return switch (accion) {
             case Tarjetas.GUARDAR -> {
-                Optional<List<Accion>> reemplazo = recibos.preguntarSiYaHay(mensajeId, id);
-                if (reemplazo.isPresent()) {
-                    yield reemplazo.get();
-                }
                 MovimientoService.Confirmacion c = movimientos.confirmar(id);
                 if (c.movimiento().isJuntada()) {
                     yield juntadas.guardada(mensajeId, c);
@@ -735,17 +746,13 @@ public class ProcesadorMensajes {
                 if (cancelado.getOrigen() == Origen.TICKET) {
                     tickets.borrarFoto(cancelado);
                 }
-                recibos.alCancelar(cancelado);
                 yield List.of(new Accion.Editar(mensajeId, tarjetas.cancelado(cancelado), Teclado.NINGUNO),
                         new Accion.Avisar("Cancelado"));
             }
             case Tarjetas.VOLVER -> List.of(principal(chatId, mensajeId, pendiente(id)));
-            case Tarjetas.EDITAR -> {
-                Movimiento editado = pendiente(id);
-                yield List.of(new Accion.Editar(mensajeId, tarjetas.pendiente(editado),
-                        editado.getOrigen() == Origen.RECIBO ? tarjetas.edicionRecibo(id) : tarjetas.edicion(id)));
-            }
-            case Tarjetas.REEMPLAZAR -> recibos.reemplazar(mensajeId, id);
+            case Tarjetas.EDITAR -> List.of(new Accion.Editar(mensajeId, tarjetas.pendiente(pendiente(id)),
+                    tarjetas.edicion(id)));
+            case TarjetasRecibo.DESCARTAR -> recibos.descartar(mensajeId, id);
             case Tarjetas.OTRA_CATEGORIA -> List.of(new Accion.Editar(mensajeId, tarjetas.pendiente(pendiente(id)),
                     tarjetas.categorias(id, catalogos.cargar().categorias())));
             case Tarjetas.MEDIOS -> List.of(new Accion.Editar(mensajeId, tarjetas.pendiente(pendiente(id)),

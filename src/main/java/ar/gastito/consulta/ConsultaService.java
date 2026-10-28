@@ -261,7 +261,9 @@ public class ConsultaService {
                 new ClienteIa.Herramienta("recibosSueldo",
                         "Los recibos de sueldo guardados entre dos fechas (por mes del período): bruto, descuentos y "
                                 + "neto de cada uno, los totales, lo descontado por cada concepto (por ejemplo el impuesto a "
-                                + "las ganancias) y cuánto cambió el neto del primer al último sueldo mensual.",
+                                + "las ganancias), cuánto cambió el neto del primer al último sueldo mensual y, mes por mes, lo "
+                                + "calculado con la calculadora de sueldo, lo cobrado y el neto del recibo con sus diferencias y "
+                                + "las cosas raras que encontró el control del recibo.",
                         propiedades("desde", fecha, "hasta", fecha), List.of("desde", "hasta")));
     }
 

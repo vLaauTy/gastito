@@ -204,7 +204,7 @@ class ConsultaServiceTest {
                 List.of(), new BigDecimal("2000000.00"), new BigDecimal("400000.00"), new BigDecimal("1600000.00"),
                 List.of(new ar.gastito.recibo.AnalisisRecibos.DescuentoTotal("Impuesto a las ganancias",
                         new BigDecimal("50000.00"))),
-                null);
+                null, List.of());
     }
 
     @Test

@@ -2,7 +2,9 @@ package ar.gastito.dashboard;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -32,6 +34,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import ar.gastito.recibo.AnalisisRecibos;
+import ar.gastito.recibo.ControlRecibo;
 import ar.gastito.recibo.GrupoConcepto;
 import ar.gastito.recibo.ReciboService;
 import ar.gastito.recibo.TipoRecibo;
@@ -61,22 +64,28 @@ class RecibosControllerTest {
     AnalisisRecibos analisis;
 
     private static ReciboService.VistaRecibo vista() {
-        return new ReciboService.VistaRecibo(1L, 31L, "Empresa Ejemplo", YearMonth.of(2026, 10),
-                TipoRecibo.SUELDO_MENSUAL, LocalDate.of(2026, 11, 3), new BigDecimal("1250000.00"),
-                new BigDecimal("212500.00"), new BigDecimal("1037500.00"),
+        return new ReciboService.VistaRecibo(31L,
+                new ReciboService.Cobro(77L, new BigDecimal("1030000.00"), LocalDateTime.of(2026, 10, 30, 12, 0),
+                        false),
+                "Empresa Ejemplo", YearMonth.of(2026, 10), TipoRecibo.SUELDO_MENSUAL, LocalDate.of(2026, 11, 3),
+                new BigDecimal("1250000.00"), new BigDecimal("212500.00"), new BigDecimal("1037500.00"),
                 List.of(new ReciboService.Renglon("Sueldo básico", GrupoConcepto.REMUNERATIVO,
-                                new BigDecimal("1250000.00")),
+                                new BigDecimal("1250000.00"), 1L),
                         new ReciboService.Renglon("Jubilación 11%", GrupoConcepto.DESCUENTO,
-                                new BigDecimal("137500.00"))),
-                null, true);
+                                new BigDecimal("137500.00"), null)),
+                null, true, new BigDecimal("1040000.00"),
+                new ControlRecibo.Resultado(List.of(new ControlRecibo.Hallazgo(ControlRecibo.Tipo.NETO_DISTINTO,
+                        "El neto del recibo es $1.037.500 y vos cobraste $1.030.000 (diferencia $7.500).")),
+                        true, true));
     }
 
     @Test
-    void elDetalleDeUnIngresoConSusConceptos() throws Exception {
+    void elDetalleDeUnReciboConSusConceptosElCobroYLoRaro() throws Exception {
         when(recibos.vista(31L)).thenReturn(Optional.of(vista()));
 
         mvc.perform(get("/api/recibos/31"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(31))
                 .andExpect(jsonPath("$.empleador").value("Empresa Ejemplo"))
                 .andExpect(jsonPath("$.periodo").value("2026-10"))
                 .andExpect(jsonPath("$.tipo").value("SUELDO_MENSUAL"))
@@ -84,7 +93,15 @@ class RecibosControllerTest {
                 .andExpect(jsonPath("$.neto").value(1037500.00))
                 .andExpect(jsonPath("$.aviso").doesNotExist())
                 .andExpect(jsonPath("$.conArchivo").value(true))
+                .andExpect(jsonPath("$.cobro.movimientoId").value(77))
+                .andExpect(jsonPath("$.cobro.monto").value(1030000.00))
+                .andExpect(jsonPath("$.cobro.aMano").value(false))
+                .andExpect(jsonPath("$.calculado").value(1040000.00))
+                .andExpect(jsonPath("$.conCalculo").value(true))
+                .andExpect(jsonPath("$.hallazgos.length()").value(1))
+                .andExpect(jsonPath("$.hallazgos[0]").value(org.hamcrest.Matchers.startsWith("El neto del recibo")))
                 .andExpect(jsonPath("$.conceptos.length()").value(2))
+                .andExpect(jsonPath("$.conceptos[0].conceptoSueldoId").value(1))
                 .andExpect(jsonPath("$.conceptos[1].descripcion").value("Jubilación 11%"))
                 .andExpect(jsonPath("$.conceptos[1].grupo").value("DESCUENTO"))
                 .andExpect(jsonPath("$.conceptos[1].grupoNombre").value("Descuento"))
@@ -92,7 +109,48 @@ class RecibosControllerTest {
     }
 
     @Test
-    void unIngresoSinReciboEs404() throws Exception {
+    void unReciboSinCobroTraElCobroNulo() throws Exception {
+        ReciboService.VistaRecibo base = vista();
+        when(recibos.vista(31L)).thenReturn(Optional.of(new ReciboService.VistaRecibo(base.id(), null,
+                base.empleador(), base.periodo(), base.tipo(), base.fechaPago(), base.bruto(), base.descuentos(),
+                base.neto(), base.conceptos(), null, true, null,
+                new ControlRecibo.Resultado(List.of(), false, false))));
+
+        mvc.perform(get("/api/recibos/31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cobro").doesNotExist())
+                .andExpect(jsonPath("$.calculado").doesNotExist())
+                .andExpect(jsonPath("$.hallazgos.length()").value(0));
+    }
+
+    @Test
+    void sePuedeVincularElReciboConUnSueldoCobrado() throws Exception {
+        when(recibos.vincular(31L, 77L)).thenReturn(vista());
+
+        mvc.perform(post("/api/recibos/31/vincular").contentType("application/json")
+                        .content("{\"movimientoId\": 77}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cobro.movimientoId").value(77));
+    }
+
+    @Test
+    void vincularAUnIngresoQueNoSirveEsUnErrorDelUsuario() throws Exception {
+        when(recibos.vincular(31L, 5L)).thenThrow(new IllegalArgumentException("Ese no es un ingreso guardado"));
+
+        mvc.perform(post("/api/recibos/31/vincular").contentType("application/json")
+                        .content("{\"movimientoId\": 5}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Ese no es un ingreso guardado"));
+    }
+
+    @Test
+    void sePuedeDescartarUnRecibo() throws Exception {
+        mvc.perform(delete("/api/recibos/31")).andExpect(status().isNoContent());
+        org.mockito.Mockito.verify(recibos).descartar(31L);
+    }
+
+    @Test
+    void unReciboQueNoExisteEs404() throws Exception {
         when(recibos.vista(5L)).thenReturn(Optional.empty());
 
         mvc.perform(get("/api/recibos/5")).andExpect(status().isNotFound());

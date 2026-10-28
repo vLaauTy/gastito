@@ -14,26 +14,35 @@ import ar.gastito.movimiento.Movimiento;
 
 public interface ReciboRepository extends JpaRepository<ReciboSueldo, Long> {
 
-    Optional<ReciboSueldo> findByMovimientoId(Long movimientoId);
+    List<ReciboSueldo> findByPeriodoAndTipo(LocalDate periodo, TipoRecibo tipo);
 
-    /** Los recibos cuyo ingreso está guardado y con período entre [desde, hasta], del más viejo al más nuevo. */
+    /** El recibo más reciente del mismo tipo con período anterior al indicado. */
+    Optional<ReciboSueldo> findFirstByPeriodoLessThanAndTipoOrderByPeriodoDescIdDesc(LocalDate periodo,
+            TipoRecibo tipo);
+
+    /** Los recibos con período entre [desde, hasta], del más viejo al más nuevo. */
     @Query("""
             select r from ReciboSueldo r
             where r.periodo >= :desde and r.periodo <= :hasta
-              and exists (select 1 from Movimiento m where m.id = r.movimientoId
-                          and m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO)
             order by r.periodo, r.id""")
-    List<ReciboSueldo> guardadosEntre(@Param("desde") LocalDate desde, @Param("hasta") LocalDate hasta);
+    List<ReciboSueldo> entre(@Param("desde") LocalDate desde, @Param("hasta") LocalDate hasta);
 
-    /** Los ingresos guardados de una clase en [desde, hasta), menos el indicado. */
+    /** El ingreso guardado (no cancelado ni pendiente) con ese id. */
+    @Query("""
+            select m from Movimiento m
+            where m.id = :id
+              and m.tipo = ar.gastito.movimiento.TipoMovimiento.INGRESO
+              and m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO""")
+    Optional<Movimiento> ingresoGuardado(@Param("id") Long id);
+
+    /** Los ingresos guardados de una clase en [desde, hasta), del más nuevo al más viejo. */
     @Query("""
             select m from Movimiento m
             where m.tipo = ar.gastito.movimiento.TipoMovimiento.INGRESO
               and m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
               and m.claseIngreso = :clase
               and m.fechaHora >= :desde and m.fechaHora < :hasta
-              and m.id <> :excepto
             order by m.fechaHora desc, m.id desc""")
     List<Movimiento> ingresosGuardados(@Param("clase") ClaseIngreso clase, @Param("desde") LocalDateTime desde,
-            @Param("hasta") LocalDateTime hasta, @Param("excepto") Long excepto);
+            @Param("hasta") LocalDateTime hasta);
 }

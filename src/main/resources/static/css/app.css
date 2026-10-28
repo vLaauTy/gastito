@@ -198,3 +198,17 @@ tr.detalle-recibo td { background: var(--input-bg); padding: 12px 16px 16px; }
 .variaciones { display: grid; gap: 4px; font-size: 14px; }
 .mejora { color: var(--ok); font-weight: 600; }
 .empeora { color: var(--warn); font-weight: 600; }
+
+/* --- Sueldo: seguimiento, calculadora y escalas --- */
+.sueldo-detalle { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+.calc-horas { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 12px 0; }
+.calc-campo { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.calc-campo input { width: 100%; box-sizing: border-box; }
+#calc-resultado { margin-top: 12px; }
+#calc-config { margin-top: 16px; }
+#calc-config summary { cursor: pointer; font-weight: 600; }
+.escala-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 12px 0; }
+.escala-form .btns, .escala-form .note, .escala-form .error { grid-column: 1 / -1; }
+input.corto { width: 72px; }
+.factor { white-space: nowrap; }
+ul.raro { color: var(--warn); }

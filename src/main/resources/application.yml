@@ -64,6 +64,12 @@ gastito:
   recibos:
     # Tope de la respuesta de la IA al leer un recibo de sueldo. Los archivos quedan en data/recibos/AAAA/MM/.
     max-tokens: 3000
+  sueldo:
+    # Desde qué diferencia (en %) entre lo calculado y lo cobrado se marca con una alerta.
+    tolerancia-cobro-porcentaje: 1
+    # Al controlar un recibo: pesos que se perdonan por concepto y puntos que se perdonan en un porcentaje de descuento.
+    tolerancia-concepto: 1
+    tolerancia-porcentaje: 0.05
   ticket:
     # Las fotos quedan en data/tickets/AAAA/MM/<id>.jpg (data/ está en el .gitignore).
     carpeta-datos: data

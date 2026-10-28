@@ -16,7 +16,9 @@ Los audios se transcriben con un servidor de Whisper local y el texto sigue el m
 tickets las lee Haiku (visión): comercio, fecha, productos y total; Java controla que los productos sumen el
 total antes de mostrar la tarjeta.
 
-Los recibos de sueldo (el PDF, o una foto) se registran como un ingreso por el neto, con todos los conceptos.
+El sueldo se calcula con una calculadora (conceptos y escalas configurables, tus horas del mes), se carga cuando
+se cobra y, una semana después, el recibo (el PDF, o una foto) se guarda para **controlarlo**: Gastito lo compara con
+el cálculo y con lo cobrado y avisa si hay algo raro. El recibo no crea ningún ingreso.
 
 Para mirar y analizar hay un **dashboard web** servido por la misma aplicación: gasto del mes, comparación con el
 mes anterior, gasto por día, por categoría y por billetera, movimientos con buscador, e ingresos (sueldo,
@@ -68,6 +70,9 @@ Otros ajustes, en `src/main/resources/application.yml`:
 - `gastito.ia.tope-mensual-usd`: tope de gasto en IA por mes, en dólares (por defecto `2`). No bloquea nada: el bot
   avisa una vez al llegar al 80 % y otra al 100 %. Con `0` se apagan los avisos.
 - `gastito.recibos.max-tokens`: tope de la respuesta de la IA al leer un recibo (por defecto `3000`).
+- `gastito.sueldo.tolerancia-cobro-porcentaje`: desde qué diferencia (%) entre lo calculado y lo cobrado se marca
+  con ⚠️ (por defecto `1`). `gastito.sueldo.tolerancia-concepto` ($ por concepto, `1`) y
+  `gastito.sueldo.tolerancia-porcentaje` (puntos de un descuento, `0.05`) son las del control del recibo.
 - `gastito.audio.timeout`: cuánto esperar la transcripción (por defecto `60s`).
 - `gastito.audio.duracion-maxima`: audios más largos no se procesan (por defecto `60s`).
 - `gastito.audio.idioma` y `gastito.audio.modelo`: `es` y `whisper-1`.
@@ -146,8 +151,11 @@ misma fecha sale lo mismo:
 - Algunas compras en el Día con el detalle del ticket y el 20% de ClubDía, basadas en el ticket real de ejemplo.
 - El mes del medio es caro (más salidas, ropa y compras grandes, alrededor de un 25% más), para que las
   comparaciones y los consejos tengan algo para mostrar.
-- Seis recibos de sueldo mensuales (con un aumento a mitad de camino), el aguinaldo y algunos extras (con
-  descripción). Cada recibo trae sus conceptos y un PDF inventado, para probar **Ver recibo**.
+- Seis meses de sueldo: dos escalas (una paritaria a mitad de camino), el cálculo, lo cobrado y el recibo de cada mes
+  (uno con la ley 19.032 al 2,5 %, una cosa rara; el último mes cobró $4.400 menos de lo calculado y todavía no
+  tiene recibo), el aguinaldo y algunos extras (con
+  descripción). Cada recibo trae sus conceptos y un PDF inventado, para probar **Ver recibo**. Borra y vuelve a
+  cargar también las escalas.
 - Unas 150 llamadas a la IA por mes en `uso_ia` (marcadas con el modelo `claude-haiku-5-5 (prueba)`), para ver la
   pantalla de costos. Con el tope en USD 2 no llegan al aviso: para verlo, bajá `gastito.ia.tope-mensual-usd`
   (por ejemplo a `0.05`).
@@ -400,9 +408,50 @@ El monto acepta `380.000`, `380 mil` o `25k`. La cuenta se reconoce por su nombr
 decís, se usa la del último ingreso de ese tipo. Como los gastos, llega una tarjeta con **✅ Guardar** y
 **❌ Cancelar**. También se cargan y se borran desde el dashboard.
 
+### Calculadora de sueldo
+
+Tu sueldo en la realidad: a fin de mes **calculás** cuánto vas a cobrar, **cobrás** (lo cargás con `/sueldo`) y una
+semana después te dan el **recibo**, que sirve para controlar, no para registrar. Gastito reproduce el Excel de forma
+genérica: los conceptos y los montos cambian con las paritarias y no están en el código.
+
+- **Conceptos** (tabla `concepto_sueldo`, se editan en el dashboard): `REMUNERATIVO_FIJO` (básico, presentismo,
+  adicionales), `HORAS` (horas × valor de la hora normal × factor; el factor es una fracción: 3/2, 2/1, 8/60),
+  `NO_REMUNERATIVO` (no lleva descuentos) y `DESCUENTO_PORCENTAJE` (sobre el bruto remunerativo).
+- **Escalas con vigencia**: los montos fijos, el valor de la hora y los porcentajes de cada paritaria, con la fecha
+  "desde" (siempre desde el día 1 de un mes). Cada mes usa la escala vigente y el historial se conserva. Cuando
+  cambia la paritaria: dashboard → Ingresos → Calculadora → **Escalas y conceptos** → *Nueva escala (copia la
+  última)*. La migración deja los conceptos pero **no los montos**: la primera escala la cargás vos.
+- **Cálculo** (Java, `BigDecimal`, centavos en cada concepto): bruto = fijos + horas; cada descuento = bruto ×
+  porcentaje; neto de haberes = bruto − descuentos; **neto total = neto de haberes + no remunerativos**. Un ajuste
+  puntual de un concepto pisa su importe ese mes. El cálculo guardado de cada mes (`calculo_sueldo`) no cambia si
+  después se edita la escala.
+
+En el bot:
+
+```
+este mes hice 10 horas al 50, 6 al 100 y 30 nocturnas      (o: /calcular 10 6 30)
+🧮 Sueldo de octubre 2026
+⏱ 10 h horas al 50% · 6 h horas al 100% · 30 h horas nocturnas
+Bruto ............... $843.000
+Descuentos .......... −$168.600
+Neto de haberes ..... $674.400
+No remunerativo ..... $440.000
+💰 Neto total ..... $1.114.400
+[✅ Guardar] [✏️ Editar] [❌ Cancelar]
+```
+
+`/calcular` toma las horas en el orden de los conceptos de horas; `/calculo` muestra el guardado del mes. Nada se
+guarda hasta tocar **Guardar**. En el dashboard (**Ingresos → Calculadora**) las horas dan el resultado en vivo con el
+detalle por concepto.
+
+**Cobrado contra calculado:** al cargar el sueldo (`/sueldo`), si ese mes tiene cálculo, la tarjeta dice
+"Calculaste $1.114.400 · Cobraste $1.110.000 (−$4.400, −0,4%)". Si la diferencia pasa el 1 %
+(`gastito.sueldo.tolerancia-cobro-porcentaje`) lo marca con ⚠️. El ingreso se guarda igual, por lo cobrado. El mes
+de un sueldo cobrado es el de su fecha.
+
 ### Recibos de sueldo
 
-Mandale el recibo al bot y lo registra como ingreso con todo el detalle:
+Mandale el recibo al bot y lo guarda para **controlarlo** (no crea ningún ingreso):
 
 - **PDF** (como archivo): si tiene texto, Gastito lo extrae con PDFBox y a Haiku le manda solo el texto (cuesta
   menos que una imagen). Si es un escaneo, usa visión, como con los tickets.
@@ -412,30 +461,52 @@ Mandale el recibo al bot y lo registra como ingreso con todo el detalle:
 Haiku extrae el empleador, el período, la fecha de pago, el tipo (sueldo mensual, aguinaldo, vacaciones o
 liquidación final) y cada concepto con su importe y su grupo (remunerativo, no remunerativo o descuento), más los
 totales impresos. **La IA no calcula**: Java controla que remunerativos + no remunerativos − descuentos den el neto
-impreso (tolerancia de $1) y, si no cierra, la tarjeta dice qué no cierra. Sin neto no se guarda nada.
+impreso (tolerancia de $1). Sin neto no se guarda nada.
+
+El recibo queda **vinculado al sueldo cobrado de su período** (el ingreso `SUELDO`, o `AGUINALDO`, de ese mes). Si
+todavía no cargaste el cobro, se guarda igual y se vincula solo cuando lo cargues; si el sueldo de octubre se cobró
+el 3 de noviembre y está cargado en noviembre, se vincula a mano (`POST /api/recibos/{id}/vincular`). Otro recibo
+del mismo mes y tipo reemplaza al anterior.
+
+**Control de cosas raras** (lo calcula Java; no hay IA en las comparaciones):
+
+- el neto del recibo contra lo cobrado;
+- cada concepto contra tu cálculo: horas extra pagadas distintas de las cargadas, básico o adicionales distintos de
+  la escala, conceptos del cálculo que el recibo no trae;
+- los porcentajes de descuento contra los de la escala (por ejemplo, la ley 19.032 al 2,5 % en lugar del 3 %);
+- conceptos que estaban el mes anterior y ahora no, y conceptos nuevos (un concepto que tu cálculo explica, como
+  las horas en cero, no cuenta);
+- los totales del recibo que no cierran.
+
+Para comparar, la IA dice a qué concepto de tu sueldo corresponde cada renglón del recibo (o "otro"); lo que ya
+coincide por nombre o ya se mapeó antes no se pregunta, y lo que responde se guarda en `mapeo_concepto_recibo` para
+los recibos siguientes (una llamada `RECIBO` más, solo la primera vez que aparece un renglón nuevo).
 
 ```
-💼 Recibo · Octubre 2026 · Empresa de Prueba
-Bruto ............... $1.327.276
-Descuentos ........... −$270.774
-  Jubilación 11%        −$129.500
+💼 Recibo · Junio 2026 · Empresa de Prueba
+Bruto ............... $1.212.800
+Descuentos ........... −$150.696
+  Jubilación           −$133.408
   …
-💰 Neto ............. $1.056.503
+💰 Neto ............. $1.062.104
+🧮 Calculaste $1.058.240 · Cobraste $1.062.104 (+$3.864, +0,4%)
+⚠️ Para revisar:
+• Ley 19.032: te descontaron 2,5% y tu escala dice 3%.
+[🗑 Descartar recibo]
 ```
 
-Con **✅ Guardar** se crea el ingreso por el neto (sueldo o aguinaldo, en el mes del período). Si ya habías cargado a
-mano el sueldo de ese mes, pregunta "Ya cargaste el sueldo de octubre ($1.030.000). ¿Lo reemplazo con el del
-recibo?". **✏️ Editar** cambia el monto, la fecha o la descripción; **❌ Cancelar** borra también el archivo.
+Sin nada raro dice "✅ El recibo coincide con tu cálculo". **🗑 Descartar recibo** borra también el archivo.
 
 Privacidad: no se guarda en la base el CUIL, el CBU, el legajo ni el domicilio (la respuesta de la IA no tiene dónde
 ponerlos, y se borran del texto del PDF antes de mandarlo). El archivo queda en `data/recibos/AAAA/MM/` (en la
 base de prueba, `data/prueba/recibos/`) y no sale de la PC.
 
-En el dashboard (**Ingresos**), cada ingreso que vino de un recibo se despliega con **💼 Recibo** para ver los
-conceptos y abrir el archivo (**Ver recibo**). Abajo hay un gráfico de los últimos 12 meses (bruto, descuentos y
-neto de los sueldos mensuales) con la variación del neto contra el mes anterior y contra el mismo mes del año
-anterior. Y se le puede preguntar al bot: "¿cuánto me descontaron de ganancias este año?", "¿cuánto aumentó mi
-sueldo desde enero?".
+En el dashboard (**Ingresos**) hay una fila por mes con **Calculado · Cobrado · Recibo**, las diferencias y un
+**Detalle** desplegable (el cálculo concepto por concepto y el recibo con lo que encontró el control, más **Ver
+recibo**), y el gráfico de los últimos 12 meses (bruto, descuentos y neto de los sueldos mensuales) con la variación
+del neto contra el mes anterior y contra el mismo mes del año anterior. Y se le puede preguntar al bot: "¿cuánto me
+descontaron de ganancias este año?", "¿cuánto aumentó mi sueldo desde enero?", "¿cuánto cobré de más o de menos
+contra lo que calculé?".
 
 ### Costos de la IA
 
@@ -523,6 +594,7 @@ Abajo del chat queda un menú fijo con estos comandos, que también están en el
 | 🖥 Dashboard   | `/dashboard` | El link del dashboard (se abre desde la PC)      |
 | ❓ Ayuda       | `/ayuda`     | Cómo cargar gastos e ingresos                    |
 |                | `/sueldo`, `/aguinaldo`, `/ingreso` | Cargar un ingreso                 |
+|                | `/calcular 10 6 30`, `/calculo` | Calcular el sueldo del mes con tus horas / ver el guardado |
 
 Las categorías, sus descripciones (las que lee la IA), sus emojis y las palabras clave del parser simple están en
 la tabla `categoria` y se pueden cambiar en la base sin tocar código.
@@ -544,8 +616,9 @@ http://localhost:8090
 - **Movimientos:** todos los gastos del mes, con buscador (sin importar tildes ni mayúsculas), filtros por
   categoría, medio de pago y origen (texto, audio o ticket), y páginas. Los gastos que vienen de un ticket tienen
   el botón **🧾 Productos**, que despliega el detalle, la suma contra el total y el link **Ver foto**.
-- **Ingresos:** sueldo, aguinaldo y extras del mes, el detalle con **Borrar** (los que vienen de un recibo se
-  despliegan con los conceptos y **Ver recibo**), los últimos 6 meses, el gráfico del sueldo de los últimos 12
+- **Ingresos:** sueldo, aguinaldo y extras del mes, el detalle con **Borrar**, el sueldo mes por mes (calculado,
+  cobrado y recibo, con el control del recibo y **Ver recibo**), la calculadora con sus escalas y conceptos, los
+  últimos 6 meses, el gráfico del sueldo de los últimos 12
   meses y el formulario **Cargar ingreso**.
 - **Costos IA:** lo gastado en la IA (en USD) en el mes: totales, proyección, tope, desglose por propósito, costo por
   día, historial de 6 meses y las 10 llamadas más caras.
@@ -592,9 +665,15 @@ decimales, y acepta `?mes=2026-10` (por defecto, el mes actual):
 | `GET /api/movimientos.csv`        | Gastos e ingresos del mes en CSV                                |
 | `GET /api/costos-ia`              | Costo en USD, llamadas y desglose por propósito                 |
 | `GET /api/costos-ia/panel`        | La sección Costos IA: mes y anterior, proyección, tope, por propósito, por día, historial y las más caras |
-| `GET /api/recibos/{id}`           | Conceptos y totales de un ingreso que vino de un recibo (el id es el del ingreso) |
+| `GET /api/recibos/{id}`           | Un recibo: conceptos, totales, el sueldo cobrado vinculado, lo calculado y lo raro que encontró el control |
 | `GET /api/recibos/{id}/archivo`   | El recibo tal como se guardó (PDF o JPEG)                       |
-| `GET /api/recibos/serie`           | Bruto, descuentos y neto de los últimos meses (`hasta`, `meses`, por defecto 12) y la variación del neto |
+| `POST /api/recibos/{id}/vincular` | Vincula el recibo a un sueldo cobrado (`movimientoId`; sin él, vuelve a buscarlo por período) |
+| `DELETE /api/recibos/{id}`        | Descarta el recibo y su archivo                                 |
+| `GET /api/recibos/serie`          | Bruto, descuentos y neto de los últimos meses (`hasta`, `meses`, por defecto 12) y la variación del neto |
+| `GET /api/sueldo/meses`           | Mes por mes: calculado, cobrado y recibo, con las diferencias (`hasta`, `meses`) |
+| `GET /api/sueldo/calculo`         | El cálculo guardado de un mes (`mes`); `POST` lo guarda, `POST /api/sueldo/calcular` es la cuenta en vivo |
+| `GET/POST/PUT /api/sueldo/conceptos` | Los conceptos del sueldo                                     |
+| `GET/POST/PUT /api/sueldo/escalas` | Las escalas con vigencia (la hora normal y el monto o porcentaje de cada concepto) |
 | `GET /api/resumenes/ultimo`       | El último resumen: período, lo que notó la IA y el consejo (204 si no hay) |
 | `GET /api/catalogo`               | Categorías, medios de pago, cuentas y tipos de ingreso          |
 | `GET /api/ingresos`               | Ingresos del mes y totales por tipo                             |
@@ -706,7 +785,8 @@ ar.gastito
 ├── ia               Cliente de Claude, prompts, registro de tokens y costo (uso_ia), costos y tope mensual
 ├── audio            Transcripción de audios con el servidor de Whisper
 ├── ticket           Fotos de tickets: achicar la imagen, leerla con Haiku, validar y guardar la foto
-├── recibo           Recibos de sueldo: leer el PDF o la foto, validar las cuentas, guardar el detalle y el archivo
+├── sueldo           Calculadora de sueldo: conceptos, escalas con vigencia, cálculo mensual y cobrado vs calculado
+├── recibo           Recibos de sueldo como control: leer el PDF o la foto, validar, guardar y buscar lo raro
 ├── resumen          Resúmenes semanales y mensuales: cálculo, redacción con Haiku y registro de envíos
 ├── consulta         Preguntas en lenguaje natural: herramientas con SQL y conversación con tool use
 ├── juntada          Juntadas: el reparto (en Java), lo que me deben, devoluciones y partes perdidas

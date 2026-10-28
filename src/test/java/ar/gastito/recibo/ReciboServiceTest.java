@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -16,45 +17,47 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.util.unit.DataSize;
 
 import ar.gastito.config.GastitoProperties;
 import ar.gastito.ia.ClienteIa;
-import ar.gastito.ia.RegistroUsoIa;
+import ar.gastito.ia.Prompts;
+import ar.gastito.ia.PropositoIa;
 import ar.gastito.movimiento.ClaseIngreso;
-import ar.gastito.movimiento.EstadoMovimiento;
 import ar.gastito.movimiento.IngresoService;
-import ar.gastito.movimiento.InicioRegistro;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoRepository;
-import ar.gastito.movimiento.MovimientoService;
-import ar.gastito.movimiento.Origen;
-import ar.gastito.movimiento.TipoMovimiento;
+import ar.gastito.sueldo.ConceptoSueldo;
+import ar.gastito.sueldo.SueldoProperties;
+import ar.gastito.sueldo.SueldoService;
 import ar.gastito.ticket.ImagenInvalidaException;
 import ar.gastito.ticket.ImagenTicket;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
-@Import({IngresoService.class, MovimientoService.class, ReciboServiceTest.Reloj.class})
+@Import({IngresoService.class, SueldoService.class, ControlRecibo.class, ReciboServiceTest.Config.class})
 class ReciboServiceTest {
 
     @TestConfiguration
-    static class Reloj {
+    @EnableConfigurationProperties(SueldoProperties.class)
+    static class Config {
         @Bean
         Clock clock() {
             return ValidadorReciboTest.RELOJ;
@@ -63,11 +66,17 @@ class ReciboServiceTest {
 
     static final byte[] FOTO = {1, 2, 3};
 
+    @TempDir
+    Path carpeta;
+
     @Autowired
     IngresoService ingresos;
 
     @Autowired
-    MovimientoService movimientos;
+    SueldoService sueldo;
+
+    @Autowired
+    ControlRecibo control;
 
     @Autowired
     MovimientoRepository movimientoRepository;
@@ -76,14 +85,18 @@ class ReciboServiceTest {
     ReciboRepository reciboRepository;
 
     @Autowired
-    Clock clock;
+    MapeoConceptoReciboRepository mapeos;
 
-    @TempDir
-    Path carpeta;
+    @Autowired
+    PlatformTransactionManager transacciones;
+
+    @Autowired
+    Clock clock;
 
     final LectorRecibo lector = mock(LectorRecibo.class);
     final ImagenTicket imagenes = mock(ImagenTicket.class);
-    final RegistroUsoIa usoIa = mock(RegistroUsoIa.class);
+    final ClienteIa ia = mock(ClienteIa.class);
+    final Prompts prompts = mock(Prompts.class);
     ArchivosRecibo archivos;
     ReciboService recibos;
 
@@ -92,9 +105,12 @@ class ReciboServiceTest {
         archivos = new ArchivosRecibo(carpeta);
         GastitoProperties properties = new GastitoProperties(null, null, null, null,
                 new GastitoProperties.Ticket("data", 1568, DataSize.ofMegabytes(1), 4096), null, null);
-        recibos = new ReciboService(new LectorPdf(), imagenes, lector, new ValidadorRecibo(clock), ingresos,
-                movimientos, reciboRepository, usoIa, archivos, properties, clock);
+        recibos = new ReciboService(new LectorPdf(), imagenes, lector, new ValidadorRecibo(clock),
+                new MapeadorConceptos(mapeos, ia, prompts), control, sueldo, reciboRepository, archivos, properties,
+                transacciones, clock);
         when(imagenes.preparar(any())).thenReturn(new ImagenTicket.Imagen(FOTO, 10, 10));
+        when(prompts.cargar(anyString(), any())).thenReturn("instrucciones");
+        laIaMapea(new MapeoIa(List.of()));
     }
 
     private void laIaLee(LecturaReciboIa lectura) {
@@ -103,9 +119,18 @@ class ReciboServiceTest {
         when(lector.leerImagen(any(), any(), any())).thenReturn(respuesta);
     }
 
-    private Movimiento leido(ReciboService.Resultado resultado) {
+    private void laIaMapea(MapeoIa mapeo) {
+        when(ia.extraer(anyString(), anyString(), eq(MapeoIa.class), eq(PropositoIa.RECIBO)))
+                .thenReturn(new ClienteIa.Respuesta<>(mapeo, 8L));
+    }
+
+    private ReciboService.Leido leido(ReciboService.Resultado resultado) {
         assertThat(resultado).isInstanceOf(ReciboService.Leido.class);
-        return ((ReciboService.Leido) resultado).movimiento();
+        return (ReciboService.Leido) resultado;
+    }
+
+    private ReciboService.VistaRecibo vista(ReciboService.Resultado resultado) {
+        return leido(resultado).recibo();
     }
 
     private static LecturaReciboIa aguinaldo() {
@@ -120,27 +145,24 @@ class ReciboServiceTest {
                 o.conceptos(), o.bruto(), o.totalDescuentos(), o.neto());
     }
 
-    private Movimiento sueldoALaMano(String monto) {
-        return ingresos.cargar(ClaseIngreso.SUELDO, new BigDecimal(monto), null, null, LocalDate.of(2026, 10, 1));
+    private Movimiento cobrar(ClaseIngreso clase, String monto, LocalDate fecha) {
+        return ingresos.cargar(clase, new BigDecimal(monto), null, null, fecha);
     }
 
     @Test
-    void unPdfConTextoQuedaComoIngresoPendientePorElNeto() throws IOException {
+    void unPdfConTextoQuedaGuardadoSinCrearNingunIngreso() throws IOException {
         laIaLee(ValidadorReciboTest.octubre());
+        long movimientosAntes = movimientoRepository.count();
 
-        Movimiento m = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), "mi recibo"));
+        ReciboService.Leido leido = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), "mi recibo"));
 
-        assertThat(m.getEstado()).isEqualTo(EstadoMovimiento.PENDIENTE);
-        assertThat(m.getTipo()).isEqualTo(TipoMovimiento.INGRESO);
-        assertThat(m.getClaseIngreso()).isEqualTo(ClaseIngreso.SUELDO);
-        assertThat(m.getOrigen()).isEqualTo(Origen.RECIBO);
-        assertThat(m.getMonto()).isEqualByComparingTo("1037500");
-        assertThat(m.getDescripcion()).isEqualTo("Sueldo octubre 2026 · Empresa Ejemplo");
-        // El pago fue el 3 de noviembre, pero el sueldo es de octubre.
-        assertThat(m.getFechaHora().toLocalDate()).isEqualTo(LocalDate.of(2026, 10, 31));
+        assertThat(leido.reemplazo()).isFalse();
+        assertThat(leido.recibo().neto()).isEqualByComparingTo("1037500");
+        assertThat(reciboRepository.count()).isEqualTo(1);
+        // El recibo es un control: el ingreso lo carga el usuario cuando cobra.
+        assertThat(movimientoRepository.count()).isEqualTo(movimientosAntes);
         verify(lector).leerTexto(anyString(), eq("mi recibo"), any());
         verify(lector, never()).leerImagen(any(), any(), any());
-        verify(usoIa).asociarMovimiento(7L, m.getId());
     }
 
     @Test
@@ -148,9 +170,8 @@ class ReciboServiceTest {
         laIaLee(ValidadorReciboTest.octubre());
         byte[] pdf = LectorPdfTest.reciboInventado();
 
-        Movimiento m = leido(recibos.leerPdf(pdf, null));
+        ReciboService.VistaRecibo vista = vista(recibos.leerPdf(pdf, null));
 
-        ReciboService.VistaRecibo vista = recibos.vista(m.getId()).orElseThrow();
         assertThat(vista.empleador()).isEqualTo("Empresa Ejemplo");
         assertThat(vista.periodo()).isEqualTo(YearMonth.of(2026, 10));
         assertThat(vista.tipo()).isEqualTo(TipoRecibo.SUELDO_MENSUAL);
@@ -161,8 +182,8 @@ class ReciboServiceTest {
                 "Antigüedad", "Suma no remunerativa", "Jubilación 11%", "Obra social 3%", "Ley 19.032 3%");
         assertThat(vista.aviso()).isNull();
         assertThat(vista.conArchivo()).isTrue();
-        Path archivo = recibos.archivo(m.getId()).orElseThrow();
-        assertThat(archivo).isEqualTo(carpeta.resolve("recibos/2026/10/" + m.getId() + ".pdf").toAbsolutePath()
+        Path archivo = recibos.archivo(vista.id()).orElseThrow();
+        assertThat(archivo).isEqualTo(carpeta.resolve("recibos/2026/10/" + vista.id() + ".pdf").toAbsolutePath()
                 .normalize());
         assertThat(Files.readAllBytes(archivo)).isEqualTo(pdf);
     }
@@ -171,9 +192,9 @@ class ReciboServiceTest {
     void unPdfEscaneadoSeLeeComoImagen() throws IOException {
         laIaLee(ValidadorReciboTest.octubre());
 
-        Movimiento m = leido(recibos.leerPdf(LectorPdfTest.pdf(), null));
+        ReciboService.VistaRecibo vista = vista(recibos.leerPdf(LectorPdfTest.pdf(), null));
 
-        assertThat(m.getMonto()).isEqualByComparingTo("1037500");
+        assertThat(vista.neto()).isEqualByComparingTo("1037500");
         verify(lector).leerImagen(eq(FOTO), any(), any());
         verify(lector, never()).leerTexto(anyString(), any(), any());
     }
@@ -182,57 +203,25 @@ class ReciboServiceTest {
     void unaFotoSeGuardaAchicadaComoJpeg() {
         laIaLee(ValidadorReciboTest.octubre());
 
-        Movimiento m = leido(recibos.leerImagen(new byte[] {9, 9, 9, 9}, "recibo"));
+        ReciboService.VistaRecibo vista = vista(recibos.leerImagen(new byte[] {9, 9, 9, 9}, "recibo"));
 
-        Path archivo = recibos.archivo(m.getId()).orElseThrow();
-        assertThat(archivo.getFileName().toString()).isEqualTo(m.getId() + ".jpg");
+        Path archivo = recibos.archivo(vista.id()).orElseThrow();
+        assertThat(archivo.getFileName().toString()).isEqualTo(vista.id() + ".jpg");
         assertThat(archivo).hasBinaryContent(FOTO);
     }
 
     @Test
-    void unAguinaldoEsUnIngresoDeClaseAguinaldo() throws IOException {
-        laIaLee(aguinaldo());
-
-        Movimiento m = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
-
-        assertThat(m.getClaseIngreso()).isEqualTo(ClaseIngreso.AGUINALDO);
-        assertThat(m.getDescripcion()).startsWith("Aguinaldo junio 2026");
-        assertThat(m.getFechaHora().toLocalDate()).isEqualTo(LocalDate.of(2026, 6, 30));
-    }
-
-    @Test
-    void unaFechaDePagoEnElMesDelPeriodoEsLaFechaDelIngreso() throws IOException {
-        LecturaReciboIa o = ValidadorReciboTest.octubre();
-        laIaLee(new LecturaReciboIa("RECIBO_SUELDO", "", o.empleador(), "2026-10", "29/10/2026", "sueldo_mensual",
-                o.conceptos(), o.bruto(), o.totalDescuentos(), o.neto()));
-
-        Movimiento m = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
-
-        assertThat(m.getFechaHora().toLocalDate()).isEqualTo(LocalDate.of(2026, 10, 29));
-    }
-
-    @Test
-    void unPeriodoQueTerminaEnElFuturoNoPoneElIngresoEnElFuturo() throws IOException {
-        // Hoy es 5/11/2026: el sueldo de noviembre todavía no se terminó.
-        LecturaReciboIa o = ValidadorReciboTest.octubre();
-        laIaLee(new LecturaReciboIa("RECIBO_SUELDO", "", o.empleador(), "2026-11", "", "sueldo_mensual",
-                o.conceptos(), o.bruto(), o.totalDescuentos(), o.neto()));
-
-        Movimiento m = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
-
-        assertThat(m.getFechaHora().toLocalDate()).isEqualTo(LocalDate.of(2026, 11, 5));
-    }
-
-    @Test
-    void siNoCierraLaCuentaElAvisoQuedaGuardado() throws IOException {
+    void siNoCierraLaCuentaElAvisoQuedaGuardadoYSaleEnElControl() throws IOException {
         LecturaReciboIa o = ValidadorReciboTest.octubre();
         laIaLee(new LecturaReciboIa("RECIBO_SUELDO", "", o.empleador(), o.periodo(), o.fechaPago(), o.tipo(),
                 o.conceptos(), o.bruto(), o.totalDescuentos(), "1.000.000,00"));
 
-        Movimiento m = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
+        ReciboService.VistaRecibo vista = vista(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
 
-        assertThat(m.getMonto()).isEqualByComparingTo("1000000");
-        assertThat(recibos.vista(m.getId()).orElseThrow().aviso()).contains("No cierra");
+        assertThat(vista.neto()).isEqualByComparingTo("1000000");
+        assertThat(vista.aviso()).contains("No cierra");
+        assertThat(vista.control().hallazgos()).extracting(ControlRecibo.Hallazgo::tipo)
+                .contains(ControlRecibo.Tipo.NO_CIERRA);
     }
 
     @Test
@@ -240,25 +229,22 @@ class ReciboServiceTest {
         LecturaReciboIa o = ValidadorReciboTest.octubre();
         laIaLee(new LecturaReciboIa("RECIBO_SUELDO", "", o.empleador(), o.periodo(), o.fechaPago(), o.tipo(),
                 o.conceptos(), o.bruto(), o.totalDescuentos(), ""));
-        long antes = movimientoRepository.count();
 
         ReciboService.Resultado resultado = recibos.leerPdf(LectorPdfTest.reciboInventado(), null);
 
         assertThat(resultado).isEqualTo(new ReciboService.Ilegible(ValidadorRecibo.Motivo.SIN_NETO));
-        assertThat(movimientoRepository.count()).isEqualTo(antes);
         assertThat(reciboRepository.count()).isZero();
         assertThat(carpeta.resolve("recibos")).doesNotExist();
     }
 
     @Test
-    void unTicketNoSeGuardaComoRecibo() throws IOException {
+    void unTicketNoSeGuardaComoRecibo() {
         laIaLee(new LecturaReciboIa("TICKET", "", null, null, null, null, List.of(), null, null, null));
-        long antes = movimientoRepository.count();
 
         ReciboService.Resultado resultado = recibos.leerImagen(new byte[] {1}, null);
 
         assertThat(resultado).isEqualTo(new ReciboService.NoEsRecibo(TipoDocumento.TICKET));
-        assertThat(movimientoRepository.count()).isEqualTo(antes);
+        assertThat(reciboRepository.count()).isZero();
     }
 
     @Test
@@ -270,114 +256,198 @@ class ReciboServiceTest {
         assertThat(recibos.superaElTamanio(enorme.length)).isTrue();
     }
 
-    // --- Confirmación ---
+    // --- Vínculo con el sueldo cobrado ---
 
     @Test
-    void sinSueldoCargadoEseMesSeGuardaDirecto() throws IOException {
+    void siTodaviaNoCobrasteElReciboQuedaSinVincular() throws IOException {
         laIaLee(ValidadorReciboTest.octubre());
-        Movimiento m = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
 
-        assertThat(recibos.yaCargado(m.getId())).isEmpty();
-        MovimientoService.Confirmacion c = movimientos.confirmar(m.getId());
+        ReciboService.VistaRecibo vista = vista(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
 
-        assertThat(c.movimiento().getEstado()).isEqualTo(EstadoMovimiento.CONFIRMADO);
+        assertThat(vista.cobro()).isNull();
+        assertThat(vista.control().conCobro()).isFalse();
     }
 
     @Test
-    void siYaCargasteElSueldoDeEseMesLoPreguntaConSuMonto() throws IOException {
-        Movimiento manual = sueldoALaMano("1030000");
+    void elReciboQueLlegaAntesDelCobroSeVinculaCuandoSeCargaElSueldo() throws IOException {
         laIaLee(ValidadorReciboTest.octubre());
-        Movimiento m = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
+        Long id = vista(recibos.leerPdf(LectorPdfTest.reciboInventado(), null)).id();
+        assertThat(recibos.cobroDe(id)).isEmpty();
 
-        Movimiento anterior = recibos.yaCargado(m.getId()).orElseThrow();
+        Movimiento cobro = cobrar(ClaseIngreso.SUELDO, "1037500", LocalDate.of(2026, 10, 30));
 
-        assertThat(anterior.getId()).isEqualTo(manual.getId());
-        assertThat(anterior.getMonto()).isEqualByComparingTo("1030000");
+        ReciboService.VistaRecibo despues = recibos.vista(id).orElseThrow();
+        assertThat(despues.cobro().movimientoId()).isEqualTo(cobro.getId());
+        assertThat(despues.cobro().aMano()).isFalse();
+        assertThat(despues.control().conCobro()).isTrue();
+        assertThat(despues.control().sinNadaRaro()).isTrue();
     }
 
     @Test
-    void alReemplazarSeGuardaElDelReciboYElAnteriorQuedaCancelado() throws IOException {
-        Movimiento manual = sueldoALaMano("1030000");
+    void siLoCobradoEsDistintoDelNetoDelReciboLoMarca() throws IOException {
         laIaLee(ValidadorReciboTest.octubre());
-        Movimiento m = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
+        Long id = vista(recibos.leerPdf(LectorPdfTest.reciboInventado(), null)).id();
+        cobrar(ClaseIngreso.SUELDO, "1030000", LocalDate.of(2026, 10, 30));
 
-        MovimientoService.Confirmacion c = recibos.confirmarReemplazando(m.getId());
+        ControlRecibo.Resultado resultado = recibos.vista(id).orElseThrow().control();
 
-        assertThat(c.movimiento().getEstado()).isEqualTo(EstadoMovimiento.CONFIRMADO);
-        // Del sueldo de octubre queda un solo ingreso: el del recibo.
-        assertThat(c.totalMesCategoria()).isEqualByComparingTo("1037500");
-        assertThat(movimientoRepository.findById(manual.getId()).orElseThrow().getEstado())
-                .isEqualTo(EstadoMovimiento.CANCELADO);
-        assertThat(ingresos.totalDelMes(YearMonth.of(2026, 10))).isEqualByComparingTo("1037500");
+        assertThat(resultado.hallazgos()).extracting(ControlRecibo.Hallazgo::tipo)
+                .containsExactly(ControlRecibo.Tipo.NETO_DISTINTO);
+        assertThat(resultado.hallazgos().get(0).texto()).contains("$1.037.500", "$1.030.000", "$7.500");
     }
 
     @Test
     void elAguinaldoYElSueldoNoSeConfunden() throws IOException {
-        sueldoALaMano("1030000");
+        cobrar(ClaseIngreso.SUELDO, "1030000", LocalDate.of(2026, 6, 30));
         laIaLee(aguinaldo());
-        Movimiento m = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
 
-        // El sueldo de octubre no es el aguinaldo de junio.
-        assertThat(recibos.yaCargado(m.getId())).isEmpty();
+        Long id = vista(recibos.leerPdf(LectorPdfTest.reciboInventado(), null)).id();
+        assertThat(recibos.cobroDe(id)).isEmpty();
+
+        Movimiento sac = cobrar(ClaseIngreso.AGUINALDO, "1037500", LocalDate.of(2026, 6, 30));
+        assertThat(recibos.cobroDe(id).orElseThrow().movimientoId()).isEqualTo(sac.getId());
     }
 
     @Test
-    void lasVacacionesYLasLiquidacionesNoPreguntanNada() throws IOException {
-        sueldoALaMano("1030000");
+    void lasVacacionesYLasLiquidacionesNoBuscanElCobroSolas() throws IOException {
+        cobrar(ClaseIngreso.SUELDO, "1030000", LocalDate.of(2026, 10, 30));
         for (String tipo : new String[] {"vacaciones", "liquidacion_final"}) {
             laIaLee(conTipo(tipo));
-            Movimiento m = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
+            Long id = vista(recibos.leerPdf(LectorPdfTest.reciboInventado(), null)).id();
 
-            assertThat(recibos.yaCargado(m.getId())).as(tipo).isEmpty();
+            assertThat(recibos.cobroDe(id)).as(tipo).isEmpty();
         }
     }
 
     @Test
-    void unSueldoCanceladoNoCuentaComoCargado() throws IOException {
-        Movimiento manual = sueldoALaMano("1030000");
-        ingresos.anular(manual.getId());
+    void unSueldoCanceladoNoCuentaComoCobro() throws IOException {
+        Movimiento cobro = cobrar(ClaseIngreso.SUELDO, "1030000", LocalDate.of(2026, 10, 30));
+        ingresos.anular(cobro.getId());
         laIaLee(ValidadorReciboTest.octubre());
-        Movimiento m = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
 
-        assertThat(recibos.yaCargado(m.getId())).isEmpty();
+        Long id = vista(recibos.leerPdf(LectorPdfTest.reciboInventado(), null)).id();
+
+        assertThat(recibos.cobroDe(id)).isEmpty();
     }
 
     @Test
-    void alCancelarSeBorraElDetalleYElArchivo() throws IOException {
+    void sePuedeVincularAManoUnSueldoDeOtroMes() throws IOException {
+        // El sueldo de octubre se cobró el 3 de noviembre y está cargado en noviembre.
+        Movimiento cobro = cobrar(ClaseIngreso.SUELDO, "1037500", LocalDate.of(2026, 11, 3));
         laIaLee(ValidadorReciboTest.octubre());
-        Movimiento m = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
-        Path archivo = recibos.archivo(m.getId()).orElseThrow();
+        Long id = vista(recibos.leerPdf(LectorPdfTest.reciboInventado(), null)).id();
+        assertThat(recibos.cobroDe(id)).isEmpty();
 
-        movimientos.cancelar(m.getId());
-        recibos.descartar(m.getId());
+        ReciboService.VistaRecibo vinculado = recibos.vincular(id, cobro.getId());
 
-        assertThat(recibos.vista(m.getId())).isEmpty();
+        assertThat(vinculado.cobro().movimientoId()).isEqualTo(cobro.getId());
+        assertThat(vinculado.cobro().aMano()).isTrue();
+        assertThat(recibos.vincular(id, null).cobro()).isNull();
+    }
+
+    @Test
+    void soloSePuedeVincularUnIngresoGuardado() throws IOException {
+        laIaLee(ValidadorReciboTest.octubre());
+        Long id = vista(recibos.leerPdf(LectorPdfTest.reciboInventado(), null)).id();
+
+        assertThatThrownBy(() -> recibos.vincular(id, 999_999L)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // --- Reemplazar y descartar ---
+
+    @Test
+    void otroReciboDelMismoMesYTipoReemplazaAlAnteriorYBorraSuArchivo() throws IOException {
+        laIaLee(ValidadorReciboTest.octubre());
+        ReciboService.VistaRecibo primero = vista(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
+        Path archivoViejo = recibos.archivo(primero.id()).orElseThrow();
+
+        ReciboService.Leido segundo = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
+
+        assertThat(segundo.reemplazo()).isTrue();
+        assertThat(reciboRepository.count()).isEqualTo(1);
+        assertThat(archivoViejo).doesNotExist();
+        assertThat(recibos.archivo(segundo.recibo().id())).isPresent();
+    }
+
+    @Test
+    void unAguinaldoNoReemplazaAlSueldo() throws IOException {
+        laIaLee(ValidadorReciboTest.octubre());
+        recibos.leerPdf(LectorPdfTest.reciboInventado(), null);
+        laIaLee(aguinaldo());
+
+        ReciboService.Leido sac = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
+
+        assertThat(sac.reemplazo()).isFalse();
+        assertThat(reciboRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void descartarBorraElDetalleYElArchivo() throws IOException {
+        laIaLee(ValidadorReciboTest.octubre());
+        Long id = vista(recibos.leerPdf(LectorPdfTest.reciboInventado(), null)).id();
+        Path archivo = recibos.archivo(id).orElseThrow();
+
+        recibos.descartar(id);
+
+        assertThat(recibos.vista(id)).isEmpty();
         assertThat(archivo).doesNotExist();
         assertThat(reciboRepository.count()).isZero();
     }
 
     @Test
-    void unReciboNoMarcaElInicioDelRegistro() throws IOException {
+    void entreListaLosRecibosDelRangoDelMasViejoAlMasNuevo() throws IOException {
+        laIaLee(aguinaldo());
+        recibos.leerPdf(LectorPdfTest.reciboInventado(), null);
         laIaLee(ValidadorReciboTest.octubre());
-        Movimiento m = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
-        movimientos.confirmar(m.getId());
-        InicioRegistro inicio = new InicioRegistro(movimientoRepository);
+        recibos.leerPdf(LectorPdfTest.reciboInventado(), null);
 
-        // Un recibo de octubre no dice que se empezó a anotar gastos en octubre: los meses de antes no son $0.
-        assertThat(inicio.primerDia()).isEmpty();
-        assertThat(inicio.hayDatosDesde(LocalDate.of(2026, 10, 1))).isFalse();
+        assertThat(recibos.entre(YearMonth.of(2026, 1), YearMonth.of(2026, 12)))
+                .extracting(ReciboService.VistaRecibo::periodo)
+                .containsExactly(YearMonth.of(2026, 6), YearMonth.of(2026, 10));
+        assertThat(recibos.entre(YearMonth.of(2026, 7), YearMonth.of(2026, 12))).hasSize(1);
+    }
+
+    // --- Qué concepto del sueldo es cada renglón ---
+
+    private Long idDe(String nombre) {
+        return sueldo.listarConceptos().stream().filter(c -> c.getNombre().equals(nombre))
+                .map(ConceptoSueldo::getId).findFirst().orElseThrow();
     }
 
     @Test
-    void soloSeListanLosRecibosConIngresoGuardado() throws IOException {
+    void losRenglonesConElNombreDeUnConceptoSeMapeanSinPreguntarleALaIa() throws IOException {
+        laIaMapea(new MapeoIa(List.of()));
         laIaLee(ValidadorReciboTest.octubre());
-        Movimiento guardado = leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
-        movimientos.confirmar(guardado.getId());
-        leido(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
 
-        List<ReciboService.VistaRecibo> lista = recibos.guardadosEntre(YearMonth.of(2026, 1), YearMonth.of(2026, 12));
+        ReciboService.VistaRecibo vista = vista(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
 
-        assertThat(lista).extracting(ReciboService.VistaRecibo::movimientoId).containsExactly(guardado.getId());
-        assertThat(LocalDateTime.now(clock).getYear()).isEqualTo(2026);
+        assertThat(vista.conceptos()).filteredOn(c -> c.descripcion().equals("Sueldo básico"))
+                .singleElement().satisfies(c -> assertThat(c.conceptoId()).isEqualTo(idDe("Sueldo básico")));
+    }
+
+    @Test
+    void laIaMapeaLoQueNoReconoceYElResultadoSeReusaConElReciboSiguiente() throws IOException {
+        laIaLee(ValidadorReciboTest.octubre());
+        // Los renglones sin nombre igual al de un concepto, en el orden en que llegan a la IA (el 0 es Antigüedad).
+        laIaMapea(new MapeoIa(List.of(new MapeoIa.Renglon(0, "otro"), new MapeoIa.Renglon(1, "Viático"),
+                new MapeoIa.Renglon(2, "Jubilación"), new MapeoIa.Renglon(3, "Obra social"),
+                new MapeoIa.Renglon(4, "Concepto inventado"))));
+
+        ReciboService.VistaRecibo primera = vista(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
+
+        Map<String, Long> mapeados = new java.util.HashMap<>();
+        primera.conceptos().forEach(c -> mapeados.put(c.descripcion(), c.conceptoId()));
+        assertThat(mapeados.get("Jubilación 11%")).isEqualTo(idDe("Jubilación"));
+        assertThat(mapeados.get("Obra social 3%")).isEqualTo(idDe("Obra social"));
+        // Un nombre que no está en la lista no se acepta: queda como "otro".
+        assertThat(mapeados.get("Ley 19.032 3%")).isNull();
+        verify(ia, times(1)).extraer(anyString(), anyString(), eq(MapeoIa.class), eq(PropositoIa.RECIBO));
+
+        // El mes siguiente: lo que la IA ya dijo está guardado y no se vuelve a preguntar.
+        ReciboService.VistaRecibo segunda = vista(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
+
+        assertThat(segunda.conceptos()).filteredOn(c -> c.descripcion().equals("Jubilación 11%"))
+                .singleElement().satisfies(c -> assertThat(c.conceptoId()).isEqualTo(idDe("Jubilación")));
+        verify(ia, times(1)).extraer(anyString(), anyString(), eq(MapeoIa.class), eq(PropositoIa.RECIBO));
     }
 }

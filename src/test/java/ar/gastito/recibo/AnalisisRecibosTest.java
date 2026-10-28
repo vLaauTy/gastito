@@ -17,17 +17,23 @@ import org.junit.jupiter.api.Test;
 class AnalisisRecibosTest {
 
     private final ReciboService servicio = mock(ReciboService.class);
-    private final AnalisisRecibos analisis = new AnalisisRecibos(servicio);
+    private final SeguimientoSueldo seguimiento = mock(SeguimientoSueldo.class);
+    private final AnalisisRecibos analisis = new AnalisisRecibos(servicio, seguimiento);
     private final List<ReciboService.VistaRecibo> guardados = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
-        when(servicio.guardadosEntre(any(), any())).thenAnswer(inv -> {
+        when(seguimiento.mes(any())).thenAnswer(inv -> sinDatos(inv.getArgument(0)));
+        when(servicio.entre(any(), any())).thenAnswer(inv -> {
             YearMonth desde = inv.getArgument(0);
             YearMonth hasta = inv.getArgument(1);
             return guardados.stream().filter(r -> !r.periodo().isBefore(desde) && !r.periodo().isAfter(hasta))
                     .toList();
         });
+    }
+
+    private static SeguimientoSueldo.Mes sinDatos(YearMonth mes) {
+        return new SeguimientoSueldo.Mes(mes, null, null, null, null, null, null, null, false, List.of(), false);
     }
 
     /** Un sueldo mensual: bruto, un descuento del 20 % y un impuesto a las ganancias de $10.000. */
@@ -40,12 +46,12 @@ class AnalisisRecibosTest {
         BigDecimal jubilacion = b.multiply(new BigDecimal("0.11")).setScale(2);
         BigDecimal ganancias = new BigDecimal(importeConcepto);
         BigDecimal descuentos = jubilacion.add(ganancias);
-        guardados.add(new ReciboService.VistaRecibo((long) guardados.size() + 1, (long) guardados.size() + 100,
+        guardados.add(new ReciboService.VistaRecibo((long) guardados.size() + 1, null,
                 "Empresa Ejemplo", mes, tipo, null, b, descuentos, b.subtract(descuentos),
-                List.of(new ReciboService.Renglon("Sueldo básico", GrupoConcepto.REMUNERATIVO, b),
-                        new ReciboService.Renglon("Jubilación 11%", GrupoConcepto.DESCUENTO, jubilacion),
-                        new ReciboService.Renglon(concepto, GrupoConcepto.DESCUENTO, ganancias)),
-                null, true));
+                List.of(new ReciboService.Renglon("Sueldo básico", GrupoConcepto.REMUNERATIVO, b, null),
+                        new ReciboService.Renglon("Jubilación 11%", GrupoConcepto.DESCUENTO, jubilacion, null),
+                        new ReciboService.Renglon(concepto, GrupoConcepto.DESCUENTO, ganancias, null)),
+                null, true, null, new ControlRecibo.Resultado(List.of(), false, false)));
     }
 
     @Test
@@ -184,6 +190,17 @@ class AnalisisRecibosTest {
         assertThat(r.recibos()).isEmpty();
         assertThat(r.totalNeto()).isEqualByComparingTo("0");
         assertThat(r.aumentoNeto()).isNull();
+    }
+
+    @Test
+    void elResumenTraElSueldoMesAMesSoloDeLosMesesConDatos() {
+        SeguimientoSueldo.Mes marzo = new SeguimientoSueldo.Mes(YearMonth.of(2026, 3), new BigDecimal("1114400"),
+                new BigDecimal("1110000"), null, null, null, null, null, false, List.of(), false);
+        when(seguimiento.mes(YearMonth.of(2026, 3))).thenReturn(marzo);
+
+        AnalisisRecibos.ResumenRecibos r = analisis.resumen(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 5, 31));
+
+        assertThat(r.sueldoMesAMes()).containsExactly(marzo);
     }
 
     @Test

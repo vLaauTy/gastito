@@ -40,10 +40,10 @@ public class ArchivosRecibo {
      * @param extension "pdf" o "jpg"
      * @return la ruta relativa a la carpeta de datos, con barras "/"
      */
-    public String guardar(long movimientoId, YearMonth periodo, String extension, byte[] contenido)
+    public String guardar(long reciboId, YearMonth periodo, String extension, byte[] contenido)
             throws IOException {
         String ruta = "%s/%04d/%02d/%d.%s".formatted(CARPETA, periodo.getYear(), periodo.getMonthValue(),
-                movimientoId, extension);
+                reciboId, extension);
         Path archivo = datos.resolve(ruta);
         Files.createDirectories(archivo.getParent());
         Files.write(archivo, contenido);

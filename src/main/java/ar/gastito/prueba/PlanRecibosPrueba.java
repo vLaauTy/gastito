@@ -20,73 +20,60 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import ar.gastito.recibo.GrupoConcepto;
 import ar.gastito.recibo.ReciboLeido;
 import ar.gastito.recibo.TipoRecibo;
+import ar.gastito.sueldo.CalculoSueldo;
+import ar.gastito.sueldo.TipoConceptoSueldo;
 
 /**
- * Los recibos de sueldo de prueba: seis meses seguidos de un empleado inventado, con un aumento a mitad de camino y
- * el aguinaldo del semestre. Todo es inventado (la empresa, los importes): no sale de ningún recibo real.
+ * Los recibos de sueldo de prueba de un empleado inventado. El del sueldo mensual sale del cálculo del mes (con lo
+ * que coincide), salvo el que se pide con un porcentaje de descuento distinto; el aguinaldo es la mitad de la mejor
+ * remuneración del semestre. Todo es inventado (la empresa, los importes): no sale de ningún recibo real.
  */
 final class PlanRecibosPrueba {
 
     static final String EMPLEADOR = "Empresa de Prueba";
-    static final int MESES = 6;
-    static final BigDecimal BASICO_INICIAL = new BigDecimal("900000");
-    /** El aumento de las paritarias, desde el mes 4. */
-    static final BigDecimal AUMENTO = new BigDecimal("1.15");
-    static final BigDecimal NO_REMUNERATIVO_INICIAL = new BigDecimal("120000");
-    static final BigDecimal NO_REMUNERATIVO_NUEVO = new BigDecimal("150000");
+    /** El porcentaje de la ley 19.032 que descuenta el recibo "raro", en lugar del de la escala. */
+    static final BigDecimal PORCENTAJE_RARO = new BigDecimal("2.5");
+    static final String CONCEPTO_RARO = "Ley 19.032";
 
     private PlanRecibosPrueba() {
     }
 
-    /** Los recibos de los {@code MESES} meses que terminan en {@code hasta}, del más viejo al más nuevo. */
-    static List<ReciboLeido> armar(YearMonth hasta) {
-        List<ReciboLeido> recibos = new ArrayList<>();
-        YearMonth desde = hasta.minusMonths(MESES - 1L);
-        BigDecimal mejorRemuneracion = BigDecimal.ZERO;
-        for (int i = 0; i < MESES; i++) {
-            YearMonth mes = desde.plusMonths(i);
-            boolean conAumento = i >= 3;
-            BigDecimal basico = conAumento ? BASICO_INICIAL.multiply(AUMENTO) : BASICO_INICIAL;
-            ReciboLeido sueldo = sueldo(mes, basico.setScale(2, RoundingMode.HALF_UP),
-                    conAumento ? NO_REMUNERATIVO_NUEVO : NO_REMUNERATIVO_INICIAL, conAumento);
-            mejorRemuneracion = mejorRemuneracion.max(remunerativo(sueldo));
-            recibos.add(sueldo);
-            if (mes.getMonthValue() == 6 || mes.getMonthValue() == 12) {
-                recibos.add(aguinaldo(mes, mejorRemuneracion));
-            }
-        }
-        return recibos;
-    }
-
-    private static ReciboLeido sueldo(YearMonth mes, BigDecimal basico, BigDecimal noRemunerativo, boolean ganancias) {
-        BigDecimal antiguedad = porcentaje(basico, "5");
-        BigDecimal presentismo = porcentaje(basico.add(antiguedad), "8.33");
-        BigDecimal remunerativo = basico.add(antiguedad).add(presentismo);
-
+    /**
+     * El recibo del sueldo de un mes a partir de su cálculo: un renglón por concepto con importe, que se cobra el
+     * 3 del mes siguiente.
+     *
+     * @param porcentajeRaro si la ley 19.032 se descuenta al 2,5% en lugar del de la escala
+     */
+    static ReciboLeido sueldo(CalculoSueldo calculo, boolean porcentajeRaro) {
         List<ReciboLeido.Concepto> conceptos = new ArrayList<>();
-        conceptos.add(concepto("Sueldo básico", GrupoConcepto.REMUNERATIVO, basico));
-        conceptos.add(concepto("Antigüedad 5%", GrupoConcepto.REMUNERATIVO, antiguedad));
-        conceptos.add(concepto("Presentismo", GrupoConcepto.REMUNERATIVO, presentismo));
-        conceptos.add(concepto("Suma no remunerativa", GrupoConcepto.NO_REMUNERATIVO, noRemunerativo));
-        conceptos.add(concepto("Jubilación 11%", GrupoConcepto.DESCUENTO, porcentaje(remunerativo, "11")));
-        conceptos.add(concepto("Ley 19.032 3%", GrupoConcepto.DESCUENTO, porcentaje(remunerativo, "3")));
-        conceptos.add(concepto("Obra social 3%", GrupoConcepto.DESCUENTO, porcentaje(remunerativo, "3")));
-        conceptos.add(concepto("Cuota sindical 2%", GrupoConcepto.DESCUENTO, porcentaje(remunerativo, "2")));
-        if (ganancias) {
-            conceptos.add(concepto("Impuesto a las ganancias", GrupoConcepto.DESCUENTO,
-                    porcentaje(remunerativo, "4")));
+        BigDecimal remunerativo = calculo.getLineas().stream()
+                .filter(l -> l.getTipo() == TipoConceptoSueldo.REMUNERATIVO_FIJO || l.getTipo() == TipoConceptoSueldo.HORAS)
+                .map(CalculoSueldo.Linea::getImporte).reduce(BigDecimal.ZERO, BigDecimal::add);
+        for (CalculoSueldo.Linea l : calculo.getLineas()) {
+            if (l.getImporte().signum() == 0) {
+                continue;
+            }
+            GrupoConcepto grupo = switch (l.getTipo()) {
+                case REMUNERATIVO_FIJO, HORAS -> GrupoConcepto.REMUNERATIVO;
+                case NO_REMUNERATIVO -> GrupoConcepto.NO_REMUNERATIVO;
+                case DESCUENTO_PORCENTAJE -> GrupoConcepto.DESCUENTO;
+            };
+            BigDecimal importe = porcentajeRaro && CONCEPTO_RARO.equals(l.getNombre()) ? porcentaje(remunerativo,
+                    PORCENTAJE_RARO) : l.getImporte();
+            conceptos.add(concepto(l.getNombre(), grupo, importe));
         }
-        return armar(mes, TipoRecibo.SUELDO_MENSUAL, conceptos, mes.plusMonths(1).atDay(3));
+        return armar(calculo.getPeriodo(), TipoRecibo.SUELDO_MENSUAL, conceptos,
+                calculo.getPeriodo().plusMonths(1).atDay(3));
     }
 
-    /** El aguinaldo: la mitad de la mejor remuneración del semestre, con los descuentos de ley. */
-    private static ReciboLeido aguinaldo(YearMonth mes, BigDecimal mejorRemuneracion) {
+    /** El aguinaldo del semestre: la mitad de la mejor remuneración, con los descuentos de ley. */
+    static ReciboLeido aguinaldo(YearMonth mes, BigDecimal mejorRemuneracion) {
         BigDecimal sac = porcentaje(mejorRemuneracion, "50");
         List<ReciboLeido.Concepto> conceptos = List.of(
                 concepto("Sueldo anual complementario", GrupoConcepto.REMUNERATIVO, sac),
-                concepto("Jubilación 11%", GrupoConcepto.DESCUENTO, porcentaje(sac, "11")),
-                concepto("Ley 19.032 3%", GrupoConcepto.DESCUENTO, porcentaje(sac, "3")),
-                concepto("Obra social 3%", GrupoConcepto.DESCUENTO, porcentaje(sac, "3")));
+                concepto("Jubilación", GrupoConcepto.DESCUENTO, porcentaje(sac, "11")),
+                concepto("Ley 19.032", GrupoConcepto.DESCUENTO, porcentaje(sac, "3")),
+                concepto("Obra social", GrupoConcepto.DESCUENTO, porcentaje(sac, "3")));
         return armar(mes, TipoRecibo.AGUINALDO, conceptos, mes.atEndOfMonth());
     }
 
@@ -105,17 +92,16 @@ final class PlanRecibosPrueba {
                 bruto.subtract(descuentos), null);
     }
 
-    private static BigDecimal remunerativo(ReciboLeido recibo) {
-        return recibo.conceptos().stream().filter(c -> c.grupo() == GrupoConcepto.REMUNERATIVO)
-                .map(ReciboLeido.Concepto::importe).reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
     private static ReciboLeido.Concepto concepto(String descripcion, GrupoConcepto grupo, BigDecimal importe) {
         return new ReciboLeido.Concepto(descripcion, grupo, importe);
     }
 
+    private static BigDecimal porcentaje(BigDecimal base, BigDecimal porcentaje) {
+        return base.multiply(porcentaje).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+    }
+
     private static BigDecimal porcentaje(BigDecimal base, String porcentaje) {
-        return base.multiply(new BigDecimal(porcentaje)).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        return porcentaje(base, new BigDecimal(porcentaje));
     }
 
     /** Un PDF con texto de un recibo de prueba, para poder abrirlo desde el dashboard ("Ver recibo"). */

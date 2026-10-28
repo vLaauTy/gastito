@@ -4,7 +4,7 @@ import static ar.gastito.bot.FormatoMensajes.html;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Optional;
+import java.util.NoSuchElementException;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
@@ -13,16 +13,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import ar.gastito.ia.IaNoDisponibleException;
-import ar.gastito.movimiento.Movimiento;
-import ar.gastito.movimiento.MovimientoService;
-import ar.gastito.movimiento.Origen;
 import ar.gastito.recibo.PdfInvalidoException;
 import ar.gastito.recibo.ReciboService;
 import ar.gastito.ticket.ImagenInvalidaException;
 
 /**
- * Recibos de sueldo en el bot: lee el PDF o la foto, arma la tarjeta de confirmación y, al guardar, pregunta si hay
- * que reemplazar el sueldo que ya estaba cargado ese mes.
+ * Recibos de sueldo en el bot: lee el PDF o la foto, lo guarda y muestra la tarjeta con el control (lo que tiene de
+ * raro). No crea ningún ingreso: el recibo es para controlar el sueldo cobrado.
  */
 @Component
 public class ConversacionRecibos {
@@ -34,12 +31,10 @@ public class ConversacionRecibos {
             Pattern.compile("(?i)\\b(recibo|sueldo|aguinaldo|haberes|liquidaci[oó]n)\\b");
 
     private final ReciboService recibos;
-    private final MovimientoService movimientos;
-    private final Tarjetas tarjetas;
+    private final TarjetasRecibo tarjetas;
 
-    public ConversacionRecibos(ReciboService recibos, MovimientoService movimientos, Tarjetas tarjetas) {
+    public ConversacionRecibos(ReciboService recibos, TarjetasRecibo tarjetas) {
         this.recibos = recibos;
-        this.movimientos = movimientos;
         this.tarjetas = tarjetas;
     }
 
@@ -103,12 +98,12 @@ public class ConversacionRecibos {
         } catch (IaNoDisponibleException e) {
             return Accion.Enviar.texto("""
                     No pude leer el recibo: %s.
-                    Mientras tanto cargá el sueldo a mano, por ejemplo: /sueldo 1.037.500 galicia"""
+                    Mandame el recibo de nuevo en un rato; no guardé nada."""
                     .formatted(html(e.getMessage())));
         }
         return switch (resultado) {
-            case ReciboService.Leido l -> Accion.Enviar.tarjeta(tarjetas.pendiente(l.movimiento()),
-                    tarjetas.principal(l.movimiento()), l.movimiento().getId());
+            case ReciboService.Leido l -> Accion.Enviar.conBotones(tarjetas.tarjeta(l.recibo(), l.reemplazo()),
+                    tarjetas.teclado(l.recibo().id()));
             case ReciboService.NoEsRecibo n -> Accion.Enviar.texto(switch (n.documento()) {
                 case TICKET -> """
                         Eso parece un ticket de compra, no un recibo de sueldo 🤔
@@ -138,33 +133,16 @@ public class ConversacionRecibos {
                 .formatted(recibos.tamanioMaximo().toMegabytes());
     }
 
-    // --- Confirmación ---
+    // --- Descartar ---
 
-    /**
-     * Al tocar Guardar en un recibo cuyo mes ya tiene sueldo (o aguinaldo) guardado, pregunta antes de dejar dos.
-     *
-     * @return la pregunta, o vacío si no es un recibo o no hay nada que reemplazar (se guarda normal)
-     */
-    public Optional<List<Accion>> preguntarSiYaHay(int mensajeId, long id) {
-        Movimiento nuevo = movimientos.buscar(id);
-        if (nuevo.getOrigen() != Origen.RECIBO || !nuevo.isPendiente()) {
-            return Optional.empty();
+    /** "Descartar recibo": no deja nada, ni el detalle ni el archivo. */
+    public List<Accion> descartar(int mensajeId, long reciboId) {
+        try {
+            recibos.descartar(reciboId);
+        } catch (NoSuchElementException e) {
+            return List.of(new Accion.QuitarBotones(mensajeId), new Accion.Avisar("Ese recibo ya no está"));
         }
-        return recibos.yaCargado(id).map(anterior -> List.of(
-                new Accion.Editar(mensajeId, tarjetas.preguntaReemplazo(nuevo, anterior), tarjetas.reemplazo(id))));
-    }
-
-    /** "Sí, reemplazar": guarda el del recibo y deja cancelado el que estaba. */
-    public List<Accion> reemplazar(int mensajeId, long id) {
-        MovimientoService.Confirmacion c = recibos.confirmarReemplazando(id);
-        return List.of(new Accion.Editar(mensajeId, tarjetas.guardado(c.movimiento(), c.totalMesCategoria()),
-                Teclado.NINGUNO), new Accion.Avisar("✅ Guardado, reemplacé el anterior"));
-    }
-
-    /** Un recibo cancelado no deja nada: ni el detalle ni el archivo. */
-    public void alCancelar(Movimiento cancelado) {
-        if (cancelado.getOrigen() == Origen.RECIBO) {
-            recibos.descartar(cancelado.getId());
-        }
+        return List.of(new Accion.Editar(mensajeId, tarjetas.descartado(), Teclado.NINGUNO),
+                new Accion.Avisar("Descartado"));
     }
 }

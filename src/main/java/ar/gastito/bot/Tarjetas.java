@@ -16,13 +16,13 @@ import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.MedioPago;
 import ar.gastito.juntada.JuntadaService;
 import ar.gastito.juntada.VistaJuntada;
+import ar.gastito.movimiento.ClaseIngreso;
 import ar.gastito.movimiento.EstadoMovimiento;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoItem;
 import ar.gastito.movimiento.Origen;
 import ar.gastito.movimiento.TipoMovimiento;
-import ar.gastito.recibo.GrupoConcepto;
-import ar.gastito.recibo.ReciboService;
+import ar.gastito.sueldo.SueldoService;
 import ar.gastito.ticket.ControlesTicket;
 
 /**
@@ -45,8 +45,6 @@ public class Tarjetas {
     static final String EDITAR_FECHA = "ef";
     static final String EDITAR_DESCRIPCION = "ed";
     static final String APLICAR = "a";
-    /** Un recibo de sueldo cuyo mes ya tenía sueldo cargado: guardarlo y borrar el anterior. */
-    static final String REEMPLAZAR = "rr";
     /** Compras repetidas: unir el nuevo con el que ya estaba, o guardar los dos. */
     static final String UNIR = "ru";
     static final String DE_NUEVO = "rd";
@@ -65,10 +63,6 @@ public class Tarjetas {
     static final long SIN_MEDIO = 0;
 
     static final int PRODUCTOS_VISIBLES = 8;
-    /** Descuentos de un recibo que se detallan en la tarjeta; el resto queda en "…y N más". */
-    static final int DESCUENTOS_VISIBLES = 8;
-    /** Caracteres de un renglón del recibo. */
-    static final int ANCHO_RECIBO = 32;
     /** Caracteres de un renglón de producto: entra en la pantalla de un celular sin cortarse. */
     static final int ANCHO_RENGLON = 30;
     /** Telegram admite 4096 caracteres; se deja lugar para lo que se agrega al editar (pedidos, avisos). */
@@ -114,16 +108,17 @@ public class Tarjetas {
         this.juntadas = fuente;
     }
 
-    /** De dónde salen los datos de un recibo de sueldo; sin recibos, ninguno. */
-    private Function<Long, Optional<ReciboService.VistaRecibo>> recibos = id -> Optional.empty();
+    /** Cómo se compara un sueldo cobrado con el cálculo del mes; sin calculadora, no se compara. */
+    private Function<Movimiento, Optional<String>> comparacionDeSueldo = m -> Optional.empty();
 
     @Autowired(required = false)
-    void usarRecibos(ReciboService servicio) {
-        usarRecibos(servicio::vista);
+    void usarSueldo(SueldoService servicio) {
+        usarSueldo(m -> servicio.comparar(YearMonth.from(m.getFechaHora()), m.getMonto())
+                .map(c -> "🧮 " + TarjetasRecibo.textoComparacion(c, formato, true)));
     }
 
-    void usarRecibos(Function<Long, Optional<ReciboService.VistaRecibo>> fuente) {
-        this.recibos = fuente;
+    void usarSueldo(Function<Movimiento, Optional<String>> fuente) {
+        this.comparacionDeSueldo = fuente;
     }
 
     private Optional<VistaJuntada> juntada(Movimiento m) {
@@ -135,9 +130,6 @@ public class Tarjetas {
 
     /** La tarjeta de un gasto (o un ingreso) pendiente. Un ticket avisa si los productos no suman el total. */
     public String pendiente(Movimiento m) {
-        if (esRecibo(m)) {
-            return conTitulo(m, "");
-        }
         if (esTicket(m)) {
             return conTitulo(m, "🧾 <b>Ticket</b>") + avisoDeSuma(m);
         }
@@ -237,24 +229,12 @@ public class Tarjetas {
      * mensaje no entra en Telegram, se muestran solo el total y cuántos productos son.
      */
     private String conTitulo(Movimiento m, String titulo) {
-        Optional<ReciboService.VistaRecibo> recibo = recibo(m);
-        if (recibo.isPresent()) {
-            return (titulo.isEmpty() ? "" : titulo + "\n") + datosRecibo(m, recibo.get());
-        }
         if (!esTicket(m)) {
             return escuchado(m) + titulo + "\n" + datos(m);
         }
         String encabezado = titulo + " · " + html(m.getDescripcion()) + "\n";
         String completo = encabezado + datosTicket(m, true);
         return completo.length() <= largoMaximoTicket ? completo : encabezado + datosTicket(m, false);
-    }
-
-    private static boolean esRecibo(Movimiento m) {
-        return m.getOrigen() == Origen.RECIBO;
-    }
-
-    private Optional<ReciboService.VistaRecibo> recibo(Movimiento m) {
-        return esRecibo(m) && m.getId() != null ? recibos.apply(m.getId()) : Optional.empty();
     }
 
     private static boolean esTicket(Movimiento m) {
@@ -424,61 +404,6 @@ public class Tarjetas {
         };
     }
 
-    /**
-     * El recibo de sueldo: bruto, descuentos con su detalle y neto, con los importes contra el margen derecho.
-     * El neto es el del ingreso (si se lo editó a mano) y, si difiere del recibo, se aclara cuál decía el recibo.
-     */
-    private String datosRecibo(Movimiento m, ReciboService.VistaRecibo r) {
-        List<String> lineas = new ArrayList<>();
-        String mes = formato.mes(r.periodo());
-        lineas.add("💼 <b>Recibo · " + html(Character.toUpperCase(mes.charAt(0)) + mes.substring(1)) + " · "
-                + html(r.empleador()) + "</b>"
-                + (r.tipo() == ar.gastito.recibo.TipoRecibo.SUELDO_MENSUAL ? "" : " (" + r.tipo().getNombre() + ")"));
-        StringBuilder bloque = new StringBuilder("<pre>");
-        bloque.append(html(punteado("Bruto", formato.pesos(r.bruto())))).append('\n');
-        bloque.append(html(punteado("Descuentos", "−" + formato.pesos(r.descuentos())))).append('\n');
-        List<ReciboService.Renglon> descuentos = r.conceptos().stream()
-                .filter(c -> c.grupo() == GrupoConcepto.DESCUENTO).toList();
-        for (int i = 0; i < Math.min(DESCUENTOS_VISIBLES, descuentos.size()); i++) {
-            ReciboService.Renglon d = descuentos.get(i);
-            bloque.append(html(punteadoCorto("  " + d.descripcion(), "−" + formato.pesos(d.importe())))).append('\n');
-        }
-        if (descuentos.size() > DESCUENTOS_VISIBLES) {
-            bloque.append("  …y ").append(descuentos.size() - DESCUENTOS_VISIBLES).append(" más\n");
-        }
-        bloque.append(html(punteado("💰 Neto", formato.pesos(m.getMonto())))).append("</pre>");
-        lineas.add(bloque.toString());
-        if (m.getMonto().compareTo(r.neto()) != 0) {
-            lineas.add("✏️ El recibo dice " + formato.pesos(r.neto()));
-        }
-        if (r.aviso() != null) {
-            lineas.add("⚠️ " + html(r.aviso()));
-        }
-        String destino = m.getCuenta() != null ? html(m.getCuenta().getNombre())
-                : m.getMedioPago() != null && m.getMedioPago().isEfectivo() ? "Efectivo"
-                : "<i>Sin especificar</i>";
-        lineas.add("🏦 " + destino + " · 📅 " + formato.fecha(m.getFechaHora()));
-        return String.join("\n", lineas);
-    }
-
-    /** "Bruto ........... $1.250.000": el importe llega al ancho de la tarjeta. */
-    private static String punteado(String nombre, String importe) {
-        return punteado(nombre, importe, ANCHO_RECIBO);
-    }
-
-    private static String punteadoCorto(String nombre, String importe) {
-        // Los descuentos van sangrados y sin puntos: "  Jubilación 11%  −$137.500".
-        int lugar = ANCHO_RECIBO - importe.length() - 2;
-        String corto = nombre.length() > lugar ? nombre.substring(0, Math.max(1, lugar - 1)).stripTrailing() + "…"
-                : nombre;
-        return corto + " ".repeat(Math.max(2, ANCHO_RECIBO - corto.length() - importe.length())) + importe;
-    }
-
-    private static String punteado(String nombre, String importe, int ancho) {
-        int puntos = Math.max(2, ancho - nombre.length() - importe.length() - 2);
-        return nombre + " " + ".".repeat(puntos) + " " + importe;
-    }
-
     private String datosIngreso(Movimiento m) {
         List<String> lineas = new ArrayList<>();
         lineas.add("💰 <b>" + formato.pesos(m.getMonto()) + "</b>");
@@ -491,6 +416,9 @@ public class Tarjetas {
                 : "<i>Sin especificar</i>";
         lineas.add("🏦 " + destino);
         lineas.add("📅 " + formato.fecha(m.getFechaHora()));
+        if (m.getClaseIngreso() == ClaseIngreso.SUELDO && m.getMonto() != null) {
+            comparacionDeSueldo.apply(m).ifPresent(lineas::add);
+        }
         return String.join("\n", lineas);
     }
 
@@ -504,10 +432,7 @@ public class Tarjetas {
     public Teclado principal(Movimiento m) {
         long id = m.getId();
         Teclado.Constructor t = Teclado.constructor();
-        if (esRecibo(m)) {
-            t.fila(boton("✅ Guardar", GUARDAR, id), boton("✏️ Editar", EDITAR, id),
-                    boton("❌ Cancelar", CANCELAR, id));
-        } else if (m.isIngreso()) {
+        if (m.isIngreso()) {
             t.fila(boton("✅ Guardar", GUARDAR, id), boton("❌ Cancelar", CANCELAR, id));
         } else if (m.getCategoria() == null) {
             for (Categoria c : m.getCandidatas()) {
@@ -577,30 +502,6 @@ public class Tarjetas {
                 .fila(boton("📝 Descripción", EDITAR_DESCRIPCION, id))
                 .fila(volver(id))
                 .build();
-    }
-
-    /** La edición de un ingreso que vino de un recibo: no tiene categoría ni medio de pago que cambiar. */
-    public Teclado edicionRecibo(long id) {
-        return Teclado.constructor()
-                .fila(boton("💰 Monto", EDITAR_MONTO, id), boton("📅 Fecha", EDITAR_FECHA, id))
-                .fila(boton("📝 Descripción", EDITAR_DESCRIPCION, id))
-                .fila(volver(id))
-                .build();
-    }
-
-    /** Ya hay un sueldo (o aguinaldo) guardado ese mes: reemplazarlo con el del recibo, o cancelar el recibo. */
-    public Teclado reemplazo(long id) {
-        return Teclado.constructor()
-                .fila(boton("🔄 Sí, reemplazar", REEMPLAZAR, id), boton("❌ No, cancelar", CANCELAR, id))
-                .build();
-    }
-
-    /** "Ya cargaste el sueldo de octubre ($1.030.000). ¿Lo reemplazo con el del recibo?" */
-    public String preguntaReemplazo(Movimiento nuevo, Movimiento anterior) {
-        String mes = formato.mes(YearMonth.from(nuevo.getFechaHora()));
-        String nombre = nuevo.getClaseIngreso().getNombre().toLowerCase(java.util.Locale.ROOT);
-        return pendiente(nuevo) + "\n\n❓ <b>Ya cargaste el " + nombre + " de " + html(mes) + " ("
-                + formato.pesos(anterior.getMonto()) + "). ¿Lo reemplazo con el del recibo?</b>";
     }
 
     public Teclado categorias(long id, List<Categoria> categorias) {
