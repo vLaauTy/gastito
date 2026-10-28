@@ -1,7 +1,11 @@
 ﻿# Arranca Gastito: revisa que esté todo listo, compila si cambió el código y deja el bot corriendo en esta ventana.
-# Se usa desde iniciar.bat (doble clic). Perfil por defecto: prueba (la base gastito_prueba, con datos de prueba).
-# "iniciar.bat postgres" arranca con la base real y "iniciar.bat dev" con H2.
-param([ValidateSet('prueba', 'postgres', 'dev')][string]$Perfil = 'prueba')
+# Se usa desde iniciar.bat (doble clic). Perfil por defecto: postgres (la base real, gastito).
+# "iniciar.bat prueba" arranca con la base de prueba (gastito_prueba), solo para probar cambios, y "iniciar.bat dev" con H2.
+# -Automatico es para el Programador de tareas: no pregunta nada y espera hasta 10 minutos a que la base responda.
+param(
+    [ValidateSet('prueba', 'postgres', 'dev')][string]$Perfil = 'postgres',
+    [switch]$Automatico
+)
 
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -15,7 +19,7 @@ function Falla($texto) {
     Write-Host ""
     Write-Host "X  $texto" -ForegroundColor Red
     Write-Host ""
-    Read-Host "Apretá Enter para cerrar"
+    if (-not $Automatico) { Read-Host "Apretá Enter para cerrar" }
     exit 1
 }
 
@@ -53,6 +57,7 @@ $otros = @(Get-CimInstance Win32_Process -Filter "Name='java.exe'" |
     Where-Object { $_.CommandLine -match 'GastitoApplication|gastito-[\d.]+.*\.jar' })
 if ($otros.Count -gt 0) {
     Write-Host "   Ya hay un Gastito corriendo (PID $($otros.ProcessId -join ', '))." -ForegroundColor Yellow
+    if ($Automatico) { exit 0 }
     $respuesta = Read-Host "   ¿Lo apago y arranco este? (S/N)"
     if ($respuesta -notmatch '^\s*[sS]') { exit 0 }
     $otros | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
@@ -70,11 +75,12 @@ if ($Perfil -ne 'dev') {
     $servidor = $Matches[1]
     $puerto = if ($Matches[2]) { [int]$Matches[2] } else { 5432 }
     Paso "Buscando PostgreSQL en ${servidor}:$puerto"
-    $limite = (Get-Date).AddMinutes(3)
+    $minutos = if ($Automatico) { 10 } else { 3 }
+    $limite = (Get-Date).AddMinutes($minutos)
     $avisado = $false
     while (-not (PuertoAbierto $servidor $puerto)) {
         if (-not $avisado) {
-            Write-Host "   No responde. ¿Está prendida la VM de Ubuntu con Docker? Espero hasta 3 minutos..." -ForegroundColor Yellow
+            Write-Host "   No responde. ¿Está prendida la VM de Ubuntu con Docker? Espero hasta $minutos minutos..." -ForegroundColor Yellow
             $avisado = $true
         }
         if ((Get-Date) -gt $limite) { Falla "PostgreSQL no respondió en ${servidor}:$puerto. Prendé la VM y volvé a abrir iniciar.bat." }
@@ -127,4 +133,4 @@ Write-Host "Para apagarlo, cerrá esta ventana."
 Write-Host ""
 & java -jar $jar.FullName "--spring.profiles.active=$Perfil"
 Write-Host ""
-Read-Host "Gastito se detuvo. Apretá Enter para cerrar"
+if (-not $Automatico) { Read-Host "Gastito se detuvo. Apretá Enter para cerrar" }
