@@ -112,8 +112,9 @@ public class DashboardService {
             long cantidad, BigDecimal porcentaje) {
     }
 
+    /** @param origen RECIBO si el ingreso salió de un recibo de sueldo (se puede abrir el detalle) */
     public record IngresoDelMes(Long id, LocalDate fecha, String clase, String claseNombre, String descripcion,
-            String billetera, BigDecimal monto) {
+            String billetera, BigDecimal monto, String origen) {
     }
 
     public record IngresosDelMes(YearMonth mes, Ingresos totales, List<IngresoDelMes> ingresos) {
@@ -309,7 +310,8 @@ public class DashboardService {
                 : m.getMedioPago() != null && m.getMedioPago().isEfectivo() ? "Efectivo"
                 : "Sin especificar";
         return new IngresoDelMes(m.getId(), m.getFechaHora().toLocalDate(), m.getClaseIngreso().name(),
-                m.getClaseIngreso().getNombre(), m.getDescripcion(), billetera, pesos(m.getMonto()));
+                m.getClaseIngreso().getNombre(), m.getDescripcion(), billetera, pesos(m.getMonto()),
+                m.getOrigen().name());
     }
 
     private static String color(String propio, Long id) {

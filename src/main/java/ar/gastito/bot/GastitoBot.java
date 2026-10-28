@@ -132,6 +132,11 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
                     long chat = chatId;
                     ejecutar(chatId, null, escribiendoMientras(chatId,
                             () -> procesador.procesarAudio(chat, mensaje.getMessageId(), audio)));
+                } else if (esPdf(mensaje)) {
+                    PdfRecibido pdf = pdf(mensaje);
+                    long chat = chatId;
+                    ejecutar(chatId, null, escribiendoMientras(chatId,
+                            () -> procesador.procesarPdf(chat, mensaje.getMessageId(), pdf)));
                 } else if (mensaje.hasPhoto() || esImagen(mensaje)) {
                     FotoRecibida foto = foto(mensaje);
                     long chat = chatId;
@@ -139,7 +144,7 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
                             () -> procesador.procesarFoto(chat, mensaje.getMessageId(), foto)));
                 } else {
                     ejecutar(chatId, null, List.of(Accion.Enviar.texto(
-                            "Por ahora entiendo mensajes de texto, audios y fotos de tickets.")));
+                            "Por ahora entiendo mensajes de texto, audios, fotos de tickets y recibos de sueldo en PDF.")));
                 }
             }
         } catch (RuntimeException e) {
@@ -174,6 +179,17 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
     private static boolean esImagen(Message mensaje) {
         return mensaje.hasDocument() && mensaje.getDocument().getMimeType() != null
                 && mensaje.getDocument().getMimeType().toLowerCase().startsWith("image/");
+    }
+
+    /** Un archivo PDF (un recibo de sueldo). */
+    private static boolean esPdf(Message mensaje) {
+        return mensaje.hasDocument() && mensaje.getDocument().getMimeType() != null
+                && mensaje.getDocument().getMimeType().equalsIgnoreCase("application/pdf");
+    }
+
+    private PdfRecibido pdf(Message mensaje) {
+        String fileId = mensaje.getDocument().getFileId();
+        return new PdfRecibido(mensaje.getDocument().getFileSize(), mensaje.getCaption(), () -> descargar(fileId));
     }
 
     /** De una foto, la de mayor resolución de las que manda Telegram. Se descarga recién cuando hace falta. */

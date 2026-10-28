@@ -78,10 +78,15 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
     @Query(nativeQuery = true, value = "UPDATE uso_ia SET movimiento_id = :a WHERE movimiento_id = :de")
     int pasarUsoIa(@Param("de") Long de, @Param("a") Long a);
 
-    /** La fecha del primer movimiento confirmado, de cualquier tipo: antes de eso no hay datos. Null si no hay. */
+    /**
+     * La fecha del primer movimiento confirmado, de cualquier tipo: antes de eso no hay datos. Null si no hay. Un
+     * recibo de sueldo no cuenta: es de un mes que pudo pasar antes de empezar a registrar, y tomarlo como el
+     * inicio haría pasar por "$0 gastado" a los meses sin gastos cargados.
+     */
     @Query("""
             select min(m.fechaHora) from Movimiento m
-            where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO""")
+            where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
+              and m.origen <> ar.gastito.movimiento.Origen.RECIBO""")
     LocalDateTime primerFechaConfirmada();
 
     /** Últimos gastos confirmados, del más nuevo al más viejo (ejemplos para la IA). */

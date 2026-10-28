@@ -16,6 +16,7 @@
     resumen: null,
     pagina: 0,
     grafico: null,
+    graficoRecibos: null,
   };
 
   // --- Formatos: solo presentación ---
@@ -199,6 +200,7 @@
         tareas.push(
           api(conMes('/api/ingresos')).then(vistaIngresos),
           api(`/api/ingresos/por-mes?hasta=${estado.mes}&meses=6`).then(ingresosPorMes),
+          api(`/api/recibos/serie?hasta=${estado.mes}&meses=12`).then(serieRecibos),
         );
         disponible(resumen.disponible, '#i-disponible', '#i-disponible-barra', '#i-disponible-nota');
       } else {
@@ -544,14 +546,123 @@
       filaMensaje(tbody, 6, 'Todavía no hay ingresos este mes. Cargalos con el botón o con /sueldo en el bot.');
       return;
     }
-    tbody.replaceChildren(...r.ingresos.map((i) => h('tr', {},
+    tbody.replaceChildren(...r.ingresos.map(filaIngreso));
+  }
+
+  // --- Recibos de sueldo ---
+
+  const GRUPOS_DE_RECIBO = [
+    { clave: 'REMUNERATIVO', titulo: 'Remunerativo' },
+    { clave: 'NO_REMUNERATIVO', titulo: 'No remunerativo' },
+    { clave: 'DESCUENTO', titulo: 'Descuentos' },
+  ];
+
+  /** Abre (o cierra) debajo del ingreso los conceptos del recibo. Se piden a la API recién al abrir. */
+  async function desplegarRecibo(boton, fila, id) {
+    const abierta = fila.nextElementSibling;
+    if (abierta && abierta.classList.contains('detalle-recibo')) {
+      abierta.remove();
+      boton.setAttribute('aria-expanded', 'false');
+      return;
+    }
+    boton.disabled = true;
+    try {
+      const detalle = await api(`/api/recibos/${id}`);
+      fila.after(h('tr', { class: 'detalle-recibo' }, h('td', { colspan: 6 }, contenidoRecibo(detalle))));
+      boton.setAttribute('aria-expanded', 'true');
+    } catch (error) {
+      mostrarAviso(`No pude cargar el recibo: ${error.message}`);
+    } finally {
+      boton.disabled = false;
+    }
+  }
+
+  function contenidoRecibo(d) {
+    const bloques = GRUPOS_DE_RECIBO.map((g) => ({ ...g, conceptos: d.conceptos.filter((c) => c.grupo === g.clave) }))
+      .filter((g) => g.conceptos.length);
+    return h('div', { class: 'recibo' },
+      h('div', { class: 'sub' }, `${d.tipoNombre} ${mesYAnio(d.periodo)} · ${d.empleador}`),
+      ...bloques.flatMap((g) => [
+        h('h3', {}, g.titulo),
+        h('ul', {}, g.conceptos.map((c) => h('li', {},
+          h('span', {}, c.descripcion),
+          h('span', { class: 'money' }, (g.clave === 'DESCUENTO' ? '−' : '') + pesos(c.importe))))),
+      ]),
+      h('ul', {},
+        h('li', { class: 'total' }, h('span', {}, 'Bruto'), h('span', { class: 'money' }, pesos(d.bruto))),
+        h('li', {}, h('span', {}, 'Descuentos'), h('span', { class: 'money' }, '−' + pesos(d.descuentos))),
+        h('li', { class: 'total' }, h('span', {}, 'Neto'), h('span', { class: 'money' }, pesos(d.neto)))),
+      d.aviso ? h('p', { class: 'aviso-recibo' }, `⚠️ ${d.aviso}`) : null,
+      d.conArchivo
+        ? h('a', { class: 'ver-todos', href: `/api/recibos/${d.movimientoId}/archivo`, target: '_blank', rel: 'noopener' }, 'Ver recibo')
+        : null);
+  }
+
+  /** Una línea: "Contra septiembre: +10% (+$89.000)". Los números llegan hechos; acá solo se formatean. */
+  function lineaCambio(texto, c) {
+    if (c.direccion === 'SIN_DATOS') {
+      return h('div', { class: 'note' }, `${texto}: sin recibo para comparar`);
+    }
+    const signo = Number(c.diferencia) > 0 ? '+' : '';
+    const porcentaje = c.variacionPorcentaje == null ? '' : `${c.variacionPorcentaje > 0 ? '+' : ''}${c.variacionPorcentaje}% `;
+    const clase = c.direccion === 'SUBE' ? 'mejora' : c.direccion === 'BAJA' ? 'empeora' : null;
+    return h('div', {}, `${texto}: `, h('span', { class: clase }, `${porcentaje}(${signo}${pesos(c.diferencia)})`));
+  }
+
+  function serieRecibos(s) {
+    const seccion = $('#i-recibos');
+    const hay = s.meses.some((m) => m.conRecibo);
+    seccion.hidden = !hay;
+    if (estado.graficoRecibos) estado.graficoRecibos.destroy();
+    estado.graficoRecibos = null;
+    if (!hay) return;
+    $('#i-recibos-variacion').replaceChildren(
+      h('div', {}, `Neto de ${nombreMes(s.hasta)}: `, h('b', {}, s.netoActual == null ? 'sin recibo' : pesos(s.netoActual))),
+      lineaCambio(`Contra ${nombreMes(s.contraMesAnterior.mes)}`, s.contraMesAnterior),
+      lineaCambio(`Contra ${mesYAnio(s.contraMismoMesAnioAnterior.mes)}`, s.contraMismoMesAnioAnterior));
+    const lienzo = $('#grafico-recibos');
+    if (!window.Chart) return;
+    const serie = (campo) => s.meses.map((m) => (m.conRecibo ? Number(m[campo]) : null));
+    estado.graficoRecibos = new window.Chart(lienzo, {
+      type: 'bar',
+      data: {
+        labels: s.meses.map((m) => mayuscula(nombreMes(m.mes)).slice(0, 3) + (m.mes.endsWith('-01') ? ` ${m.mes.slice(2, 4)}` : '')),
+        datasets: [
+          { label: 'Bruto', data: serie('bruto'), backgroundColor: color('--bar-dia'), borderRadius: 4 },
+          { label: 'Descuentos', data: serie('descuentos'), backgroundColor: color('--warn'), borderRadius: 4 },
+          { label: 'Neto', data: serie('neto'), backgroundColor: color('--accent'), borderRadius: 4 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: color('--muted'), boxWidth: 12 } },
+          tooltip: { callbacks: { label: (item) => `${item.dataset.label}: ${pesos(item.raw)}` } },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: color('--muted'), maxRotation: 0 } },
+          y: { beginAtZero: true, grid: { color: color('--row') }, ticks: { color: color('--muted'), callback: (v) => pesos(v), maxTicksLimit: 5 } },
+        },
+      },
+    });
+  }
+
+  function filaIngreso(i) {
+    const boton = i.origen === 'RECIBO'
+      ? h('button', { class: 'mini desplegar', type: 'button', 'aria-expanded': 'false' }, '💼 Recibo')
+      : null;
+    const fila = h('tr', {},
       h('td', { class: 'date' }, fechaCorta(i.fecha)),
       h('td', {}, h('span', { class: `chip ${i.clase.toLowerCase()}` }, i.claseNombre)),
-      h('td', {}, i.descripcion || '—'),
+      h('td', {}, i.descripcion || '—', boton),
       h('td', { class: i.billetera === 'Sin especificar' ? 'sin-especificar' : null }, i.billetera),
       h('td', { class: 'amt' }, pesos(i.monto)),
       h('td', {}, h('button', { type: 'button', class: 'mini', onclick: () => borrarIngreso(i) }, 'Borrar')),
-    )));
+    );
+    if (boton) boton.addEventListener('click', () => desplegarRecibo(boton, fila, i.id));
+    return fila;
   }
 
   function ingresosPorMes(meses) {

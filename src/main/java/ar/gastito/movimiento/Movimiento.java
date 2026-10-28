@@ -434,7 +434,7 @@ public class Movimiento {
         return switch (origen) {
             case TICKET -> 3;
             case AVISO -> 2;
-            case TEXTO, AUDIO, DASHBOARD -> 1;
+            case TEXTO, AUDIO, DASHBOARD, RECIBO -> 1;
             case AUTOMATICO, RESUMEN -> 0;
         };
     }

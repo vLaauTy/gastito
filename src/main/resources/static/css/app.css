@@ -186,3 +186,15 @@ tr.inactivo { opacity: .5; }
   .grid2 { grid-template-columns: minmax(0, 1fr); }
   .cat { grid-template-columns: minmax(0, 120px) minmax(0, 1fr) auto; }
 }
+
+/* --- Recibos de sueldo --- */
+tr.detalle-recibo td { background: var(--input-bg); padding: 12px 16px 16px; }
+.recibo { max-width: 560px; display: grid; gap: 8px; }
+.recibo h3 { margin: 6px 0 2px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.recibo ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.recibo li { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.recibo li.total { font-weight: 700; border-top: 1px solid var(--row); padding-top: 4px; }
+.recibo .aviso-recibo { color: var(--warn); font-weight: 600; font-size: 13px; margin: 0; }
+.variaciones { display: grid; gap: 4px; font-size: 14px; }
+.mejora { color: var(--ok); font-weight: 600; }
+.empeora { color: var(--warn); font-weight: 600; }

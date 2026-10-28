@@ -82,6 +82,12 @@ class ValidadorTicketTest {
     }
 
     @Test
+    void unReciboDeSueldoSeReconoceParaLeerloConElFlujoDeRecibos() {
+        assertThat(validador.validar(ticket().problema("recibo_sueldo").build(), CatalogoDePrueba.crear(), AHORA))
+                .isInstanceOf(ValidadorTicket.EsRecibo.class);
+    }
+
+    @Test
     void unaFotoQueNoEsTicketOBorrosaNoEsGasto() {
         assertThat(validador.validar(ticket().problema("no_es_ticket").build(), CatalogoDePrueba.crear(), AHORA))
                 .isInstanceOf(ValidadorTicket.NoEsTicket.class);

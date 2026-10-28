@@ -92,6 +92,9 @@ public class ProcesadorMensajes {
             /ingreso 25000 arreglo de PC a mercado pago (cualquier otro ingreso: una venta, un regalo…)
             Si no decís la cuenta, uso la del último ingreso de ese tipo. Te muestro la tarjeta y lo guardás con un toque.
 
+            <b>Recibo de sueldo</b> 💼
+            Mandame el PDF del recibo (o una foto, con la palabra "recibo" en el texto): lo guardo como ingreso por el neto, con todos los conceptos. Si ya cargaste el sueldo de ese mes, te pregunto si lo reemplazo.
+
             <b>Juntadas</b>
             "pagué 48000 el asado, éramos 6, con mercado pago": en tus gastos cuenta solo tu parte y el resto queda a cobrar. Cuando alguien te paga, decímelo: "Pablo me pasó 8000". Con /juntadas ves quién te debe.
 
@@ -136,6 +139,7 @@ public class ProcesadorMensajes {
     private final GastoFijoService gastosFijos;
     private final ConversacionVarios varios;
     private final ConversacionCuotas cuotas;
+    private final ConversacionRecibos recibos;
     private final FormatoResumen formatoResumen;
     private final ConsultaService consultas;
     private final FormatoConsulta formatoConsulta;
@@ -194,11 +198,12 @@ public class ProcesadorMensajes {
             FormatoResumen formatoResumen, ConsultaService consultas, FormatoConsulta formatoConsulta,
             ConversacionRepetidos repetidos, ConversacionJuntadas juntadas, ConversacionFijos fijos,
             GastoFijoService gastosFijos, ConversacionVarios varios, ConversacionCuotas cuotas,
-            GastitoProperties properties, DashboardProperties dashboard, Clock clock) {
+            ConversacionRecibos recibos, GastitoProperties properties, DashboardProperties dashboard, Clock clock) {
         this.fijos = fijos;
         this.gastosFijos = gastosFijos;
         this.varios = varios;
         this.cuotas = cuotas;
+        this.recibos = recibos;
         this.repetidos = repetidos;
         this.juntadas = juntadas;
         this.consultas = consultas;
@@ -344,7 +349,20 @@ public class ProcesadorMensajes {
         if (espera != null) {
             acciones.addAll(restaurar(espera));
         }
-        acciones.add(nuevoTicket(foto));
+        acciones.add(ConversacionRecibos.mencionaRecibo(foto.texto()) ? recibos.leerFoto(foto) : nuevoTicket(foto));
+        return acciones;
+    }
+
+    // --- Recibos de sueldo ---
+
+    /** Un PDF es un recibo de sueldo: queda la tarjeta con el neto y el detalle, para guardar. */
+    public List<Accion> procesarPdf(long chatId, int mensajeId, PdfRecibido pdf) {
+        List<Accion> acciones = new ArrayList<>();
+        Espera espera = esperas.remove(chatId);
+        if (espera != null) {
+            acciones.addAll(restaurar(espera));
+        }
+        acciones.add(recibos.leerPdf(pdf));
         return acciones;
     }
 
@@ -353,8 +371,10 @@ public class ProcesadorMensajes {
             return Accion.Enviar.texto(demasiadoGrande());
         }
         TicketService.Resultado resultado;
+        byte[] bytes;
         try {
-            resultado = tickets.leer(foto.descarga().descargar(), foto.texto());
+            bytes = foto.descarga().descargar();
+            resultado = tickets.leer(bytes, foto.texto());
         } catch (IOException e) {
             log.warn("No se pudo descargar la foto de Telegram ({})", e.getClass().getSimpleName());
             return Accion.Enviar.texto("No pude descargar la foto de Telegram 😕 Probá mandarla de nuevo.");
@@ -373,6 +393,7 @@ public class ProcesadorMensajes {
         }
         return switch (resultado) {
             case TicketService.Leido l -> tarjetaNueva(l.movimiento());
+            case TicketService.EsRecibo r -> recibos.leerFoto(bytes, foto.texto());
             case TicketService.NoEsTicket n -> Accion.Enviar.texto("""
                     Esa foto no parece un ticket 🤔
                     Mandame la foto de un ticket o una factura de compra, o escribime el gasto ("super 8050").""");
@@ -695,6 +716,10 @@ public class ProcesadorMensajes {
     private List<Accion> boton(long chatId, int mensajeId, String accion, long id, Long elegido) {
         return switch (accion) {
             case Tarjetas.GUARDAR -> {
+                Optional<List<Accion>> reemplazo = recibos.preguntarSiYaHay(mensajeId, id);
+                if (reemplazo.isPresent()) {
+                    yield reemplazo.get();
+                }
                 MovimientoService.Confirmacion c = movimientos.confirmar(id);
                 if (c.movimiento().isJuntada()) {
                     yield juntadas.guardada(mensajeId, c);
@@ -710,12 +735,17 @@ public class ProcesadorMensajes {
                 if (cancelado.getOrigen() == Origen.TICKET) {
                     tickets.borrarFoto(cancelado);
                 }
+                recibos.alCancelar(cancelado);
                 yield List.of(new Accion.Editar(mensajeId, tarjetas.cancelado(cancelado), Teclado.NINGUNO),
                         new Accion.Avisar("Cancelado"));
             }
             case Tarjetas.VOLVER -> List.of(principal(chatId, mensajeId, pendiente(id)));
-            case Tarjetas.EDITAR -> List.of(
-                    new Accion.Editar(mensajeId, tarjetas.pendiente(pendiente(id)), tarjetas.edicion(id)));
+            case Tarjetas.EDITAR -> {
+                Movimiento editado = pendiente(id);
+                yield List.of(new Accion.Editar(mensajeId, tarjetas.pendiente(editado),
+                        editado.getOrigen() == Origen.RECIBO ? tarjetas.edicionRecibo(id) : tarjetas.edicion(id)));
+            }
+            case Tarjetas.REEMPLAZAR -> recibos.reemplazar(mensajeId, id);
             case Tarjetas.OTRA_CATEGORIA -> List.of(new Accion.Editar(mensajeId, tarjetas.pendiente(pendiente(id)),
                     tarjetas.categorias(id, catalogos.cargar().categorias())));
             case Tarjetas.MEDIOS -> List.of(new Accion.Editar(mensajeId, tarjetas.pendiente(pendiente(id)),

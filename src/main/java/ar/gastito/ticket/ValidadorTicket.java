@@ -111,6 +111,10 @@ public class ValidadorTicket {
     public record NoEsTicket() implements Resultado {
     }
 
+    /** La foto es un recibo de sueldo: la lee Gastito con el flujo de recibos. */
+    public record EsRecibo() implements Resultado {
+    }
+
     public record Ilegible(Motivo motivo) implements Resultado {
     }
 
@@ -134,6 +138,9 @@ public class ValidadorTicket {
             return new Ilegible(Motivo.BORROSA);
         }
         String problema = ia.problema() == null ? "" : ia.problema().strip().toLowerCase(Locale.ROOT);
+        if (problema.contains("recibo")) {
+            return new EsRecibo();
+        }
         if (problema.contains("no_es_ticket") || problema.contains("no es")) {
             return new NoEsTicket();
         }

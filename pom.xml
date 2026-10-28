@@ -23,6 +23,7 @@
         <anthropic-java.version>2.71.0</anthropic-java.version>
         <wiremock.version>3.13.2</wiremock.version>
         <chartjs.version>4.5.1</chartjs.version>
+        <pdfbox.version>3.0.8</pdfbox.version>
     </properties>
 
     <dependencies>
@@ -80,6 +81,13 @@
         <dependency>
             <groupId>org.webjars</groupId>
             <artifactId>webjars-locator-lite</artifactId>
+        </dependency>
+
+        <!-- Recibos de sueldo en PDF: se extrae el texto (sin IA) y solo el texto se le manda a Haiku -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
         </dependency>
 
         <!-- IA -->

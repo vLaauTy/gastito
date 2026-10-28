@@ -8,6 +8,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -40,20 +41,23 @@ import ar.gastito.config.GastitoProperties;
 import ar.gastito.fijo.Frecuencia;
 import ar.gastito.fijo.GastoFijoService;
 import ar.gastito.fijo.VistaFijo;
+import ar.gastito.movimiento.ClaseIngreso;
 import ar.gastito.movimiento.DatosTicket;
 import ar.gastito.movimiento.IngresoService;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
 import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Origen;
+import ar.gastito.recibo.ReciboLeido;
+import ar.gastito.recibo.ReciboService;
 
 /**
  * Borra los datos de la base de prueba y la vuelve a llenar con {@link PlanDatosPrueba}. Solo existe con el perfil
  * prueba y gastito.prueba.generar=true, y antes de tocar nada comprueba que la base sea gastito_prueba: con la base
  * real (perfil postgres) no corre nunca. Al terminar, apaga la aplicación.
  * <p>
- * Borra movimientos (con sus productos y categorías candidatas, y por lo tanto lo aprendido), resúmenes y envíos de
- * resúmenes, y las fotos de los tickets de prueba. Deja el catálogo y uso_ia, que es plata de verdad gastada en la
+ * Borra movimientos (con sus productos y categorías candidatas, y por lo tanto lo aprendido), recibos de sueldo,
+ * resúmenes y envíos de resúmenes, y las fotos de los tickets y los recibos de prueba. Deja el catálogo y uso_ia, que es plata de verdad gastada en la
  * API mientras se probaba.
  */
 @Component
@@ -75,6 +79,8 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
             "DELETE FROM resumen",
             "DELETE FROM movimiento_item",
             "DELETE FROM movimiento_categoria_candidata",
+            "DELETE FROM recibo_concepto",
+            "DELETE FROM recibo_sueldo",
             "DELETE FROM movimiento",
             "DELETE FROM recordatorio_fijo",
             "DELETE FROM gasto_fijo");
@@ -86,6 +92,7 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
     private final MovimientoService movimientos;
     private final IngresoService ingresos;
     private final GastoFijoService fijos;
+    private final ReciboService recibos;
     private final GastitoProperties properties;
     private final Environment entorno;
     private final ApplicationContext contexto;
@@ -93,7 +100,7 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
 
     public GeneradorDatosPrueba(DataSource dataSource, JdbcTemplate jdbc, TransactionTemplate transaccion,
             CatalogoService catalogos, MovimientoService movimientos, IngresoService ingresos,
-            GastoFijoService fijos, GastitoProperties properties, Environment entorno, ApplicationContext contexto,
+            GastoFijoService fijos, ReciboService recibos, GastitoProperties properties, Environment entorno, ApplicationContext contexto,
             Clock clock) {
         this.dataSource = dataSource;
         this.jdbc = jdbc;
@@ -102,6 +109,7 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
         this.movimientos = movimientos;
         this.ingresos = ingresos;
         this.fijos = fijos;
+        this.recibos = recibos;
         this.properties = properties;
         this.entorno = entorno;
         this.contexto = contexto;
@@ -117,7 +125,7 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
                 plan.hasta(), plan.gastos().size(), plan.ingresos().size(), plan.mesCaro());
 
         transaccion.executeWithoutResult(estado -> BORRAR.forEach(jdbc::update));
-        borrarFotos();
+        borrarArchivos();
         cargar(plan);
 
         log.info("Listo: la base {} tiene datos de prueba nuevos", BASE_DE_PRUEBA);
@@ -147,14 +155,17 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
         }
     }
 
-    private void borrarFotos() throws IOException {
-        Path carpeta = Path.of(properties.ticket().carpetaDatos(), "tickets");
-        if (!Files.isDirectory(carpeta)) {
-            return;
-        }
-        try (Stream<Path> archivos = Files.walk(carpeta)) {
-            for (Path p : archivos.sorted(Comparator.reverseOrder()).toList()) {
-                Files.delete(p);
+    /** Las fotos de los tickets y los recibos de prueba. */
+    private void borrarArchivos() throws IOException {
+        for (String nombre : List.of("tickets", "recibos")) {
+            Path carpeta = Path.of(properties.ticket().carpetaDatos(), nombre);
+            if (!Files.isDirectory(carpeta)) {
+                continue;
+            }
+            try (Stream<Path> archivos = Files.walk(carpeta)) {
+                for (Path p : archivos.sorted(Comparator.reverseOrder()).toList()) {
+                    Files.delete(p);
+                }
             }
         }
     }
@@ -181,10 +192,28 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
             movimientos.confirmar(m.getId());
         }
         for (PlanDatosPrueba.Ingreso i : plan.ingresos()) {
+            // El sueldo y el aguinaldo vienen de los recibos.
+            if (i.clase() == ClaseIngreso.SUELDO || i.clase() == ClaseIngreso.AGUINALDO) {
+                continue;
+            }
             ingresos.cargar(i.clase(), i.monto(), i.descripcion(),
                     i.cuenta() == null ? null : buscar(cuentas, i.cuenta()).getId(), i.fecha());
         }
+        cargarRecibos();
         cargarFijos(categorias, catalogo.tarjetaCredito().orElse(null));
+    }
+
+    /**
+     * Seis meses de recibos de sueldo, con un aumento a mitad de camino y el aguinaldo. Cada uno es el ingreso del mes
+     * (en Galicia) con sus conceptos y un PDF inventado.
+     */
+    private void cargarRecibos() {
+        Cuenta galicia = buscar(porNombre(catalogos.cargar().cuentas(), Cuenta::getNombre), "Galicia");
+        for (ReciboLeido recibo : PlanRecibosPrueba.armar(YearMonth.from(LocalDateTime.now(clock)))) {
+            Movimiento m = recibos.guardar(recibo, null, PlanRecibosPrueba.pdf(recibo), "pdf");
+            jdbc.update("UPDATE movimiento SET cuenta_id = ? WHERE id = ?", galicia.getId(), m.getId());
+            movimientos.confirmar(m.getId());
+        }
     }
 
     /**

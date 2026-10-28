@@ -230,6 +230,52 @@ class MigracionTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void unReciboGuardaSusConceptosYSeBorraConEllos() {
+        jdbc.update("""
+                INSERT INTO movimiento (id, fecha_hora, monto, tipo, clase_ingreso, origen, estado, creado_en)
+                VALUES (2000, CURRENT_TIMESTAMP, 1037500, 'INGRESO', 'SUELDO', 'RECIBO', 'PENDIENTE', CURRENT_TIMESTAMP)""");
+        jdbc.update("""
+                INSERT INTO recibo_sueldo (id, movimiento_id, empleador, periodo, tipo, bruto, descuentos, neto)
+                VALUES (1, 2000, 'Empresa de Prueba', DATE '2026-10-01', 'SUELDO_MENSUAL', 1250000, 212500, 1037500)""");
+        jdbc.update("""
+                INSERT INTO recibo_concepto (recibo_id, descripcion, grupo, importe, orden)
+                VALUES (1, 'Jubilación 11%', 'DESCUENTO', 137500, 0)""");
+
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO recibo_sueldo (movimiento_id, empleador, periodo, tipo, bruto, descuentos, neto)
+                VALUES (2000, 'Otra', DATE '2026-10-01', 'SUELDO_MENSUAL', 1, 1, 1)"""))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO recibo_concepto (recibo_id, descripcion, grupo, importe, orden)
+                VALUES (1, 'Algo', 'OTRO_GRUPO', 1, 1)"""))
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        jdbc.update("DELETE FROM recibo_sueldo WHERE id = 1");
+        assertThat(contar("recibo_concepto")).isZero();
+    }
+
+    @Test
+    void elProposito_RECIBO_yElOrigen_RECIBO_sonValidos() {
+        jdbc.update("""
+                INSERT INTO uso_ia (fecha_hora, modelo, tokens_entrada, tokens_salida, proposito, costo_usd)
+                VALUES (CURRENT_TIMESTAMP, 'claude-haiku-5-5', 3000, 900, 'RECIBO', 0.00075)""");
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO uso_ia (fecha_hora, modelo, tokens_entrada, tokens_salida, proposito, costo_usd)
+                VALUES (CURRENT_TIMESTAMP, 'claude-haiku-5-5', 1, 1, 'OTRO', 0)"""))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void elAvisoDelTopeSeGuardaUnaSolaVezPorMesYUmbral() {
+        jdbc.update("INSERT INTO aviso_tope_ia (mes, umbral, enviado_en) VALUES (DATE '2026-10-01', 80, CURRENT_TIMESTAMP)");
+        jdbc.update("INSERT INTO aviso_tope_ia (mes, umbral, enviado_en) VALUES (DATE '2026-10-01', 100, CURRENT_TIMESTAMP)");
+
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO aviso_tope_ia (mes, umbral, enviado_en) VALUES (DATE '2026-10-01', 80, CURRENT_TIMESTAMP)"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
     private int contar(String tabla) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM " + tabla, Integer.class);
     }

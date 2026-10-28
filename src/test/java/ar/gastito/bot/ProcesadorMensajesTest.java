@@ -98,6 +98,7 @@ class ProcesadorMensajesTest {
     private final ar.gastito.fijo.GastoFijoService gastosFijos = mock(ar.gastito.fijo.GastoFijoService.class);
     private final ConversacionVarios varios = mock(ConversacionVarios.class);
     private final ConversacionCuotas cuotas = mock(ConversacionCuotas.class);
+    private final ConversacionRecibos recibos = mock(ConversacionRecibos.class);
     private ProcesadorMensajes procesador;
 
     @BeforeEach
@@ -113,7 +114,7 @@ class ProcesadorMensajesTest {
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
                 tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, resumenes,
                 new FormatoResumen(formato, new GraficoMes(formato), dashboard), consultas, new FormatoConsulta(formato),
-                repetidos, juntadas, fijos, gastosFijos, varios, cuotas, properties, dashboard, RELOJ);
+                repetidos, juntadas, fijos, gastosFijos, varios, cuotas, recibos, properties, dashboard, RELOJ);
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));
         when(tickets.tamanioMaximo()).thenReturn(DataSize.ofMegabytes(10));
     }
@@ -1254,5 +1255,71 @@ class ProcesadorMensajesTest {
         assertThat(acciones).hasSize(1).first().isInstanceOf(Accion.Enviar.class);
         verifyNoInteractions(varios);
         verify(movimientos, never()).crearPendiente(any(), any(), any());
+    }
+
+    // --- Recibos de sueldo ---
+
+    @Test
+    void unaFotoQueDiceReciboSeLeeComoReciboSinPasarPorElTicket() {
+        Accion tarjeta = Accion.Enviar.texto("recibo leído");
+        when(recibos.leerFoto(any(FotoRecibida.class))).thenReturn(tarjeta);
+
+        List<Accion> acciones = procesador.procesarFoto(CHAT, MENSAJE_USUARIO, foto("mi recibo de sueldo"));
+
+        assertThat(acciones).containsExactly(tarjeta);
+        verify(tickets, never()).leer(any(), any());
+    }
+
+    @Test
+    void unaFotoSinTextoQueResultaSerUnReciboSeLeeComoRecibo() {
+        Accion tarjeta = Accion.Enviar.texto("recibo leído");
+        when(tickets.leer(FOTO, null)).thenReturn(new TicketService.EsRecibo());
+        when(recibos.leerFoto(FOTO, null)).thenReturn(tarjeta);
+
+        assertThat(procesador.procesarFoto(CHAT, MENSAJE_USUARIO, foto(null))).containsExactly(tarjeta);
+    }
+
+    @Test
+    void unaFotoComunSigueSiendoUnTicket() {
+        when(tickets.leer(FOTO, "con débito")).thenReturn(new TicketService.NoEsTicket());
+
+        assertThat(mandarFoto("con débito").html()).startsWith("Esa foto no parece un ticket");
+        verify(recibos, never()).leerFoto(any(FotoRecibida.class));
+    }
+
+    @Test
+    void unPdfSeLeeComoRecibo() {
+        PdfRecibido pdf = new PdfRecibido(5L, null, () -> FOTO);
+        Accion tarjeta = Accion.Enviar.texto("recibo leído");
+        when(recibos.leerPdf(pdf)).thenReturn(tarjeta);
+
+        assertThat(procesador.procesarPdf(CHAT, MENSAJE_USUARIO, pdf)).containsExactly(tarjeta);
+    }
+
+    @Test
+    void alGuardarUnReciboConSueldoCargadoPreguntaAntesDeGuardar() {
+        List<Accion> pregunta = List.of(new Accion.Avisar("pregunta"));
+        when(recibos.preguntarSiYaHay(TARJETA, ID)).thenReturn(java.util.Optional.of(pregunta));
+
+        assertThat(tocar("g:15")).isEqualTo(pregunta);
+        verify(movimientos, never()).confirmar(any());
+    }
+
+    @Test
+    void elBotonReemplazarGuardaElDelRecibo() {
+        List<Accion> guardado = List.of(new Accion.Avisar("guardado"));
+        when(recibos.reemplazar(TARJETA, ID)).thenReturn(guardado);
+
+        assertThat(tocar("rr:15")).isEqualTo(guardado);
+    }
+
+    @Test
+    void alCancelarSeAvisaALosRecibosParaBorrarElArchivo() {
+        Movimiento cancelado = conCategoria("3700", KIOSCO);
+        when(movimientos.cancelar(ID)).thenReturn(cancelado);
+
+        tocar("c:15");
+
+        verify(recibos).alCancelar(cancelado);
     }
 }

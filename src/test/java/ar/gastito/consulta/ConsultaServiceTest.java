@@ -42,9 +42,10 @@ class ConsultaServiceTest {
     private final ClienteIa ia = mock(ClienteIa.class);
     private final HerramientasConsulta herramientas = mock(HerramientasConsulta.class);
     private final CatalogoService catalogos = mock(CatalogoService.class);
+    private final ar.gastito.recibo.AnalisisRecibos recibos = mock(ar.gastito.recibo.AnalisisRecibos.class);
     private final ObjectMapper json = JsonMapper.builder().findAndAddModules()
             .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS).build();
-    private final ConsultaService consultas = new ConsultaService(ia, herramientas, catalogos, new Prompts(), json,
+    private final ConsultaService consultas = new ConsultaService(ia, herramientas, recibos, catalogos, new Prompts(), json,
             new GastitoProperties(null, null, null, null, null, null,
                     new GastitoProperties.Consultas("claude-haiku-5-5", 1024, 3)),
             new RelojDePrueba(HOY.atTime(10, 0), java.time.ZoneId.of("America/Argentina/Buenos_Aires")));
@@ -192,10 +193,50 @@ class ConsultaServiceTest {
     }
 
     @Test
-    void lasSeisHerramientas() {
+    void lasSieteHerramientas() {
         assertThat(ConsultaService.definiciones()).extracting(ClienteIa.Herramienta::nombre)
                 .containsExactly("totalGastado", "gastoPorCategoria", "compararPeriodos", "listarMovimientos",
-                        "buscarProducto", "ingresosYDisponible");
+                        "buscarProducto", "ingresosYDisponible", "recibosSueldo");
+    }
+
+    private static ar.gastito.recibo.AnalisisRecibos.ResumenRecibos recibosDelAnio() {
+        return new ar.gastito.recibo.AnalisisRecibos.ResumenRecibos(LocalDate.of(2026, 1, 1), HOY, 2,
+                List.of(), new BigDecimal("2000000.00"), new BigDecimal("400000.00"), new BigDecimal("1600000.00"),
+                List.of(new ar.gastito.recibo.AnalisisRecibos.DescuentoTotal("Impuesto a las ganancias",
+                        new BigDecimal("50000.00"))),
+                null);
+    }
+
+    @Test
+    void laHerramientaDeRecibosUsaElRangoPedido() {
+        when(recibos.resumen(any(), any())).thenReturn(recibosDelAnio());
+        laIa("Te descontaron $50.000 de ganancias este año.",
+                Map.of("herramienta", "recibosSueldo", "desde", "2026-01-01", "hasta", "2026-10-25"));
+
+        ConsultaService.Respuesta r = consultas.responder("¿Cuánto me descontaron de ganancias este año?");
+
+        assertThat(r.texto()).isEqualTo("Te descontaron $50.000 de ganancias este año.");
+        assertThat(r.descartado()).isFalse();
+        assertThat(r.resultados()).containsExactly(recibosDelAnio());
+        verify(recibos).resumen(LocalDate.of(2026, 1, 1), HOY);
+    }
+
+    @Test
+    void unNumeroQueNoVienedelResumenDeRecibosDescartaElTexto() {
+        when(recibos.resumen(any(), any())).thenReturn(recibosDelAnio());
+        laIa("Te descontaron $70.000 de ganancias este año.",
+                Map.of("herramienta", "recibosSueldo", "desde", "2026-01-01", "hasta", "2026-10-25"));
+
+        assertThat(consultas.responder("¿Cuánto me descontaron de ganancias?").descartado()).isTrue();
+    }
+
+    @Test
+    void laHerramientaDeRecibosValidaLasFechas() {
+        ClienteIa.ResultadoHerramienta r = consultas.ejecutar("recibosSueldo",
+                json.valueToTree(Map.of("desde", "2026-10-25", "hasta", "2026-01-01")), HOY, new ArrayList<>());
+
+        assertThat(r.error()).isTrue();
+        assertThat(r.contenido()).contains("posterior");
     }
 
     @Test

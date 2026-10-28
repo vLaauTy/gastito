@@ -66,6 +66,10 @@ public class TicketService {
     public record NoEsTicket() implements Resultado {
     }
 
+    /** La foto es un recibo de sueldo: hay que leerla con ReciboService. */
+    public record EsRecibo() implements Resultado {
+    }
+
     public record Ilegible(ValidadorTicket.Motivo motivo) implements Resultado {
     }
 
@@ -97,6 +101,7 @@ public class TicketService {
         return switch (validador.validar(respuesta.valor(), catalogo, ahora, conTexto)) {
             case ValidadorTicket.Valido v -> new Leido(guardar(v, imagen, pista, respuesta.usoIaId(), catalogo));
             case ValidadorTicket.NoEsTicket n -> new NoEsTicket();
+            case ValidadorTicket.EsRecibo r -> new EsRecibo();
             case ValidadorTicket.Ilegible i -> new Ilegible(i.motivo());
         };
     }

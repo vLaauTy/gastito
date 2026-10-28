@@ -34,6 +34,7 @@ import ar.gastito.ia.ClienteIa;
 import ar.gastito.ia.ControlNumeros;
 import ar.gastito.ia.Prompts;
 import ar.gastito.ia.PropositoIa;
+import ar.gastito.recibo.AnalisisRecibos;
 
 /**
  * Responde una pregunta en lenguaje natural con tool use: la IA elige entre herramientas fijas implementadas en
@@ -55,16 +56,18 @@ public class ConsultaService {
 
     private final ClienteIa ia;
     private final HerramientasConsulta herramientas;
+    private final AnalisisRecibos recibos;
     private final CatalogoService catalogos;
     private final Prompts prompts;
     private final ObjectMapper json;
     private final GastitoProperties.Consultas config;
     private final Clock clock;
 
-    public ConsultaService(ClienteIa ia, HerramientasConsulta herramientas, CatalogoService catalogos, Prompts prompts,
-            ObjectMapper json, GastitoProperties properties, Clock clock) {
+    public ConsultaService(ClienteIa ia, HerramientasConsulta herramientas, AnalisisRecibos recibos,
+            CatalogoService catalogos, Prompts prompts, ObjectMapper json, GastitoProperties properties, Clock clock) {
         this.ia = ia;
         this.herramientas = herramientas;
+        this.recibos = recibos;
         this.catalogos = catalogos;
         this.prompts = prompts;
         this.json = json;
@@ -133,6 +136,7 @@ public class ConsultaService {
                 case "buscarProducto" -> herramientas.buscarProducto(texto(p, "texto"), fecha(p, "desde", hoy),
                         fechaHasta(p, hoy));
                 case "ingresosYDisponible" -> herramientas.ingresosYDisponible(mes(p, hoy));
+                case "recibosSueldo" -> recibos.resumen(fecha(p, "desde", hoy), fechaHasta(p, hoy));
                 default -> throw new HerramientasConsulta.HerramientaInvalida("No existe la herramienta " + nombre);
             };
             resultados.add(resultado);
@@ -253,7 +257,12 @@ public class ConsultaService {
                         "Los ingresos de un mes (sueldo, aguinaldo, extras), lo gastado, lo disponible y qué parte "
                                 + "de los ingresos se gastó.",
                         propiedades("mes", texto("Mes AAAA-MM; si no se dice, el actual")),
-                        List.of()));
+                        List.of()),
+                new ClienteIa.Herramienta("recibosSueldo",
+                        "Los recibos de sueldo guardados entre dos fechas (por mes del período): bruto, descuentos y "
+                                + "neto de cada uno, los totales, lo descontado por cada concepto (por ejemplo el impuesto a "
+                                + "las ganancias) y cuánto cambió el neto del primer al último sueldo mensual.",
+                        propiedades("desde", fecha, "hasta", fecha), List.of("desde", "hasta")));
     }
 
     private static Map<String, Object> texto(String descripcion) {
