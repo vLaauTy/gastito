@@ -97,8 +97,8 @@ ajustar sin tocar código.
 
 ## Arrancar el bot (lo más fácil)
 
-Doble clic en **`iniciar.bat`**, en la raíz del proyecto. Por ahora arranca con el perfil `prueba`, la base de
-datos inventados (ver [Dos bases: prueba y real](#dos-bases-prueba-y-real)), y antes revisa:
+Doble clic en **`iniciar.bat`**, en la raíz del proyecto. Arranca con el perfil `postgres`, la base real (ver
+[Dos bases: prueba y real](#dos-bases-prueba-y-real)), y antes revisa:
 
 1. Que esté Java (Maven no hace falta: usa el wrapper `mvnw`).
 2. Que el `.env` tenga todas las variables (no muestra los valores).
@@ -107,25 +107,30 @@ datos inventados (ver [Dos bases: prueba y real](#dos-bases-prueba-y-real)), y a
 5. Que responda el servidor de Whisper. Si no, avisa y arranca igual: con texto funciona, solo fallan los audios.
 6. Que el jar esté al día. Compila solo la primera vez y cuando cambió el código (sin correr los tests).
 
-Cuando en la ventana aparece `Bot de Telegram conectado y escuchando mensajes`, ya se puede usar. **Para
-apagarlo, cerrá la ventana.** Si algo falla, la ventana queda abierta con el motivo.
+Cuando en la ventana aparece `Bot de Telegram conectado y escuchando mensajes`, ya se puede usar. Al arrancar,
+la consola (`Gastito corriendo con la base ...`) y un mensaje de Telegram dicen con qué base está corriendo
+(🟢 la real, 🧪 la de prueba). **Para apagarlo, cerrá la ventana.** Si algo falla, la ventana queda abierta con
+el motivo.
 
 Para arrancar con otra base, desde una terminal en la raíz del proyecto:
 
 ```bash
-iniciar.bat postgres   # la base real (gastito)
+iniciar.bat prueba     # la base de prueba (gastito_prueba), para probar cambios
 iniciar.bat dev        # H2 en un archivo, sin PostgreSQL
 ```
 
+`scripts\iniciar.ps1 -Automatico` es la variante para el Programador de tareas (ver
+[Arranque automático](#arranque-automático)): no pregunta nada, espera hasta 10 minutos a PostgreSQL y, si ya
+hay un Gastito prendido, no hace nada.
+
 ## Dos bases: prueba y real
 
-Hasta terminar todas las etapas (hasta la 8), la aplicación no se usa con datos reales: todo es prueba. Por eso
-hay dos bases en el mismo PostgreSQL de la VM, con las mismas migraciones y el mismo usuario del `.env`:
+Hay dos bases en el mismo PostgreSQL de la VM, con las mismas migraciones y el mismo usuario del `.env`:
 
-| Perfil     | Base             | Para qué                                                                        |
-|------------|------------------|---------------------------------------------------------------------------------|
-| `prueba`   | `gastito_prueba` | Probar todo, con datos inventados. Es la que usa `iniciar.bat` por ahora.        |
-| `postgres` | `gastito`        | La real. Queda vacía y reservada para cuando se empiece a usar de verdad.        |
+| Perfil     | Base             | Para qué                                                                         |
+|------------|------------------|----------------------------------------------------------------------------------|
+| `postgres` | `gastito`        | La real, con los datos de verdad. Es la que usa `iniciar.bat`.                    |
+| `prueba`   | `gastito_prueba` | Solo para probar cambios, con datos inventados (`iniciar.bat prueba`).            |
 
 El perfil `prueba` toma la URL de `DB_PRUEBA_URL` si está en el `.env`; si no, usa
 `jdbc:postgresql://localhost:5432/gastito_prueba`. Las fotos de sus tickets van a `data/prueba/tickets/`, aparte
@@ -166,26 +171,90 @@ prueba, que es plata de verdad gastada en la API mientras se probaba. El generad
 comprueba que la base se llame `gastito_prueba` y que no esté activo el perfil `postgres`. Con la base real no
 corre nunca.
 
-### El día del lanzamiento
+### Lanzamiento
 
-1. Apagá Gastito (cerrá la ventana).
-2. En `scripts/iniciar.ps1`, cambiá el perfil por defecto de `'prueba'` a `'postgres'` (la línea `param(...)`), y
-   en `iniciar.bat` el comentario.
-3. Doble clic en `iniciar.bat`. Como `gastito` está vacía, el primer resumen automático no manda nada de antes.
+Desde el 28/10/2026 `iniciar.bat` arranca con la base real. El primer arranque con `postgres` aplica las
+migraciones que le faltaban a `gastito` (estaba en la V6). El 25/10/2026 la base `gastito` se vació (tenía las
+primeras pruebas); su backup quedó en `data/backups/gastito-2026-10-25.dump` y se puede restaurar aparte con
+`scripts\restaurar.ps1 -Backup data\backups\gastito-2026-10-25.dump -BaseNueva gastito_backup`.
 
-La base de prueba puede quedar para seguir probando cambios con `iniciar.bat prueba`.
+## Backup
 
-El 25/10/2026 la base `gastito` se vació (tenía las primeras pruebas, cargadas antes de separar las bases). Antes
-se guardó un backup en `data/backups/gastito-2026-10-25.dump` (fuera del repo, como todo `data/`), hecho desde
-Windows con `ssh devbox "docker exec gastito-db pg_dump -U gastito -d gastito --format=custom" > ...`. Para ver
-qué tiene, o restaurarlo en una base aparte sin tocar `gastito` (desde Git Bash, en la raíz del proyecto;
-`devbox` es el alias SSH de la VM en `~/.ssh/config`, con el puerto 22 de la VM reenviado al 2222 de Windows):
+**`scripts\backup.ps1`** hace un `pg_dump` de la base real (dentro del contenedor `gastito-db` de la VM, por SSH)
+y una copia de `data/` (fotos de tickets, recibos; sin `data/backups/`). Cada backup es una carpeta
+`gastito-AAAA-MM-DD_HHmm` con `gastito.dump` y `data\`, y se conservan los últimos 30.
 
-```bash
-ssh devbox "docker exec -i gastito-db pg_restore --list" < data/backups/gastito-2026-10-25.dump
-ssh devbox "docker exec gastito-db createdb -U gastito gastito_backup"
-ssh devbox "docker exec -i gastito-db pg_restore -U gastito -d gastito_backup" < data/backups/gastito-2026-10-25.dump
+- Carpeta: `-Destino <carpeta>`, o `BACKUP_DIR` en el `.env`, o `%USERPROFILE%\Backups\gastito`. Mejor en otro
+  disco o en una carpeta sincronizada con la nube.
+- Necesita el alias SSH `devbox` en `~/.ssh/config` (la VM, con el puerto 22 reenviado al 2222 de Windows) con
+  clave, sin contraseña. Los scripts usan `ssh -4`: en Windows `localhost` resuelve primero a `::1` y el reenvío
+  de VirtualBox escucha solo en IPv4.
+
+**`scripts\restaurar.ps1`** restaura el backup más reciente en una base **nueva** (`gastito_restaurada`) del
+mismo PostgreSQL y compara las filas de cada tabla con `gastito`, para comprobar que el backup sirve sin tocar la
+real. Nunca restaura sobre `gastito` ni `gastito_prueba`.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\backup.ps1
+powershell -ExecutionPolicy Bypass -File scripts\restaurar.ps1 -Borrar        # prueba y borra la base nueva
+powershell -ExecutionPolicy Bypass -File scripts\restaurar.ps1 -Backup <carpeta> -BaseNueva otra -Reemplazar
 ```
+
+Para recuperar la base real de verdad: restaurá en una base nueva, revisala, apagá Gastito y renombrala en la VM
+(`docker exec gastito-db psql -U gastito -d postgres -c "ALTER DATABASE gastito RENAME TO gastito_vieja"` y
+después `gastito_restaurada` a `gastito`). Los archivos se recuperan copiando la carpeta `data\` del backup.
+
+### Backup diario con el Programador de tareas
+
+En PowerShell (como tu usuario, que es el que tiene la clave SSH), desde la raíz del proyecto:
+
+```powershell
+$accion = New-ScheduledTaskAction -Execute 'powershell.exe' `
+  -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$PWD\scripts\backup.ps1`""
+$cuando = New-ScheduledTaskTrigger -Daily -At 22:00
+# StartWhenAvailable: si a esa hora la PC estaba apagada, lo hace apenas se prende.
+$opciones = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
+Register-ScheduledTask -TaskPath '\Gastito\' -TaskName 'Backup' -Action $accion -Trigger $cuando -Settings $opciones
+```
+
+Para ver si anduvo: Programador de tareas > Gastito > Backup ("Resultado de la última ejecución" 0x0) y la
+carpeta de backups. Para probarlo ya: `Start-ScheduledTask -TaskPath '\Gastito\' -TaskName 'Backup'`.
+
+## Arranque automático
+
+Para que todo arranque solo al prender la PC (al iniciar sesión), en este orden:
+
+1. **La VM de Ubuntu** (`devbox`), sin ventana:
+
+   ```powershell
+   $vbox = 'C:\Program Files\Oracle\VirtualBox\VBoxManage.exe'
+   $accion = New-ScheduledTaskAction -Execute $vbox -Argument 'startvm devbox --type headless'
+   Register-ScheduledTask -TaskPath '\Gastito\' -TaskName 'VM' -Action $accion `
+     -Trigger (New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME)
+   ```
+
+   Para verla o apagarla: VirtualBox > devbox > Mostrar, o `VBoxManage controlvm devbox acpipowerbutton`.
+
+2. **Docker y PostgreSQL en la VM.** Docker arranca con el sistema (`sudo systemctl enable docker`) y los
+   contenedores vuelven solos por su política de reinicio: `gastito-db` con `--restart unless-stopped` y
+   `whisper` con `--restart=always` (ver [La VM](#la-vm-whisper-y-postgresql)). Para revisarlo:
+   `docker inspect -f '{{.Name}} {{.HostConfig.RestartPolicy.Name}}' gastito-db whisper`. Si se creó con el
+   `docker-compose.yml`, ya tiene `restart: unless-stopped`.
+
+3. **La app**, un minuto después, con `iniciar.ps1 -Automatico`, que espera hasta 10 minutos a que PostgreSQL
+   responda y compila si hace falta. Queda en una ventana: para apagarlo, cerrala.
+
+   ```powershell
+   $accion = New-ScheduledTaskAction -Execute 'powershell.exe' -WorkingDirectory $PWD `
+     -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$PWD\scripts\iniciar.ps1`" -Automatico"
+   $cuando = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+   $cuando.Delay = 'PT1M'
+   $opciones = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero)   # sin límite de tiempo
+   Register-ScheduledTask -TaskPath '\Gastito\' -TaskName 'App' -Action $accion -Trigger $cuando -Settings $opciones
+   ```
+
+Al arrancar, el bot avisa por Telegram con qué base está corriendo: ese mensaje es la señal de que todo levantó.
+Si no llega, abrí `iniciar.bat` a mano para ver el motivo.
 
 Las secciones de abajo explican cómo arrancarlo a mano con el Maven Wrapper (`./mvnw`; en Windows sin Git Bash, `mvnw.cmd`) o con el jar. La primera vez descarga Maven solo.
 

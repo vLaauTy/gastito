@@ -18,10 +18,11 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
 - Spring Data JPA + Flyway para la base de datos.
 - Base de datos:
   - Perfil `dev` (por defecto): H2 en archivo (`./data/gastito`), en modo compatibilidad PostgreSQL. No necesita Docker.
-  - Perfil `prueba`: la base `gastito_prueba`, en el mismo PostgreSQL de la VM (mismo usuario del `.env`; URL en `DB_PRUEBA_URL` o `localhost:5432/gastito_prueba`). Fotos de tickets en `data/prueba/`. **Es el perfil con el que arranca `iniciar.bat` hasta el lanzamiento.**
-  - Perfil `postgres`: la base real, `gastito`. Está vacía y reservada para cuando se empiece a usar de verdad: no cargues datos ahí ni corras nada contra ella sin que se pida. El día del lanzamiento se cambia el perfil por defecto de `scripts/iniciar.ps1` a `postgres` (ver README).
-  - Las migraciones de Flyway tienen que funcionar en todos.
-- Hasta terminar todas las etapas (hasta la 8) la aplicación no se usa con datos reales: todo es prueba. Los datos de prueba se regeneran desde cero con `generar-datos-prueba.bat` (`ar.gastito.prueba`, solo con el perfil `prueba`; antes de borrar comprueba que la base sea `gastito_prueba`).
+  - Perfil `postgres` (**el de `iniciar.bat`**): la base real, `gastito`, con **datos reales** desde el lanzamiento (28/10/2026). No cargues, borres ni corras nada contra ella sin que se pida (el backup y su prueba de restauración en otra base, sí).
+  - Perfil `prueba` (`iniciar.bat prueba`): la base `gastito_prueba`, en el mismo PostgreSQL de la VM (mismo usuario del `.env`; URL en `DB_PRUEBA_URL` o `localhost:5432/gastito_prueba`), **solo para probar cambios**. Fotos de tickets en `data/prueba/`.
+  - Las migraciones de Flyway tienen que funcionar en todos, y nunca rompen datos existentes de la base real.
+- Al arrancar, `bot.AvisoArranque` dice en la consola y por Telegram con qué base corre. Los datos de prueba se regeneran con `generar-datos-prueba.bat` (`ar.gastito.prueba`, solo con el perfil `prueba`; antes de borrar comprueba que la base sea `gastito_prueba`).
+- Backup: `scripts/backup.ps1` (pg_dump por `ssh -4 devbox` + `data/`, últimos 30) y `scripts/restaurar.ps1` (en una base nueva, nunca sobre `gastito`). Arranque automático y backup diario con el Programador de tareas: ver README.
 - Telegram: librería TelegramBots (rubenlagus), modo long polling. No se usan webhooks: el bot corre en la PC del usuario y no tiene URL pública.
 - IA: SDK oficial de Anthropic para Java (`com.anthropic:anthropic-java`). Modelo por defecto: `claude-haiku-5-5`.
 - Verificá en Maven Central la última versión estable de cada dependencia antes de agregarla. No inventes versiones.
@@ -34,6 +35,7 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
   - `TELEGRAM_ALLOWED_USER_ID`
   - `ANTHROPIC_API_KEY`
   - `WHISPER_URL` y `WHISPER_API_KEY` (servidor de Whisper para los audios)
+  - `DB_URL`, `DB_USER`, `DB_PASSWORD` (y opcional `DB_PRUEBA_URL`); opcional `BACKUP_DIR`.
   - Opcionales: `SERVER_ADDRESS` y `GASTITO_DASHBOARD_TOKEN`, juntas, para abrir el dashboard en la red. Por defecto el servidor escucha solo en `127.0.0.1`, y sin token no arranca escuchando en otra dirección.
 - Spring los lee con `spring.config.import=optional:file:.env[.properties]` en `application.yml`.
 - `.env` y `data/` tienen que estar en `.gitignore`. Nunca subas secretos al repo, nunca los imprimas en logs ni en mensajes de error.
