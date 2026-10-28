@@ -12,6 +12,12 @@ spring:
       ddl-auto: validate
   flyway:
     locations: classpath:db/migration
+  web:
+    resources:
+      cache:
+        # El navegador pregunta en cada carga si cambió el CSS o el JS (si no, un cambio tarda en verse).
+        cachecontrol:
+          no-cache: true
   jackson:
     # La plata va en el JSON como 380000.00, nunca como 3.8E+5.
     generator:
