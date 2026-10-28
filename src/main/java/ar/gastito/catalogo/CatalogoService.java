@@ -19,6 +19,18 @@ public class CatalogoService {
         this.tarjetas = tarjetas;
     }
 
+    /** Cambia el ícono de una categoría (un nombre de Lucide: minúsculas, números y guiones). */
+    @Transactional
+    public Categoria cambiarIcono(long id, String icono) {
+        if (icono == null || !icono.matches("[a-z0-9]+(-[a-z0-9]+)*") || icono.length() > 40) {
+            throw new IllegalArgumentException("El ícono tiene que ser un nombre de Lucide, por ejemplo shopping-cart.");
+        }
+        Categoria categoria = categorias.findById(id)
+                .orElseThrow(() -> new java.util.NoSuchElementException("No existe esa categoría."));
+        categoria.setIcono(icono);
+        return categoria;
+    }
+
     /** Las tablas son chicas: se leen en cada mensaje, así un cambio en la base se ve enseguida. */
     @Transactional(readOnly = true)
     public Catalogo cargar() {

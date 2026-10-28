@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="/css/app.css">
 <!-- Chart.js viene dentro del jar (WebJar): el dashboard anda sin internet. -->
 <script src="/webjars/chart.js/dist/chart.umd.min.js" defer></script>
+<script src="/js/iconos.js" defer></script>
 <script src="/js/app.js" defer></script>
 <script src="/js/sueldo.js" defer></script>
 <script src="/js/movil.js" defer></script>
@@ -18,12 +19,15 @@
   <nav aria-label="Secciones">
     <div class="logo"><span aria-hidden="true">G</span>Gastito</div>
     <div class="links">
-      <a href="#resumen" data-view="resumen"><i class="ico" aria-hidden="true">▦</i><span>Resumen</span></a>
-      <a href="#movimientos" data-view="movimientos"><i class="ico" aria-hidden="true">☰</i><span>Movimientos</span></a>
-      <a href="#ingresos" data-view="ingresos"><i class="ico" aria-hidden="true">＋</i><span>Ingresos</span></a>
-      <a href="#fijos" data-view="fijos"><i class="ico" aria-hidden="true">✓</i><span>Fijos</span></a>
-      <a href="#costos-ia" data-view="costos-ia" class="en-mas"><i class="ico" aria-hidden="true">◎</i><span>Costos IA</span></a>
-      <button type="button" class="mas" id="nav-mas" aria-expanded="false"><i class="ico" aria-hidden="true">⋯</i><span>Más</span></button>
+      <a href="#resumen" data-view="resumen"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#layout-dashboard"/></svg><span>Resumen</span></a>
+      <a href="#movimientos" data-view="movimientos"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#list"/></svg><span>Movimientos</span></a>
+      <a href="#ingresos" data-view="ingresos"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#wallet"/></svg><span>Ingresos</span></a>
+      <a href="#fijos" data-view="fijos"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#calendar-check"/></svg><span>Fijos</span></a>
+      <div class="mas-panel">
+        <a href="#costos-ia" data-view="costos-ia" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#bot"/></svg><span>Costos IA</span></a>
+        <a href="#categorias" data-view="categorias" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#tags"/></svg><span>Categorías</span></a>
+      </div>
+      <button type="button" class="mas" id="nav-mas" aria-expanded="false"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#ellipsis"/></svg><span>Más</span></button>
       <a class="off" aria-disabled="true">Cuotas y juntadas <small>Próximamente</small></a>
     </div>
     <div class="ia" id="ia" aria-live="polite">
@@ -276,6 +280,16 @@
         </div>
       </section>
     </div>
+    <!-- ===== Categorías ===== -->
+    <div class="view" id="v-categorias" hidden>
+      <header>
+        <div><h1>Categorías</h1><div class="sub">Elegí el ícono de cada una. Los emojis siguen en el bot de Telegram.</div></div>
+      </header>
+      <section class="card" aria-label="Íconos de las categorías">
+        <div id="cat-lista" class="lista"></div>
+      </section>
+    </div>
+
     <!-- ===== Costos de la IA ===== -->
     <div class="view" id="v-costos-ia" hidden>
       <header>

@@ -90,9 +90,28 @@
 
   const texto = (id, valor) => { $(id).textContent = valor; };
 
-  function filaMensaje(tbody, columnas, mensaje) {
-    tbody.replaceChildren(h('tr', {}, h('td', { class: 'mensaje', colspan: columnas }, mensaje)));
+  /** Estado vacío de una tabla: ícono y una frase que dice qué hacer. */
+  function filaMensaje(tbody, columnas, mensaje, icono = 'inbox') {
+    const sinCoincidencias = /coincid/.test(mensaje);
+    tbody.replaceChildren(h('tr', {}, h('td', { class: 'mensaje', colspan: columnas },
+      window.Iconos.vacio(sinCoincidencias ? 'search-x' : icono, mensaje))));
   }
+
+  /** Mientras llega la primera respuesta de una vista, esqueletos en lugar de espacios en blanco. */
+  function esqueletos() {
+    const vista = $(`#v-${estado.vista}`);
+    for (const tbody of vista.querySelectorAll('tbody')) {
+      if (!tbody.children.length) tbody.replaceChildren(h('tr', {}, h('td', { class: 'mensaje', colspan: 9 }, ...window.Iconos.esqueleto(3))));
+    }
+    for (const lista of vista.querySelectorAll('.lista')) {
+      if (!lista.children.length) lista.replaceChildren(...window.Iconos.esqueleto(4));
+    }
+  }
+
+  const quitarEsqueletos = () => $$('.esqueleto').forEach((e) => (e.closest('tr') || e).remove());
+
+  /** Los tooltips de los gráficos muestran "$ 12.345". */
+  const pesosTooltip = (n) => pesos(n).replace('$', '$ ');
 
   function debounce(fn, ms) {
     let espera;
@@ -138,7 +157,7 @@
 
   // --- Navegación ---
 
-  const VISTAS = ['resumen', 'movimientos', 'ingresos', 'fijos', 'costos-ia'];
+  const VISTAS = ['resumen', 'movimientos', 'ingresos', 'fijos', 'costos-ia', 'categorias'];
 
   function leerUrl() {
     const vista = location.hash.slice(1);
@@ -180,6 +199,7 @@
   async function cargar() {
     cargando(true);
     ocultarAviso();
+    esqueletos();
     try {
       const resumen = await api(conMes('/api/resumen'));
       estado.resumen = resumen;
@@ -208,6 +228,8 @@
         disponible(resumen.disponible, '#i-disponible', '#i-disponible-barra', '#i-disponible-nota');
       } else if (estado.vista === 'costos-ia') {
         tareas.push(api(conMes('/api/costos-ia/panel')).then(vistaCostos));
+      } else if (estado.vista === 'categorias') {
+        tareas.push(vistaCategorias());
       } else {
         tareas.push(
           api(conMes('/api/fijos/checklist')).then(vistaFijosChecklist),
@@ -216,6 +238,7 @@
       }
       await Promise.all(tareas);
     } catch (error) {
+      quitarEsqueletos();
       mostrarAviso(`No pude cargar los datos: ${error.message}`);
     } finally {
       cargando(false);
@@ -332,7 +355,7 @@
           tooltip: {
             callbacks: {
               title: (items) => `Día ${items[0].label}`,
-              label: (item) => `${item.dataset.label}: ${pesos(item.raw)}`,
+              label: (item) => `${item.dataset.label}: ${pesosTooltip(item.raw)}`,
             },
           },
         },
@@ -351,14 +374,17 @@
   function categorias(lista) {
     const contenedor = $('#r-categorias');
     if (!lista.length) {
-      contenedor.replaceChildren(h('p', { class: 'note' }, 'Sin gastos este mes.'));
+      contenedor.replaceChildren(window.Iconos.vacio('inbox', 'Sin gastos este mes.'));
       return;
     }
-    contenedor.replaceChildren(...lista.map((c) => h('div', { class: 'cat', title: plural(c.cantidad, 'gasto', 'gastos') },
-      h('span', {}, `${c.emoji ? c.emoji + ' ' : ''}${c.nombre}`),
-      h('div', { class: 'track' }, h('i', { style: { width: `${c.porcentajeDelMaximo}%` } })),
-      h('span', { class: 'money' }, pesos(c.total)),
-    )));
+    contenedor.replaceChildren(...lista.map((c) => {
+      const info = window.Iconos.categoriaPorNombre(c.nombre);
+      return h('div', { class: 'cat', title: plural(c.cantidad, 'gasto', 'gastos') },
+        h('span', { class: 'cat-nombre' }, window.Iconos.iconoCategoria(info), h('span', { class: 'cat-texto' }, c.nombre)),
+        h('div', { class: 'track' }, h('i', { style: { width: `${c.porcentajeDelMaximo}%`, background: window.Iconos.colorDe(info) } })),
+        h('span', { class: 'money' }, pesos(c.total)),
+      );
+    }));
   }
 
   function billeteras(lista) {
@@ -369,13 +395,13 @@
     $('#r-billetera-leyenda').replaceChildren(...lista.map((b) => h('span', {
       class: b.tipo === 'SIN_ESPECIFICAR' ? 'sin-especificar' : null,
       title: b.tipo === 'SIN_ESPECIFICAR' ? 'Gastos sin medio de pago ni cuenta: corregilos desde el bot' : null,
-    }, h('i', { style: { background: b.color } }), `${b.nombre} `, h('span', { class: 'money' }, pesos(b.total)))));
+    }, window.Iconos.circuloInicial(b.nombre, b.color), `${b.nombre} `, h('span', { class: 'money' }, pesos(b.total)))));
   }
 
   function ingresosDelResumen(r) {
     const lista = $('#r-ingresos-lista');
     if (!r.ingresos.length) {
-      lista.replaceChildren(h('p', { class: 'note' }, 'Todavía no hay ingresos este mes.'));
+      lista.replaceChildren(window.Iconos.vacio('wallet', 'Todavía no hay ingresos este mes.', 'Cargá uno con el botón de arriba.'));
       return;
     }
     lista.replaceChildren(...r.ingresos.map((i) => h('div', { class: 'ing' },
@@ -395,8 +421,8 @@
     const lista = $('#r-ia');
     if (!r) {
       texto('#r-ia-periodo', '');
-      lista.replaceChildren(h('p', { class: 'note' },
-        'Todavía no hay resúmenes. El domingo a las 21 llega el de la semana, o pedilo con /resumen.'));
+      lista.replaceChildren(window.Iconos.vacio('bot', 'Todavía no hay resúmenes.',
+        'El domingo a las 21 llega el de la semana, o pedilo con /resumen.'));
       return;
     }
     const periodo = r.tipo === 'SEMANAL'
@@ -405,8 +431,8 @@
     texto('#r-ia-periodo', r.parcial
       ? `${periodo} · ${r.tipo === 'SEMANAL' ? 'semana' : 'mes'} parcial, hasta el ${diaSemana.format(fecha(r.hasta))}`
       : periodo);
-    const notas = (r.notas || []).map((n) => h('p', { class: 'note' }, `ℹ️ ${n}`));
-    const sinConsejo = r.sinConsejo ? h('p', { class: 'consejo' }, `👉 ${r.sinConsejo}`) : null;
+    const notas = (r.notas || []).map((n) => h('p', { class: 'note con-icono' }, window.Iconos.svg('info'), n));
+    const sinConsejo = r.sinConsejo ? h('p', { class: 'consejo con-icono' }, window.Iconos.svg('bot'), r.sinConsejo) : null;
     let aviso = null;
     if (r.textoIaDescartado) {
       aviso = 'Esta vez la IA escribió un número que no estaba en los datos, así que el resumen salió solo con los números.';
@@ -418,7 +444,7 @@
     lista.replaceChildren(...[
       aviso ? h('p', { class: 'note' }, aviso) : null,
       r.observaciones.length ? h('ul', { class: 'observaciones' }, ...r.observaciones.map((o) => h('li', {}, o))) : null,
-      r.consejo ? h('p', { class: 'consejo' }, h('b', {}, '👉 Consejo: '), r.consejo) : null,
+      r.consejo ? h('p', { class: 'consejo con-icono' }, window.Iconos.svg('bot'), h('span', {}, h('b', {}, 'Consejo: '), r.consejo)) : null,
       sinConsejo,
       ...notas,
     ].filter(Boolean));
@@ -436,14 +462,14 @@
 
   function filaMovimiento(m) {
     const boton = m.ticket
-      ? h('button', { class: 'mini desplegar', type: 'button', 'aria-expanded': 'false' }, '🧾 Productos')
+      ? h('button', { class: 'mini desplegar', type: 'button', 'aria-expanded': 'false' }, window.Iconos.svg('receipt'), 'Productos')
       : null;
     const fila = h('tr', {},
       h('td', { class: 'date' }, fechaCorta(m.fechaHora)),
       h('td', {}, h('b', {}, m.descripcion || '—'), boton),
-      h('td', {}, m.categoria ? `${m.emoji ? m.emoji + ' ' : ''}${m.categoria}` : '—'),
-      h('td', { class: m.sinEspecificar ? 'sin-especificar' : null }, m.medio),
-      h('td', {}, h('span', { class: `chip ${m.origen.toLowerCase()}` }, origenTexto(m.origen))),
+      h('td', {}, window.Iconos.etiquetaCategoria(m.categoria)),
+      h('td', { class: m.sinEspecificar ? 'sin-especificar' : null }, window.Iconos.medio(m.medio)),
+      h('td', {}, h('span', { class: `chip ${m.origen.toLowerCase()}` }, window.Iconos.iconoOrigen(m.origen), origenTexto(m.origen))),
       h('td', { class: 'amt' }, pesos(m.monto)),
     );
     if (boton) boton.addEventListener('click', () => desplegarTicket(boton, fila, m.id));
@@ -493,10 +519,10 @@
       )))
       : h('p', { class: 'note' }, 'No se leyeron los productos de este ticket.');
     const avisos = d.coincide ? null : h('div', { class: 'avisos-ticket' },
-      ...d.diferencias.map((dif) => h('p', { class: 'up' }, `⚠️ ${diferenciaTicket(dif)}`)),
-      ...d.renglonesDudosos.map((r) => h('p', { class: 'up' },
-        `⚠️ ${r.descripcion}: ${cantidades.format(r.cantidad)} × ${pesos(r.precioUnitario)} da ${pesos(r.calculado)}, pero el renglón dice ${pesos(r.impreso)}.`)),
-      d.lineasIlegibles.length ? h('p', { class: 'note' }, '🔍 No se pudo leer bien:') : null,
+      ...d.diferencias.map((dif) => h('p', { class: 'up con-icono' }, window.Iconos.svg('triangle-alert'), diferenciaTicket(dif))),
+      ...d.renglonesDudosos.map((r) => h('p', { class: 'up con-icono' }, window.Iconos.svg('triangle-alert'),
+        `${r.descripcion}: ${cantidades.format(r.cantidad)} × ${pesos(r.precioUnitario)} da ${pesos(r.calculado)}, pero el renglón dice ${pesos(r.impreso)}.`)),
+      d.lineasIlegibles.length ? h('p', { class: 'note con-icono' }, window.Iconos.svg('search-x'), 'No se pudo leer bien:') : null,
       d.lineasIlegibles.length ? h('ul', { class: 'ilegibles' }, ...d.lineasIlegibles.map((l) => h('li', {}, l))) : null);
     const suma = d.sumaItems != null && d.coincide
       ? h('span', { class: 'note' }, `Las cuentas cierran: ${pesos(d.total)}.`)
@@ -513,7 +539,7 @@
       q: $('#r-q').value.trim(), categoria: $('#r-cat').value, tamanio: ULTIMOS_MOVIMIENTOS,
     }));
     filasMovimientos($('#r-movimientos'), pagina,
-      $('#r-q').value || $('#r-cat').value ? 'No hay gastos que coincidan.' : 'Todavía no hay gastos este mes.');
+      $('#r-q').value || $('#r-cat').value ? 'No hay gastos que coincidan.' : 'Todavía no hay gastos este mes. Mandale uno al bot.');
   }
 
   async function tablaMovimientos() {
@@ -697,7 +723,7 @@
         animation: false,
         plugins: {
           legend: { position: 'bottom', labels: { color: color('--muted'), boxWidth: 12 } },
-          tooltip: { callbacks: { label: (item) => `${item.dataset.label}: ${pesos(item.raw)}` } },
+          tooltip: { callbacks: { label: (item) => `${item.dataset.label}: ${pesosTooltip(item.raw)}` } },
         },
         scales: {
           x: { grid: { display: false }, ticks: { color: color('--muted'), maxRotation: 0 } },
@@ -732,6 +758,7 @@
     if (!confirm(`¿Borrar el ingreso de ${pesos(ingreso.monto)}${detalle}?`)) return;
     try {
       await api(`/api/ingresos/${ingreso.id}`, { method: 'DELETE' });
+      window.Iconos.toast('Ingreso borrado');
       cargar();
     } catch (error) {
       mostrarAviso(`No pude borrar el ingreso: ${error.message}`);
@@ -774,6 +801,7 @@
         }),
       });
       cerrarFormulario();
+      window.Iconos.toast('Ingreso guardado');
       cargar();
     } catch (e) {
       error.textContent = e.message;
@@ -792,9 +820,9 @@
   }
 
   function estadoChecklist(i) {
-    if (i.estado === 'CARGADO') return `✅ Cargado${i.porcentaje != null ? ` (${i.porcentaje > 0 ? '+' : ''}${i.porcentaje}%)` : ''}`;
-    if (i.estado === 'ESTE_MES_NO') return '➖ Este mes no';
-    return '⏳ Falta';
+    if (i.estado === 'CARGADO') return window.Iconos.estado('ok', `Cargado${i.porcentaje != null ? ` (${i.porcentaje > 0 ? '+' : ''}${i.porcentaje}%)` : ''}`);
+    if (i.estado === 'ESTE_MES_NO') return window.Iconos.estado('neutro', 'Este mes no');
+    return window.Iconos.estado('falta', 'Falta');
   }
 
   function accionesChecklist(i) {
@@ -811,9 +839,9 @@
     texto('#f-cargado', pesos(data.cargado));
     texto('#f-faltan', data.faltan);
     const tbody = $('#f-checklist');
-    if (!data.items.length) { filaMensaje(tbody, 5, 'No tenés gastos fijos este mes.'); return; }
+    if (!data.items.length) { filaMensaje(tbody, 5, 'No tenés gastos fijos este mes.', 'calendar-check'); return; }
     tbody.replaceChildren(...data.items.map((i) => h('tr', {},
-      h('td', {}, `${i.emoji ? i.emoji + ' ' : ''}${i.nombre}`),
+      h('td', { class: 'nombre-con-icono' }, window.Iconos.iconoCategoria(window.Iconos.categoriaPorEmoji(i.emoji)), i.nombre),
       h('td', {}, estadoChecklist(i)),
       h('td', { class: 'amt' }, i.estado === 'CARGADO' ? pesos(i.monto) : i.montoAnterior != null ? `ref. ${pesos(i.montoAnterior)}` : '—'),
       h('td', {}, i.estado === 'CARGADO' ? fechaCorta(i.fecha) : `vence el ${i.vencimiento.slice(-2)}`),
@@ -832,6 +860,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ monto }),
       });
+      window.Iconos.toast(`${item.nombre} cargado`);
       cargar();
     } catch (e) {
       mostrarAviso(`No pude cargar el gasto: ${e.message}`);
@@ -841,6 +870,7 @@
   async function esteMesNoFijo(item) {
     try {
       await api(`/api/fijos/${item.fijoId}/este-mes-no?mes=${estado.mes}`, { method: 'POST' });
+      window.Iconos.toast(`${item.nombre}: este mes no`);
       cargar();
     } catch (e) {
       mostrarAviso(`No pude marcar "este mes no": ${e.message}`);
@@ -851,6 +881,7 @@
     if (!confirm(`¿Deshacer ${item.nombre} de este mes?`)) return;
     try {
       await api(`/api/fijos/${item.fijoId}/deshacer?mes=${estado.mes}`, { method: 'POST' });
+      window.Iconos.toast(`${item.nombre} deshecho`);
       cargar();
     } catch (e) {
       mostrarAviso(`No pude deshacer: ${e.message}`);
@@ -862,10 +893,10 @@
   function fijosAbm(lista) {
     estado.fijos = lista;
     const tbody = $('#f-abm');
-    if (!lista.length) { filaMensaje(tbody, 7, 'No tenés gastos fijos. Agregá el primero con el botón de arriba.'); return; }
+    if (!lista.length) { filaMensaje(tbody, 7, 'No tenés gastos fijos. Agregá el primero con el botón de arriba.', 'calendar-check'); return; }
     tbody.replaceChildren(...lista.map((f) => h('tr', { class: f.activo ? null : 'inactivo' },
       h('td', {}, f.nombre),
-      h('td', {}, f.categoria),
+      h('td', {}, window.Iconos.etiquetaCategoria(f.categoria)),
       h('td', { class: 'amt' }, pesos(f.montoEsperado)),
       h('td', {}, f.diaDelMes),
       h('td', {}, f.frecuencia === 'BIMESTRAL' ? 'Cada dos meses' : 'Mensual'),
@@ -881,6 +912,7 @@
     if (!confirm(`¿Dar de baja ${f.nombre}? No se borra el historial.`)) return;
     try {
       await api(`/api/fijos/${f.id}`, { method: 'DELETE' });
+      window.Iconos.toast(`${f.nombre} dado de baja`);
       cargar();
     } catch (e) {
       mostrarAviso(`No pude dar de baja el fijo: ${e.message}`);
@@ -937,6 +969,7 @@
         body: JSON.stringify(cuerpo),
       });
       cerrarFormularioFijo();
+      window.Iconos.toast('Fijo guardado');
       cargar();
     } catch (e) {
       error.textContent = e.message;
@@ -946,12 +979,56 @@
     }
   }
 
+  // --- Categorías: el ícono de cada una (el emoji queda para el bot) ---
+
+  const ICONOS_CATEGORIA = [
+    ['store', 'Local'], ['shopping-cart', 'Carrito'], ['party-popper', 'Fiesta'], ['utensils', 'Cubiertos'],
+    ['house', 'Casa'], ['zap', 'Rayo'], ['bike', 'Moto o bici'], ['repeat', 'Repetir'], ['shield', 'Escudo'],
+    ['pill', 'Pastilla'], ['shirt', 'Remera'], ['receipt', 'Recibo'], ['circle-ellipsis', 'Otros'], ['car', 'Auto'],
+    ['fuel', 'Nafta'], ['book-open', 'Libro'], ['gift', 'Regalo'], ['heart-pulse', 'Salud'], ['graduation-cap', 'Estudio'],
+    ['paw-print', 'Mascota'], ['plane', 'Viaje'], ['coffee', 'Café'], ['wrench', 'Herramienta'], ['tag', 'Etiqueta'],
+    ['smartphone', 'Celular'], ['music', 'Música'],
+  ];
+
+  async function vistaCategorias() {
+    const categoriasDelCatalogo = (await api('/api/catalogo')).categorias;
+    window.Iconos.cargarCategorias(categoriasDelCatalogo);
+    $('#cat-lista').replaceChildren(...categoriasDelCatalogo.map((c) => {
+      const marca = h('span', { class: 'cat-vista' }, window.Iconos.iconoCategoria(window.Iconos.categoriaPorNombre(c.nombre)));
+      const select = h('select', { 'aria-label': `Ícono de ${c.nombre}` },
+        ...ICONOS_CATEGORIA.map(([valor, nombre]) => h('option', { value: valor }, nombre)));
+      const actual = c.icono || 'circle-ellipsis';
+      if (!ICONOS_CATEGORIA.some(([valor]) => valor === actual)) select.append(h('option', { value: actual }, actual));
+      select.value = actual;
+      select.addEventListener('change', async () => {
+        select.disabled = true;
+        try {
+          await api(`/api/categorias/${c.id}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ icono: select.value }),
+          });
+          c.icono = select.value;
+          window.Iconos.cargarCategorias(categoriasDelCatalogo);
+          estado.catalogo.categorias = categoriasDelCatalogo;
+          marca.replaceChildren(window.Iconos.iconoCategoria(window.Iconos.categoriaPorNombre(c.nombre)));
+          window.Iconos.toast(`Ícono de ${c.nombre} guardado`);
+        } catch (e) {
+          select.value = c.icono || 'circle-ellipsis';
+          window.Iconos.toast(`No pude guardar el ícono: ${e.message}`, 'error');
+        } finally {
+          select.disabled = false;
+        }
+      });
+      return h('div', { class: 'cat-fila' }, marca, h('span', { class: 'cat-fila-nombre' }, c.nombre), select);
+    }));
+  }
+
   // --- Catálogo (filtros y formulario) ---
 
   function llenarCatalogo(c) {
     estado.catalogo = c;
+    window.Iconos.cargarCategorias(c.categorias);
     for (const select of $$('select[data-categorias]')) {
-      select.append(...c.categorias.map((cat) => h('option', { value: cat.id }, `${cat.emoji ? cat.emoji + ' ' : ''}${cat.nombre}`)));
+      select.append(...c.categorias.map((cat) => h('option', { value: cat.id }, cat.nombre)));
     }
     $('#m-med').append(...c.mediosPago.map((m) => h('option', { value: m.id }, m.nombre)));
     $('#i-clase').replaceChildren(...c.clasesIngreso.map((cl) => h('option', { value: cl.clave },
@@ -1015,7 +1092,7 @@
   }
 
   // Lo que sueldo.js necesita de acá (los formatos, la API y los avisos), sin repetirlo.
-  window.Gastito = Object.assign(window.Gastito || {}, { h, api, pesos, mostrarAviso, nombreMes, mesYAnio, mayuscula, numeroArg, fechaCorta, estado });
+  window.Gastito = Object.assign(window.Gastito || {}, { h, api, pesos, mostrarAviso, nombreMes, mesYAnio, mayuscula, numeroArg, fechaCorta, estado, toast: (m, t) => window.Iconos.toast(m, t) });
 
   iniciar();
 })();

@@ -25,6 +25,9 @@ public class Categoria implements ConPalabrasClave {
 
     private String emoji;
 
+    /** Nombre del ícono de Lucide para el dashboard (el emoji es para Telegram). */
+    private String icono;
+
     private boolean activa = true;
 
     protected Categoria() {
@@ -48,6 +51,14 @@ public class Categoria implements ConPalabrasClave {
 
     public String getDescripcion() {
         return descripcion;
+    }
+
+    public String getIcono() {
+        return icono;
+    }
+
+    public void setIcono(String icono) {
+        this.icono = icono;
     }
 
     public String getEmoji() {

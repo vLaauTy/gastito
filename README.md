@@ -634,6 +634,8 @@ efectivo. Una cuenta o tarjeta nueva aparece sola (su color está en la columna 
 Lo que no tiene medio de pago ni cuenta queda en **Sin especificar**, en gris claro: son los gastos para
 corregir desde el bot. Fijos, Juntadas y "Lo que notó la IA" aparecen como *Próximamente*.
 
+En la web no hay emojis: los íconos son SVG de [Lucide](https://lucide.dev) (licencia ISC), con copia local en `static/img/icons.svg` (anda sin internet). Cada categoría tiene su ícono (columna `categoria.icono`, se cambia en la sección **Categorías**, dentro de **Más** en el celular) y un color propio; el emoji queda para el bot. Los medios de pago llevan ícono y las cuentas, un círculo con la inicial.
+
 Se adapta al celular (ver más abajo) y tiene modo oscuro según la configuración del sistema. Chart.js viene dentro del jar
 (WebJar), así que anda sin internet.
 

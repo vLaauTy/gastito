@@ -21,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -134,7 +135,7 @@ public class DashboardController {
 
     // --- Catálogo, para los filtros y el formulario de ingresos ---
 
-    public record Opcion(Long id, String nombre, String emoji) {
+    public record Opcion(Long id, String nombre, String emoji, String icono) {
     }
 
     public record Clase(String clave, String nombre) {
@@ -148,10 +149,19 @@ public class DashboardController {
     public CatalogoDashboard catalogo() {
         Catalogo c = catalogos.cargar();
         return new CatalogoDashboard(
-                c.categorias().stream().map(x -> new Opcion(x.getId(), x.getNombre(), x.getEmoji())).toList(),
-                c.mediosPago().stream().map(x -> new Opcion(x.getId(), x.getNombre(), null)).toList(),
-                c.cuentas().stream().map(x -> new Opcion(x.getId(), x.getNombre(), null)).toList(),
+                c.categorias().stream().map(x -> new Opcion(x.getId(), x.getNombre(), x.getEmoji(), x.getIcono())).toList(),
+                c.mediosPago().stream().map(x -> new Opcion(x.getId(), x.getNombre(), null, null)).toList(),
+                c.cuentas().stream().map(x -> new Opcion(x.getId(), x.getNombre(), null, null)).toList(),
                 Arrays.stream(ClaseIngreso.values()).map(x -> new Clase(x.name(), x.getNombre())).toList());
+    }
+
+    public record CambioDeIcono(String icono) {
+    }
+
+    @PatchMapping("/categorias/{id}")
+    public Opcion cambiarIcono(@PathVariable long id, @RequestBody CambioDeIcono cambio) {
+        var c = catalogos.cambiarIcono(id, cambio.icono());
+        return new Opcion(c.getId(), c.getNombre(), c.getEmoji(), c.getIcono());
     }
 
     // --- Ingresos ---

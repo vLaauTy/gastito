@@ -7,6 +7,7 @@
  */
 (() => {
   const { h, api, pesos, mostrarAviso, nombreMes, mesYAnio, mayuscula, numeroArg, fechaCorta, estado } = window.Gastito;
+  const { Iconos } = window;
   const $ = (selector) => document.querySelector(selector);
 
   const JSON_HEADERS = { 'Content-Type': 'application/json' };
@@ -47,8 +48,8 @@
     if (m.reciboVsCobrado) diferencias.push(diferencia('Recibo vs cobrado', m.reciboVsCobrado));
     if (m.reciboId != null) {
       diferencias.push(m.reciboSinNadaRaro
-        ? h('div', { class: 'mejora' }, '✅ Recibo sin nada raro')
-        : h('div', { class: 'empeora' }, `⚠️ ${m.avisos.length === 1 ? '1 cosa rara' : `${m.avisos.length} cosas raras`} en el recibo`));
+        ? h('div', { class: 'mejora con-icono' }, Iconos.svg('circle-check'), 'Recibo sin nada raro')
+        : h('div', { class: 'empeora con-icono' }, Iconos.svg('triangle-alert'), `${m.avisos.length === 1 ? '1 cosa rara' : `${m.avisos.length} cosas raras`} en el recibo`));
     } else if (m.cobrado != null) {
       diferencias.push(h('div', { class: 'note' }, 'Recibo: todavía no cargaste el de este mes'));
     }
@@ -137,8 +138,8 @@
       ]),
       totales({ bruto: d.bruto, descuentos: d.descuentos, neto: d.neto }),
       d.hallazgos.length
-        ? h('div', {}, h('h3', {}, 'Para revisar'), h('ul', { class: 'raro' }, d.hallazgos.map((t) => h('li', {}, `⚠️ ${t}`))))
-        : h('p', { class: 'mejora' }, d.conCalculo ? '✅ El recibo coincide con tu cálculo' : '✅ No encontré nada raro (sin cálculo ese mes para comparar los conceptos)'),
+        ? h('div', {}, h('h3', {}, 'Para revisar'), h('ul', { class: 'raro' }, d.hallazgos.map((t) => h('li', { class: 'con-icono' }, Iconos.svg('triangle-alert'), t))))
+        : h('p', { class: 'mejora con-icono' }, Iconos.svg('circle-check'), d.conCalculo ? 'El recibo coincide con tu cálculo' : 'No encontré nada raro (sin cálculo ese mes para comparar los conceptos)'),
       vinculador(d),
       d.conArchivo
         ? h('a', { class: 'ver-todos', href: `/api/recibos/${d.id}/archivo`, target: '_blank', rel: 'noopener' }, 'Ver recibo')
@@ -179,6 +180,7 @@
               body: JSON.stringify({ movimientoId: selector.value ? Number(selector.value) : null }),
             });
             info.textContent = textoCobro(r.cobro);
+            Iconos.toast('Recibo vinculado');
             seguimiento(estado.mes);
           } catch (e) {
             mostrarAviso(`No pude vincular el recibo: ${e.message}`);
@@ -241,6 +243,7 @@
       const guardado = await api('/api/sueldo/calculo', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(pedidoDeHoras()) });
       mostrarResultado(guardado);
       mensajeError($('#calc-error'), null);
+      Iconos.toast('Cálculo guardado');
       seguimiento(estado.mes);
     } catch (e) {
       mensajeError($('#calc-error'), e);
@@ -324,6 +327,7 @@
         : await api('/api/sueldo/escalas', { method: 'POST', headers: JSON_HEADERS, body: cuerpo });
       datos.escalaEditada = null;
       mensajeError(error, null);
+      Iconos.toast('Escala guardada');
       await configuracion();
       datos.escalaEditada = datos.escalas.find((x) => x.id === guardada.id) || null;
       dibujarEscalas();
@@ -367,6 +371,7 @@
         await (nuevo ? api('/api/sueldo/conceptos', { method: 'POST', headers: JSON_HEADERS, body: cuerpo })
           : api(`/api/sueldo/conceptos/${c.id}`, { method: 'PUT', headers: JSON_HEADERS, body: cuerpo }));
         await calculadora(estado.mes);
+        Iconos.toast('Concepto guardado');
       } catch (e) {
         mostrarAviso(`No pude guardar el concepto: ${e.message}`);
       } finally {

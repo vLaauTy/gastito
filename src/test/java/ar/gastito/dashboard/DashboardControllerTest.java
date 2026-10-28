@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -210,6 +211,24 @@ class DashboardControllerTest {
                 .andExpect(jsonPath("$.cuentas[0].nombre").value("Galicia"))
                 .andExpect(jsonPath("$.clasesIngreso[*].clave").value(
                         contains("SUELDO", "AGUINALDO", "EXTRA")));
+    }
+
+    @Test
+    void cambiaElIconoDeUnaCategoria() throws Exception {
+        when(catalogos.cambiarIcono(1L, "pill")).thenReturn(new Categoria(1L, "Salud", "salud", null, "💊"));
+
+        mvc.perform(patch("/api/categorias/1").contentType("application/json").content("{\"icono\":\"pill\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombre").value("Salud"));
+        verify(catalogos).cambiarIcono(1L, "pill");
+    }
+
+    @Test
+    void unIconoInvalidoEsUnError() throws Exception {
+        when(catalogos.cambiarIcono(1L, "<x>")).thenThrow(new IllegalArgumentException("El ícono no sirve."));
+
+        mvc.perform(patch("/api/categorias/1").contentType("application/json").content("{\"icono\":\"<x>\"}"))
+                .andExpect(status().isBadRequest());
     }
 
     // --- Ingresos ---
