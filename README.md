@@ -180,12 +180,17 @@ primeras pruebas); su backup quedó en `data/backups/gastito-2026-10-25.dump` y 
 
 ## Backup
 
-**`scripts\backup.ps1`** hace un `pg_dump` de la base real (dentro del contenedor `gastito-db` de la VM, por SSH)
-y una copia de `data/` (fotos de tickets, recibos; sin `data/backups/`). Cada backup es una carpeta
-`gastito-AAAA-MM-DD_HHmm` con `gastito.dump` y `data\`, y se conservan los últimos 30.
+**`backup.bat`** (doble clic, en la raíz; llama a `scripts\backup.ps1`) hace un `pg_dump` de la base real
+(dentro del contenedor `gastito-db` de la VM, por SSH) y una copia de `data/` (fotos de tickets, recibos; sin
+`data/backups/`). Cada backup es una carpeta `gastito-AAAA-MM-DD_HHmm` con `gastito.dump` y `data\`, y se
+conservan los últimos 30.
 
-- Carpeta: `-Destino <carpeta>`, o `BACKUP_DIR` en el `.env`, o `%USERPROFILE%\Backups\gastito`. Mejor en otro
-  disco o en una carpeta sincronizada con la nube.
+- Carpeta: `BACKUP_DIR` en el `.env` (o `-Destino <carpeta>` para una vez). **Conviene que sea una carpeta
+  sincronizada con la nube**, así el backup sobrevive aunque se rompa la PC: por ejemplo, con
+  [Google Drive para escritorio](https://www.google.com/drive/download/) instalado,
+  `BACKUP_DIR=G:\Mi unidad\Backups\gastito` (la letra de la unidad puede cambiar: fijate en el Explorador). Sin
+  `BACKUP_DIR`, usa `%USERPROFILE%\Backups\gastito`, que queda solo en esta PC, y lo avisa.
+- Los dumps tienen todos tus movimientos: la carpeta de la nube tiene que ser privada (no la compartas).
 - Necesita el alias SSH `devbox` en `~/.ssh/config` (la VM, con el puerto 22 reenviado al 2222 de Windows) con
   clave, sin contraseña. Los scripts usan `ssh -4`: en Windows `localhost` resuelve primero a `::1` y el reenvío
   de VirtualBox escucha solo en IPv4.

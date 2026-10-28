@@ -18,7 +18,12 @@ $raiz = Split-Path -Parent $PSScriptRoot
 $variables = Leer-Env $raiz
 $usuario = if ($variables['DB_USER']) { $variables['DB_USER'] } else { 'gastito' }
 if (-not $Destino) {
-    $Destino = if ($variables['BACKUP_DIR']) { $variables['BACKUP_DIR'] } else { Join-Path $env:USERPROFILE 'Backups\gastito' }
+    if ($variables['BACKUP_DIR']) {
+        $Destino = $variables['BACKUP_DIR']
+    } else {
+        $Destino = Join-Path $env:USERPROFILE 'Backups\gastito'
+        Write-Host "Falta BACKUP_DIR en el .env: uso $Destino, que no se sincroniza con la nube." -ForegroundColor Yellow
+    }
 }
 foreach ($par in @(@($Base, 'Base'), @($Ssh, 'Host SSH'), @($Contenedor, 'Contenedor'), @($usuario, 'DB_USER'))) {
     Comprobar-Nombre $par[0] $par[1]

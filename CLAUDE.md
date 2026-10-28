@@ -22,7 +22,7 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
   - Perfil `prueba` (`iniciar.bat prueba`): la base `gastito_prueba`, en el mismo PostgreSQL de la VM (mismo usuario del `.env`; URL en `DB_PRUEBA_URL` o `localhost:5432/gastito_prueba`), **solo para probar cambios**. Fotos de tickets en `data/prueba/`.
   - Las migraciones de Flyway tienen que funcionar en todos, y nunca rompen datos existentes de la base real.
 - Al arrancar, `bot.AvisoArranque` dice en la consola y por Telegram con qué base corre. Los datos de prueba se regeneran con `generar-datos-prueba.bat` (`ar.gastito.prueba`, solo con el perfil `prueba`; antes de borrar comprueba que la base sea `gastito_prueba`).
-- Backup: `scripts/backup.ps1` (pg_dump por `ssh -4 devbox` + `data/`, últimos 30) y `scripts/restaurar.ps1` (en una base nueva, nunca sobre `gastito`). Arranque automático y backup diario con el Programador de tareas: ver README.
+- Backup: `backup.bat` → `scripts/backup.ps1` (a `BACKUP_DIR`, idealmente sincronizada con la nube; pg_dump por `ssh -4 devbox` + `data/`, últimos 30) y `scripts/restaurar.ps1` (en una base nueva, nunca sobre `gastito`). Arranque automático y backup diario con el Programador de tareas: ver README.
 - Telegram: librería TelegramBots (rubenlagus), modo long polling. No se usan webhooks: el bot corre en la PC del usuario y no tiene URL pública.
 - IA: SDK oficial de Anthropic para Java (`com.anthropic:anthropic-java`). Modelo por defecto: `claude-haiku-5-5`.
 - Verificá en Maven Central la última versión estable de cada dependencia antes de agregarla. No inventes versiones.
