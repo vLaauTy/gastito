@@ -12,6 +12,13 @@ public interface JuntadaRepository extends JpaRepository<Juntada, Long> {
     @EntityGraph(attributePaths = {"movimiento", "participantes"})
     Optional<Juntada> findByMovimientoId(Long movimientoId);
 
+    /** Todas las juntadas guardadas, de la más nueva a la más vieja. */
+    @Query("""
+            select distinct j from Juntada j join fetch j.movimiento m
+            where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
+            order by m.fechaHora desc""")
+    List<Juntada> confirmadas();
+
     /** Las juntadas guardadas en las que alguien todavía me debe, de la más nueva a la más vieja. */
     @Query("""
             select distinct j from Juntada j join fetch j.movimiento m

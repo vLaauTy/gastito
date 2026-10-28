@@ -25,10 +25,11 @@
       <a href="#fijos" data-view="fijos"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#calendar-check"/></svg><span>Fijos</span></a>
       <div class="mas-panel">
         <a href="#costos-ia" data-view="costos-ia" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#bot"/></svg><span>Costos IA</span></a>
+        <a href="#juntadas" data-view="juntadas" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#users"/></svg><span>Juntadas</span></a>
+        <a href="#cuotas" data-view="cuotas" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#layers"/></svg><span>Cuotas</span></a>
         <a href="#categorias" data-view="categorias" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#tags"/></svg><span>Categorías</span></a>
       </div>
       <button type="button" class="mas" id="nav-mas" aria-expanded="false"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#ellipsis"/></svg><span>Más</span></button>
-      <a class="off" aria-disabled="true">Cuotas y juntadas <small>Próximamente</small></a>
     </div>
     <div class="ia" id="ia" aria-live="polite">
       <span id="ia-titulo">Costo de la IA</span>
@@ -132,7 +133,10 @@
             <p class="note" id="r-ia-periodo"></p>
             <div id="r-ia"></div>
           </section>
-          <section class="soon"><h2>Fijos y juntadas</h2>Próximamente: llegan en la etapa 6.</section>
+          <section class="card" aria-label="Fijos y juntadas">
+            <h2>Fijos y juntadas</h2>
+            <div id="r-pendientes"></div>
+          </section>
         </aside>
       </div>
     </div>
@@ -260,6 +264,7 @@
       <section class="cards" aria-label="Checklist del mes">
         <div class="card"><div class="label">Cargado este mes</div><div class="big positivo" id="f-cargado">…</div></div>
         <div class="card"><div class="label">Falta cargar</div><div class="big" id="f-faltan">…</div></div>
+        <div class="card"><div class="label">Próximo vencimiento</div><div class="big" id="f-proximo">…</div><div class="note" id="f-proximo-nota"></div></div>
       </section>
       <section class="card table-card" aria-label="Checklist mensual">
         <h2>Checklist del mes</h2>
@@ -280,6 +285,46 @@
         </div>
       </section>
     </div>
+    <!-- ===== Juntadas ===== -->
+    <div class="view" id="v-juntadas" hidden>
+      <header>
+        <div><h1>Juntadas</h1><div class="sub">Se cargan y se cobran desde el bot: acá se miran.</div></div>
+      </header>
+      <section class="cards" aria-label="Lo que te deben">
+        <div class="card"><div class="label">Te deben</div><div class="big" id="j-acobrar">…</div><div class="note" id="j-acobrar-nota"></div></div>
+        <div class="card"><div class="label">Juntadas abiertas</div><div class="big" id="j-abiertas">…</div></div>
+        <div class="card"><div class="label">Juntadas cerradas</div><div class="big" id="j-cerradas">…</div></div>
+      </section>
+      <h2>Abiertas</h2>
+      <div id="j-lista-abiertas" class="juntadas"></div>
+      <h2>Cerradas</h2>
+      <div id="j-lista-cerradas" class="juntadas"></div>
+    </div>
+
+    <!-- ===== Cuotas ===== -->
+    <div class="view" id="v-cuotas" hidden>
+      <header>
+        <div><h1>Cuotas</h1><div class="sub">Las compras en cuotas se cargan desde el bot.</div></div>
+      </header>
+      <section class="cards" aria-label="Lo comprometido en cuotas">
+        <div class="card"><div class="label">Comprometido en los próximos 6 meses</div><div class="big" id="q-total">…</div><div class="note" id="q-total-nota"></div></div>
+        <div class="card"><div class="label">Planes activos</div><div class="big" id="q-planes">…</div></div>
+      </section>
+      <section class="card" aria-label="Planes de cuotas">
+        <h2>Planes activos</h2>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Compra</th><th>Tarjeta</th><th class="num">Valor de la cuota</th><th>Cuotas</th><th>Próxima</th><th class="num">Total</th></tr></thead>
+            <tbody id="q-filas"></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="card" aria-label="Comprometido mes a mes">
+        <h2>Lo que falta pagar, mes a mes</h2>
+        <div id="q-meses" class="lista"></div>
+      </section>
+    </div>
+
     <!-- ===== Categorías ===== -->
     <div class="view" id="v-categorias" hidden>
       <header>

@@ -242,6 +242,12 @@ public class JuntadaService {
         return juntadas.conDeudasPendientes().stream().map(this::vista).toList();
     }
 
+    /** Todas las juntadas guardadas (abiertas y cerradas), de la más nueva a la más vieja. */
+    @Transactional(readOnly = true)
+    public List<VistaJuntada> todas() {
+        return juntadas.confirmadas().stream().map(this::vista).toList();
+    }
+
     // --- Vista ---
 
     private VistaJuntada vista(Juntada j) {

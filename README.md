@@ -625,6 +625,7 @@ http://localhost:8090
   cobrado y recibo, con el control del recibo y **Ver recibo**), la calculadora con sus escalas y conceptos, los
   últimos 6 meses, el gráfico del sueldo de los últimos 12
   meses y el formulario **Cargar ingreso**.
+- **Juntadas** y **Cuotas** (solo lectura; se cargan y se cobran desde el bot): las juntadas abiertas con quién debe cuánto y las cerradas, y las compras en cuotas con lo que falta pagar en los próximos 6 meses. En el Resumen, la tarjeta **Fijos y juntadas** dice cuántos fijos faltan cargar y cuánta plata hay por cobrar.
 - **Costos IA:** lo gastado en la IA (en USD) en el mes: totales, proyección, tope, desglose por propósito, costo por
   día, historial de 6 meses y las 10 llamadas más caras.
 - **Exportar CSV:** los gastos e ingresos del mes para Excel en castellano (separador `;`, coma decimal).
@@ -632,7 +633,7 @@ http://localhost:8090
 Las billeteras salen de los datos: cada gasto va a su tarjeta o su cuenta, o a **Efectivo** si se pagó en
 efectivo. Una cuenta o tarjeta nueva aparece sola (su color está en la columna `color` de `cuenta` o `tarjeta`).
 Lo que no tiene medio de pago ni cuenta queda en **Sin especificar**, en gris claro: son los gastos para
-corregir desde el bot. Fijos, Juntadas y "Lo que notó la IA" aparecen como *Próximamente*.
+corregir desde el bot. 
 
 En la web no hay emojis: los íconos son SVG de [Lucide](https://lucide.dev) (licencia ISC), con copia local en `static/img/icons.svg` (anda sin internet). Cada categoría tiene su ícono (columna `categoria.icono`, se cambia en la sección **Categorías**, dentro de **Más** en el celular) y un color propio; el emoji queda para el bot. Los medios de pago llevan ícono y las cuentas, un círculo con la inicial.
 

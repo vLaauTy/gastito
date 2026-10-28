@@ -106,6 +106,39 @@ public class PlanCuotasService {
                 .toList();
     }
 
+    /** Lo que suman las cuotas que todavía no ocurrieron de los planes activos, mes a mes (desde el mes actual). */
+    public record MesComprometido(YearMonth mes, BigDecimal total, int cuotas, int porcentajeDelMaximo) {
+    }
+
+    @Transactional(readOnly = true)
+    public List<MesComprometido> comprometido(int meses) {
+        LocalDate hoy = LocalDate.now(clock);
+        YearMonth desde = YearMonth.from(hoy);
+        BigDecimal[] totales = new BigDecimal[meses];
+        int[] cantidades = new int[meses];
+        java.util.Arrays.fill(totales, BigDecimal.ZERO);
+        for (PlanCuotas plan : planes.findByEstadoOrderByIdDesc(EstadoPlanCuotas.ACTIVO)) {
+            for (Movimiento cuota : movimientos.findByPlanCuotasIdOrderByCuotaActual(plan.getId())) {
+                if (!cuota.getFechaHora().toLocalDate().isAfter(hoy)) {
+                    continue;
+                }
+                int i = (int) java.time.temporal.ChronoUnit.MONTHS.between(desde, YearMonth.from(cuota.getFechaHora()));
+                if (i >= 0 && i < meses) {
+                    totales[i] = totales[i].add(cuota.getMonto());
+                    cantidades[i]++;
+                }
+            }
+        }
+        BigDecimal maximo = java.util.Arrays.stream(totales).max(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
+        List<MesComprometido> lista = new ArrayList<>();
+        for (int i = 0; i < meses; i++) {
+            int porcentaje = maximo.signum() == 0 ? 0
+                    : totales[i].multiply(BigDecimal.valueOf(100)).divide(maximo, 0, RoundingMode.HALF_UP).intValue();
+            lista.add(new MesComprometido(desde.plusMonths(i), totales[i], cantidades[i], porcentaje));
+        }
+        return lista;
+    }
+
     @Transactional(readOnly = true)
     public VistaPlanCuotas vista(Long planId) {
         return vista(plan(planId));

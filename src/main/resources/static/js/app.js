@@ -157,7 +157,7 @@
 
   // --- Navegación ---
 
-  const VISTAS = ['resumen', 'movimientos', 'ingresos', 'fijos', 'costos-ia', 'categorias'];
+  const VISTAS = ['resumen', 'movimientos', 'ingresos', 'fijos', 'costos-ia', 'categorias', 'juntadas', 'cuotas'];
 
   function leerUrl() {
     const vista = location.hash.slice(1);
@@ -213,6 +213,7 @@
           api(conMes('/api/gastos/por-billetera')).then(billeteras),
           api(conMes('/api/ingresos')).then(ingresosDelResumen),
           api('/api/resumenes/ultimo').then(loQueNotoLaIa),
+          Promise.all([api(conMes('/api/fijos/checklist')), api('/api/juntadas')]).then(([fijos, juntadas]) => pendientesDelResumen(fijos, juntadas)),
           ultimosMovimientos(),
         );
       } else if (estado.vista === 'movimientos') {
@@ -230,6 +231,10 @@
         tareas.push(api(conMes('/api/costos-ia/panel')).then(vistaCostos));
       } else if (estado.vista === 'categorias') {
         tareas.push(vistaCategorias());
+      } else if (estado.vista === 'juntadas') {
+        tareas.push(api('/api/juntadas').then(vistaJuntadas));
+      } else if (estado.vista === 'cuotas') {
+        tareas.push(api('/api/cuotas').then(vistaCuotas));
       } else {
         tareas.push(
           api(conMes('/api/fijos/checklist')).then(vistaFijosChecklist),
@@ -547,7 +552,10 @@
       q: $('#m-q').value.trim(), categoria: $('#m-cat').value, medioPago: $('#m-med').value,
       origen: $('#m-ori').value, pagina: estado.pagina, tamanio: TAMANIO_PAGINA,
     }));
-    filasMovimientos($('#m-movimientos'), pagina, 'No hay gastos que coincidan con los filtros.');
+    const filtrado = ['#m-q', '#m-cat', '#m-med', '#m-ori'].some((id) => $(id).value.trim());
+    filasMovimientos($('#m-movimientos'), pagina,
+      filtrado ? 'No hay gastos que coincidan con los filtros.' : 'Todavía no hay gastos este mes. Mandale uno al bot.');
+    $('.pager').hidden = pagina.totalElementos === 0;
     const desde = pagina.totalElementos === 0 ? 0 : pagina.pagina * pagina.tamanio + 1;
     const hasta = pagina.pagina * pagina.tamanio + pagina.elementos.length;
     texto('#m-pagina', `Mostrando ${desde}–${hasta} de ${pagina.totalElementos}`);
@@ -838,10 +846,13 @@
   function vistaFijosChecklist(data) {
     texto('#f-cargado', pesos(data.cargado));
     texto('#f-faltan', data.faltan);
+    const proximo = data.items.filter((i) => i.estado === 'FALTA').sort((a, b) => a.vencimiento.localeCompare(b.vencimiento))[0];
+    texto('#f-proximo', proximo ? proximo.nombre : '—');
+    texto('#f-proximo-nota', proximo ? `vence el ${proximo.vencimiento.slice(-2)}` : 'No falta nada este mes');
     const tbody = $('#f-checklist');
     if (!data.items.length) { filaMensaje(tbody, 5, 'No tenés gastos fijos este mes.', 'calendar-check'); return; }
     tbody.replaceChildren(...data.items.map((i) => h('tr', {},
-      h('td', { class: 'nombre-con-icono' }, window.Iconos.iconoCategoria(window.Iconos.categoriaPorEmoji(i.emoji)), i.nombre),
+      h('td', {}, h('span', { class: 'nombre-con-icono' }, window.Iconos.iconoCategoria(window.Iconos.categoriaPorEmoji(i.emoji)), i.nombre)),
       h('td', {}, estadoChecklist(i)),
       h('td', { class: 'amt' }, i.estado === 'CARGADO' ? pesos(i.monto) : i.montoAnterior != null ? `ref. ${pesos(i.montoAnterior)}` : '—'),
       h('td', {}, i.estado === 'CARGADO' ? fechaCorta(i.fecha) : `vence el ${i.vencimiento.slice(-2)}`),
@@ -977,6 +988,81 @@
     } finally {
       boton.disabled = false;
     }
+  }
+
+  // --- Resumen: lo pendiente de fijos y juntadas ---
+
+  function pendientesDelResumen(fijos, juntadas) {
+    const I = window.Iconos;
+    const fila = (icono, ...hijos) => h('div', { class: 'pendiente' }, I.svg(icono), h('div', {}, ...hijos));
+    const filas = [];
+    filas.push(fijos.faltan > 0
+      ? fila('calendar-check', h('b', {}, plural(fijos.faltan, 'fijo falta', 'fijos faltan')), ' cargar este mes. ',
+        h('a', { href: '#fijos', 'data-view': 'fijos', class: 'ver-todos' }, 'Ir a Fijos'))
+      : fila('circle-check', 'Están todos los fijos de este mes. ', h('a', { href: '#fijos', 'data-view': 'fijos', class: 'ver-todos' }, 'Ver Fijos')));
+    filas.push(Number(juntadas.aCobrar) > 0
+      ? fila('users', h('b', {}, pesos(juntadas.aCobrar)), ` por cobrar de ${plural(juntadas.personasQueDeben, 'persona', 'personas')}. `,
+        h('a', { href: '#juntadas', 'data-view': 'juntadas', class: 'ver-todos' }, 'Ir a Juntadas'))
+      : fila('circle-check', 'Nadie te debe plata de juntadas. ', h('a', { href: '#juntadas', 'data-view': 'juntadas', class: 'ver-todos' }, 'Ver Juntadas')));
+    $('#r-pendientes').replaceChildren(...filas);
+  }
+
+  // --- Juntadas ---
+
+  function personaJuntada(p) {
+    const I = window.Iconos;
+    let estadoPersona;
+    if (p.estado === 'PAGADO') estadoPersona = I.estado('ok', 'Pagó');
+    else if (p.estado === 'PERDIDO') estadoPersona = I.estado('neutro', 'Dado por perdido');
+    else estadoPersona = I.estado('falta', `Debe ${pesos(p.restante)}`, Number(p.pagado) > 0 ? ` (pagó ${pesos(p.pagado)})` : '');
+    return h('li', {}, h('span', { class: 'persona-nombre' }, p.nombre), h('span', { class: 'money' }, pesos(p.monto)), estadoPersona);
+  }
+
+  function tarjetaJuntada(j) {
+    const I = window.Iconos;
+    return h('article', { class: 'card juntada' },
+      h('div', { class: 'head' },
+        h('h3', {}, j.descripcion || 'Juntada'),
+        Number(j.aCobrar) > 0 ? h('span', { class: 'big chico negativo' }, pesos(j.aCobrar)) : I.estado('ok', 'Cerrada')),
+      h('div', { class: 'note' }, [fechaCorta(j.fechaHora), `pagué ${pesos(j.totalPagado)}${j.billetera ? ` desde ${j.billetera}` : ''}`,
+        `mi parte ${pesos(j.miParte)}`, plural(j.personas, 'persona', 'personas')].join(' · ')),
+      j.categoria ? h('div', {}, I.etiquetaCategoria(j.categoria)) : null,
+      h('ul', { class: 'personas' }, ...j.participantes.map(personaJuntada)));
+  }
+
+  function vistaJuntadas(d) {
+    texto('#j-acobrar', pesos(d.aCobrar));
+    texto('#j-acobrar-nota', d.personasQueDeben ? `${plural(d.personasQueDeben, 'persona te debe', 'personas te deben')}` : 'Nadie te debe nada');
+    texto('#j-abiertas', d.abiertas.length);
+    texto('#j-cerradas', d.cerradas.length);
+    const lista = (id, items, vacio) => $(id).replaceChildren(...(items.length ? items.map(tarjetaJuntada)
+      : [h('div', { class: 'card' }, window.Iconos.vacio('users', vacio))]));
+    lista('#j-lista-abiertas', d.abiertas, 'No hay juntadas abiertas. Cargá una desde el bot, por ejemplo: "asado 30000 entre 4".');
+    lista('#j-lista-cerradas', d.cerradas, 'Todavía no cerraste ninguna juntada.');
+  }
+
+  // --- Cuotas ---
+
+  function vistaCuotas(d) {
+    texto('#q-total', pesos(d.totalComprometido));
+    texto('#q-total-nota', d.totalComprometido > 0 ? 'Cuotas que todavía no se pagaron' : 'No tenés cuotas pendientes');
+    texto('#q-planes', d.planes.length);
+    const tbody = $('#q-filas');
+    if (!d.planes.length) {
+      filaMensaje(tbody, 6, 'No tenés compras en cuotas. Cargá una desde el bot: "zapatillas 90000 en 6 cuotas".', 'layers');
+    } else {
+      tbody.replaceChildren(...d.planes.map((p) => h('tr', {},
+        h('td', {}, h('b', {}, p.descripcion || 'Compra en cuotas'), ' ', window.Iconos.etiquetaCategoria(p.categoria)),
+        h('td', {}, p.tarjeta || '—'),
+        h('td', { class: 'amt' }, pesos(p.valorCuota)),
+        h('td', {}, `${p.cuotasPagadas} de ${p.cantidad}`),
+        h('td', {}, p.proximaCuota ? fechaCorta(p.proximaCuota) : 'Última pagada'),
+        h('td', { class: 'amt' }, pesos(p.total)))));
+    }
+    $('#q-meses').replaceChildren(...d.comprometido.map((m) => h('div', { class: 'cat', title: plural(m.cuotas, 'cuota', 'cuotas') },
+      h('span', {}, mesYAnio(m.mes)),
+      h('div', { class: 'track' }, h('i', { style: { width: `${m.porcentajeDelMaximo}%` } })),
+      h('span', { class: 'money' }, Number(m.total) > 0 ? pesos(m.total) : '—'))));
   }
 
   // --- Categorías: el ícono de cada una (el emoji queda para el bot) ---
