@@ -20,6 +20,7 @@
       <a href="#movimientos" data-view="movimientos">Movimientos</a>
       <a href="#ingresos" data-view="ingresos">Ingresos</a>
       <a href="#fijos" data-view="fijos">Fijos</a>
+      <a href="#costos-ia" data-view="costos-ia">Costos IA</a>
       <a class="off" aria-disabled="true">Cuotas y juntadas <small>Próximamente</small></a>
     </div>
     <div class="ia" id="ia" aria-live="polite">
@@ -243,6 +244,53 @@
           <table>
             <thead><tr><th>Nombre</th><th>Categoría</th><th class="num">Monto esperado</th><th>Día</th><th>Frecuencia</th><th>Propone monto</th><th></th></tr></thead>
             <tbody id="f-abm"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+    <!-- ===== Costos de la IA ===== -->
+    <div class="view" id="v-costos-ia" hidden>
+      <header>
+        <div><h1>Costos IA</h1><div class="sub" data-titulo-mes></div></div>
+        <div class="btns">
+          <button type="button" data-mes="-1">‹ <span data-nombre-mes="-1"></span></button>
+          <button type="button" data-mes="1" hidden><span data-nombre-mes="1"></span> ›</button>
+        </div>
+      </header>
+      <section class="cards" aria-label="Costo del mes">
+        <div class="card"><div class="label" id="c-titulo">Este mes</div><div class="big" id="c-actual">…</div><div class="note" id="c-actual-nota"></div></div>
+        <div class="card"><div class="label" id="c-anterior-titulo">Mes anterior</div><div class="big" id="c-anterior">…</div><div class="note" id="c-anterior-nota"></div></div>
+        <div class="card"><div class="label">Proyección a fin de mes</div><div class="big" id="c-proyeccion">…</div><div class="note" id="c-proyeccion-nota"></div></div>
+        <div class="card dark">
+          <div class="label">Tope mensual</div>
+          <div class="big" id="c-tope">…</div>
+          <div class="bar" id="c-tope-barra" hidden><i></i></div>
+          <div class="note" id="c-tope-nota"></div>
+        </div>
+      </section>
+      <section class="card table-card" aria-label="Costo por propósito">
+        <h2>Por propósito</h2>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Propósito</th><th class="num">Llamadas</th><th class="num">Tokens de entrada</th><th class="num">Tokens de salida</th><th class="num">Costo</th><th class="num">Promedio por llamada</th></tr></thead>
+            <tbody id="c-proposito"></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="card" aria-label="Costo por día">
+        <h2>Costo por día</h2>
+        <div class="grafico"><canvas id="grafico-costos" role="img" aria-label="Costo en dólares de cada día del mes"></canvas></div>
+      </section>
+      <section class="card" aria-label="Historial">
+        <h2>Últimos 6 meses</h2>
+        <div id="c-historial" class="lista"></div>
+      </section>
+      <section class="card table-card" aria-label="Las llamadas más caras">
+        <h2>Las 10 llamadas más caras del mes</h2>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Fecha</th><th>Propósito</th><th class="num">Tokens de entrada</th><th class="num">Tokens de salida</th><th class="num">Costo</th></tr></thead>
+            <tbody id="c-caras"></tbody>
           </table>
         </div>
       </section>

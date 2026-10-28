@@ -16,6 +16,8 @@ Los audios se transcriben con un servidor de Whisper local y el texto sigue el m
 tickets las lee Haiku (visión): comercio, fecha, productos y total; Java controla que los productos sumen el
 total antes de mostrar la tarjeta.
 
+Los recibos de sueldo (el PDF, o una foto) se registran como un ingreso por el neto, con todos los conceptos.
+
 Para mirar y analizar hay un **dashboard web** servido por la misma aplicación: gasto del mes, comparación con el
 mes anterior, gasto por día, por categoría y por billetera, movimientos con buscador, e ingresos (sueldo,
 aguinaldo y extras) con lo que queda disponible.
@@ -61,7 +63,11 @@ El bot ignora en silencio los mensajes de cualquier usuario que no sea `TELEGRAM
 Otros ajustes, en `src/main/resources/application.yml`:
 
 - `gastito.ia.modelo`: el modelo de Claude (por defecto `claude-haiku-5-5`).
-- `gastito.ia.precios`: precio por millón de tokens de cada modelo, para calcular el costo en `/costos`.
+- `gastito.ia.precios`: precio por millón de tokens de cada modelo. El costo de cada llamada se calcula al guardarla
+  y queda fijo: si los precios cambian, el historial no se recalcula.
+- `gastito.ia.tope-mensual-usd`: tope de gasto en IA por mes, en dólares (por defecto `2`). No bloquea nada: el bot
+  avisa una vez al llegar al 80 % y otra al 100 %. Con `0` se apagan los avisos.
+- `gastito.recibos.max-tokens`: tope de la respuesta de la IA al leer un recibo (por defecto `3000`).
 - `gastito.audio.timeout`: cuánto esperar la transcripción (por defecto `60s`).
 - `gastito.audio.duracion-maxima`: audios más largos no se procesan (por defecto `60s`).
 - `gastito.audio.idioma` y `gastito.audio.modelo`: `es` y `whisper-1`.
@@ -140,11 +146,15 @@ misma fecha sale lo mismo:
 - Algunas compras en el Día con el detalle del ticket y el 20% de ClubDía, basadas en el ticket real de ejemplo.
 - El mes del medio es caro (más salidas, ropa y compras grandes, alrededor de un 25% más), para que las
   comparaciones y los consejos tengan algo para mostrar.
-- Sueldo todos los meses, un aguinaldo y algunos extras (con descripción).
+- Seis recibos de sueldo mensuales (con un aumento a mitad de camino), el aguinaldo y algunos extras (con
+  descripción). Cada recibo trae sus conceptos y un PDF inventado, para probar **Ver recibo**.
+- Unas 150 llamadas a la IA por mes en `uso_ia` (marcadas con el modelo `claude-haiku-5-5 (prueba)`), para ver la
+  pantalla de costos. Con el tope en USD 2 no llegan al aviso: para verlo, bajá `gastito.ia.tope-mensual-usd`
+  (por ejemplo a `0.05`).
 
-Borra movimientos e ingresos (y con ellos lo aprendido), tickets, resúmenes y sus envíos, y las fotos de
-`data/prueba/tickets/`. Deja el catálogo y `uso_ia`, que es plata de verdad gastada en la API mientras se
-probaba. El generador está en `ar.gastito.prueba`: solo existe con el perfil `prueba` y, antes de borrar nada,
+Borra movimientos e ingresos (y con ellos lo aprendido), recibos, tickets, resúmenes y sus envíos, y los archivos
+de `data/prueba/tickets/` y `data/prueba/recibos/`. Deja el catálogo y las llamadas de `uso_ia` que no son de
+prueba, que es plata de verdad gastada en la API mientras se probaba. El generador está en `ar.gastito.prueba`: solo existe con el perfil `prueba` y, antes de borrar nada,
 comprueba que la base se llame `gastito_prueba` y que no esté activo el perfil `postgres`. Con la base real no
 corre nunca.
 
@@ -390,6 +400,54 @@ El monto acepta `380.000`, `380 mil` o `25k`. La cuenta se reconoce por su nombr
 decís, se usa la del último ingreso de ese tipo. Como los gastos, llega una tarjeta con **✅ Guardar** y
 **❌ Cancelar**. También se cargan y se borran desde el dashboard.
 
+### Recibos de sueldo
+
+Mandale el recibo al bot y lo registra como ingreso con todo el detalle:
+
+- **PDF** (como archivo): si tiene texto, Gastito lo extrae con PDFBox y a Haiku le manda solo el texto (cuesta
+  menos que una imagen). Si es un escaneo, usa visión, como con los tickets.
+- **Foto** del recibo impreso: escribí "recibo" (o "sueldo", "aguinaldo") junto con la foto. Si no, el bot la toma por
+  un ticket y, si Haiku nota que es un recibo, la lee de nuevo como recibo (una llamada más).
+
+Haiku extrae el empleador, el período, la fecha de pago, el tipo (sueldo mensual, aguinaldo, vacaciones o
+liquidación final) y cada concepto con su importe y su grupo (remunerativo, no remunerativo o descuento), más los
+totales impresos. **La IA no calcula**: Java controla que remunerativos + no remunerativos − descuentos den el neto
+impreso (tolerancia de $1) y, si no cierra, la tarjeta dice qué no cierra. Sin neto no se guarda nada.
+
+```
+💼 Recibo · Octubre 2026 · Empresa de Prueba
+Bruto ............... $1.327.276
+Descuentos ........... −$270.774
+  Jubilación 11%        −$129.500
+  …
+💰 Neto ............. $1.056.503
+```
+
+Con **✅ Guardar** se crea el ingreso por el neto (sueldo o aguinaldo, en el mes del período). Si ya habías cargado a
+mano el sueldo de ese mes, pregunta "Ya cargaste el sueldo de octubre ($1.030.000). ¿Lo reemplazo con el del
+recibo?". **✏️ Editar** cambia el monto, la fecha o la descripción; **❌ Cancelar** borra también el archivo.
+
+Privacidad: no se guarda en la base el CUIL, el CBU, el legajo ni el domicilio (la respuesta de la IA no tiene dónde
+ponerlos, y se borran del texto del PDF antes de mandarlo). El archivo queda en `data/recibos/AAAA/MM/` (en la
+base de prueba, `data/prueba/recibos/`) y no sale de la PC.
+
+En el dashboard (**Ingresos**), cada ingreso que vino de un recibo se despliega con **💼 Recibo** para ver los
+conceptos y abrir el archivo (**Ver recibo**). Abajo hay un gráfico de los últimos 12 meses (bruto, descuentos y
+neto de los sueldos mensuales) con la variación del neto contra el mes anterior y contra el mismo mes del año
+anterior. Y se le puede preguntar al bot: "¿cuánto me descontaron de ganancias este año?", "¿cuánto aumentó mi
+sueldo desde enero?".
+
+### Costos de la IA
+
+`/costos` muestra el total del mes en dólares, la proyección a fin de mes (lo gastado ÷ días transcurridos × días
+del mes), cuánto del tope mensual lleva y el desglose por propósito. Cuando el mes llega al 80 % del tope
+(`gastito.ia.tope-mensual-usd`) el bot avisa una sola vez ("La IA lleva USD 1,62 este mes (81% del tope de USD 2)"),
+y otra al 100 %. No bloquea nada.
+
+En el dashboard, la sección **Costos IA** tiene el total del mes y del anterior, la proyección, el tope, el desglose
+por propósito (llamadas, tokens de entrada y salida, costo y **costo promedio por llamada**), el costo de cada día,
+el historial de 6 meses y las 10 llamadas más caras del mes, para ver qué conviene optimizar.
+
 ### Resúmenes
 
 El **domingo a las 21** llega el resumen de la semana (lunes a domingo) y el **día 1 a las 9**, el del mes que
@@ -458,7 +516,7 @@ Abajo del chat queda un menú fijo con estos comandos, que también están en el
 |                | `/start`     | Saludo, ejemplos y el menú                       |
 | 📊 Hoy         | `/hoy`       | Gastos de hoy y el total                         |
 | 📅 Mes         | `/mes`       | Total del mes y barras por categoría             |
-| 💸 Costos IA   | `/costos`    | Lo gastado en IA este mes, en dólares            |
+| 💸 Costos IA   | `/costos`    | Lo gastado en IA este mes, la proyección y el desglose |
 |                | `/resumen`   | La semana hasta hoy; `/resumen mes`, el mes      |
 |                | `/juntadas`  | Quién te debe plata de las juntadas              |
 |                | `/fijo`, `/fijos` | Agregar un gasto fijo; los que tenés y su próximo cobro |
@@ -486,8 +544,11 @@ http://localhost:8090
 - **Movimientos:** todos los gastos del mes, con buscador (sin importar tildes ni mayúsculas), filtros por
   categoría, medio de pago y origen (texto, audio o ticket), y páginas. Los gastos que vienen de un ticket tienen
   el botón **🧾 Productos**, que despliega el detalle, la suma contra el total y el link **Ver foto**.
-- **Ingresos:** sueldo, aguinaldo y extras del mes, el detalle con **Borrar**, los últimos 6 meses y el
-  formulario **Cargar ingreso**.
+- **Ingresos:** sueldo, aguinaldo y extras del mes, el detalle con **Borrar** (los que vienen de un recibo se
+  despliegan con los conceptos y **Ver recibo**), los últimos 6 meses, el gráfico del sueldo de los últimos 12
+  meses y el formulario **Cargar ingreso**.
+- **Costos IA:** lo gastado en la IA (en USD) en el mes: totales, proyección, tope, desglose por propósito, costo por
+  día, historial de 6 meses y las 10 llamadas más caras.
 - **Exportar CSV:** los gastos e ingresos del mes para Excel en castellano (separador `;`, coma decimal).
 
 Las billeteras salen de los datos: cada gasto va a su tarjeta o su cuenta, o a **Efectivo** si se pagó en
@@ -530,6 +591,10 @@ decimales, y acepta `?mes=2026-10` (por defecto, el mes actual):
 | `GET /api/movimientos/{id}/foto`  | La foto del ticket (JPEG)                                       |
 | `GET /api/movimientos.csv`        | Gastos e ingresos del mes en CSV                                |
 | `GET /api/costos-ia`              | Costo en USD, llamadas y desglose por propósito                 |
+| `GET /api/costos-ia/panel`        | La sección Costos IA: mes y anterior, proyección, tope, por propósito, por día, historial y las más caras |
+| `GET /api/recibos/{id}`           | Conceptos y totales de un ingreso que vino de un recibo (el id es el del ingreso) |
+| `GET /api/recibos/{id}/archivo`   | El recibo tal como se guardó (PDF o JPEG)                       |
+| `GET /api/recibos/serie`           | Bruto, descuentos y neto de los últimos meses (`hasta`, `meses`, por defecto 12) y la variación del neto |
 | `GET /api/resumenes/ultimo`       | El último resumen: período, lo que notó la IA y el consejo (204 si no hay) |
 | `GET /api/catalogo`               | Categorías, medios de pago, cuentas y tipos de ingreso          |
 | `GET /api/ingresos`               | Ingresos del mes y totales por tipo                             |
@@ -638,9 +703,10 @@ El código está organizado por funcionalidad, no por capa técnica:
 ar.gastito
 ├── bot              Telegram: filtro de usuario, conversación, tarjetas de gasto, formato de mensajes
 ├── interpretacion   Parser simple, historial, validación de la respuesta de la IA, fechas relativas
-├── ia               Cliente de Claude, prompts, registro de tokens y costo (uso_ia)
+├── ia               Cliente de Claude, prompts, registro de tokens y costo (uso_ia), costos y tope mensual
 ├── audio            Transcripción de audios con el servidor de Whisper
 ├── ticket           Fotos de tickets: achicar la imagen, leerla con Haiku, validar y guardar la foto
+├── recibo           Recibos de sueldo: leer el PDF o la foto, validar las cuentas, guardar el detalle y el archivo
 ├── resumen          Resúmenes semanales y mensuales: cálculo, redacción con Haiku y registro de envíos
 ├── consulta         Preguntas en lenguaje natural: herramientas con SQL y conversación con tool use
 ├── juntada          Juntadas: el reparto (en Java), lo que me deben, devoluciones y partes perdidas

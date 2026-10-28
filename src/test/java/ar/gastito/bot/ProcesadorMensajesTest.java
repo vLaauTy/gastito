@@ -53,7 +53,6 @@ import ar.gastito.dashboard.DashboardProperties;
 import ar.gastito.ia.IaNoDisponibleException;
 import ar.gastito.ia.PropositoIa;
 import ar.gastito.ia.RegistroUsoIa;
-import ar.gastito.ia.ResumenUsoIa;
 import ar.gastito.interpretacion.InterpretadorService;
 import ar.gastito.interpretacion.ParserIngreso;
 import ar.gastito.interpretacion.PedidoFijo;
@@ -99,6 +98,7 @@ class ProcesadorMensajesTest {
     private final ConversacionVarios varios = mock(ConversacionVarios.class);
     private final ConversacionCuotas cuotas = mock(ConversacionCuotas.class);
     private final ConversacionRecibos recibos = mock(ConversacionRecibos.class);
+    private final ar.gastito.ia.CostosIaService costosIa = mock(ar.gastito.ia.CostosIaService.class);
     private ProcesadorMensajes procesador;
 
     @BeforeEach
@@ -114,7 +114,9 @@ class ProcesadorMensajesTest {
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
                 tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, resumenes,
                 new FormatoResumen(formato, new GraficoMes(formato), dashboard), consultas, new FormatoConsulta(formato),
-                repetidos, juntadas, fijos, gastosFijos, varios, cuotas, recibos, properties, dashboard, RELOJ);
+                repetidos, juntadas, fijos, gastosFijos, varios, cuotas, recibos, new FormatoCostos(costosIa, formato, RELOJ), properties, dashboard,
+                RELOJ);
+        when(costosIa.panel(any())).thenReturn(panelDeCostos(0, "0"));
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));
         when(tickets.tamanioMaximo()).thenReturn(DataSize.ofMegabytes(10));
     }
@@ -929,15 +931,31 @@ class ProcesadorMensajesTest {
                 Total: <b>$7.400</b>""");
     }
 
+    /** El panel de costos de octubre de 2026 con esa cantidad de llamadas de texto y ese costo. */
+    private static ar.gastito.ia.CostosIaService.Panel panelDeCostos(long llamadas, String costo) {
+        YearMonth octubre = YearMonth.of(2026, 10);
+        BigDecimal usd = new BigDecimal(costo);
+        return new ar.gastito.ia.CostosIaService.Panel(octubre, true,
+                new ar.gastito.ia.CostosIaService.Total(octubre, llamadas, llamadas * 1000, llamadas * 100, usd),
+                new ar.gastito.ia.CostosIaService.Total(octubre.minusMonths(1), 0, 0, 0, BigDecimal.ZERO),
+                new ar.gastito.ia.CostosIaService.Proyeccion(usd.multiply(new BigDecimal("31"))
+                        .divide(new BigDecimal("13"), 2, java.math.RoundingMode.HALF_UP), 13, 31),
+                new ar.gastito.ia.CostosIaService.Tope(new BigDecimal("2"), 81),
+                List.of(new ar.gastito.ia.CostosIaService.PorProposito(PropositoIa.TEXTO, llamadas, llamadas * 1000,
+                        llamadas * 100, usd, usd)),
+                List.of(), List.of(), List.of());
+    }
+
     @Test
     void comandoCostos() {
-        when(usoIa.resumenMesActual()).thenReturn(new ResumenUsoIa(3, 6000, 250, new BigDecimal("0.00072500")));
+        when(costosIa.panel(any())).thenReturn(panelDeCostos(3, "1.62"));
 
         assertThat(texto("/costos")).isEqualTo("""
-                <b>Uso de la IA en octubre 2026</b>
-                • Llamadas: 3
-                • Tokens: 6000 de entrada, 250 de salida
-                • Costo: <b>US$ 0,000725</b>""");
+                💸 <b>IA en octubre 2026</b>
+                Llevás <b>USD 1,62</b> en 3 llamadas (81% del tope de USD 2).
+                Proyección a fin de mes: <b>USD 3,86</b>
+
+                • Texto: 3 llamadas · USD 1,62""");
     }
 
     @Test
@@ -967,7 +985,6 @@ class ProcesadorMensajesTest {
     @Test
     void losBotonesDelMenuSonComandosYLasRespuestasLlevanElMenu() {
         when(movimientos.hoy()).thenReturn(new MovimientoService.ResumenDia(List.of(), BigDecimal.ZERO));
-        when(usoIa.resumenMesActual()).thenReturn(new ResumenUsoIa(0, 0, 0, BigDecimal.ZERO));
 
         Accion.Enviar hoy = (Accion.Enviar) procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "📊 Hoy").get(0);
         assertThat(hoy.html()).isEqualTo("Hoy no registraste gastos.");

@@ -17,6 +17,7 @@
     pagina: 0,
     grafico: null,
     graficoRecibos: null,
+    graficoCostos: null,
   };
 
   // --- Formatos: solo presentación ---
@@ -32,8 +33,9 @@
 
   function dolares(n) {
     const v = Number(n);
-    const decimales = v > 0 && v < 0.01 ? 4 : 2;
-    return 'US$ ' + new Intl.NumberFormat('es-AR', { minimumFractionDigits: decimales, maximumFractionDigits: decimales }).format(v);
+    // Una llamada a Haiku cuesta fracciones de centavo: por debajo de 1 centavo se muestran hasta 6 decimales.
+    const maximo = v !== 0 && Math.abs(v) < 0.01 ? 6 : 2;
+    return 'US$ ' + new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: maximo }).format(v);
   }
 
   function mesDeHoy() {
@@ -136,7 +138,7 @@
 
   // --- Navegación ---
 
-  const VISTAS = ['resumen', 'movimientos', 'ingresos', 'fijos'];
+  const VISTAS = ['resumen', 'movimientos', 'ingresos', 'fijos', 'costos-ia'];
 
   function leerUrl() {
     const vista = location.hash.slice(1);
@@ -203,6 +205,8 @@
           api(`/api/recibos/serie?hasta=${estado.mes}&meses=12`).then(serieRecibos),
         );
         disponible(resumen.disponible, '#i-disponible', '#i-disponible-barra', '#i-disponible-nota');
+      } else if (estado.vista === 'costos-ia') {
+        tareas.push(api(conMes('/api/costos-ia/panel')).then(vistaCostos));
       } else {
         tareas.push(
           api(conMes('/api/fijos/checklist')).then(vistaFijosChecklist),
@@ -547,6 +551,106 @@
       return;
     }
     tbody.replaceChildren(...r.ingresos.map(filaIngreso));
+  }
+
+  // --- Costos de la IA ---
+
+  const PROPOSITOS = {
+    TEXTO: 'Texto', AUDIO: 'Audio', TICKET: 'Ticket', RECIBO: 'Recibo', RESUMEN: 'Resumen', CONSULTA: 'Consulta',
+  };
+
+  /** Todo llega calculado en dólares; acá solo se formatea. */
+  function vistaCostos(c) {
+    texto('#c-titulo', c.mesActual ? 'Este mes' : mayuscula(nombreMes(c.mes)));
+    texto('#c-actual', dolares(c.actual.costoUsd));
+    texto('#c-actual-nota', plural(c.actual.llamadas, 'llamada', 'llamadas'));
+    texto('#c-anterior-titulo', mayuscula(nombreMes(c.anterior.mes)));
+    texto('#c-anterior', dolares(c.anterior.costoUsd));
+    texto('#c-anterior-nota', plural(c.anterior.llamadas, 'llamada', 'llamadas'));
+
+    const p = c.proyeccion;
+    texto('#c-proyeccion', dolares(p.costoUsd));
+    texto('#c-proyeccion-nota', p.diasTranscurridos === 0 ? 'Todavía no empezó'
+      : c.mesActual ? `Con lo gastado en ${p.diasTranscurridos} de ${p.diasDelMes} días` : 'Mes completo');
+
+    const barra = $('#c-tope-barra');
+    if (c.tope.topeUsd == null) {
+      texto('#c-tope', '—');
+      texto('#c-tope-nota', 'Sin tope: los avisos están apagados');
+      barra.hidden = true;
+    } else {
+      texto('#c-tope', `${c.tope.porcentaje}%`);
+      texto('#c-tope-nota', `Del tope de ${dolares(c.tope.topeUsd)} por mes. El bot avisa al 80% y al 100%`);
+      barra.hidden = false;
+      const relleno = barra.querySelector('i');
+      relleno.style.width = `${Math.min(100, c.tope.porcentaje)}%`;
+      relleno.classList.toggle('pasado', c.tope.porcentaje >= 100);
+    }
+
+    $('#c-proposito').replaceChildren(...c.porProposito.map((x) => h('tr', { class: x.llamadas ? null : 'inactivo' },
+      h('td', {}, h('b', {}, PROPOSITOS[x.proposito] || x.proposito)),
+      h('td', { class: 'amt' }, enteros.format(x.llamadas)),
+      h('td', { class: 'amt' }, enteros.format(x.tokensEntrada)),
+      h('td', { class: 'amt' }, enteros.format(x.tokensSalida)),
+      h('td', { class: 'amt' }, dolares(x.costoUsd)),
+      h('td', { class: 'amt' }, x.llamadas ? dolares(x.costoPromedioUsd) : '—'),
+    )));
+
+    $('#c-historial').replaceChildren(...c.historial.map((m) => h('div', { class: 'cat', title: plural(m.llamadas, 'llamada', 'llamadas') },
+      h('span', {}, mayuscula(nombreMes(m.mes)) + (m.mes.slice(0, 4) !== c.mes.slice(0, 4) ? ` ${m.mes.slice(0, 4)}` : '')),
+      h('div', { class: 'track' }, h('i', { style: { width: `${m.porcentajeDelMaximo}%` } })),
+      h('span', { class: 'money' }, dolares(m.costoUsd)),
+    )));
+
+    const caras = $('#c-caras');
+    if (!c.masCaras.length) {
+      filaMensaje(caras, 5, 'Todavía no se usó la IA este mes.');
+    } else {
+      caras.replaceChildren(...c.masCaras.map((x) => h('tr', {},
+        h('td', { class: 'date' }, fechaCorta(x.fechaHora)),
+        h('td', {}, PROPOSITOS[x.proposito] || x.proposito),
+        h('td', { class: 'amt' }, enteros.format(x.tokensEntrada)),
+        h('td', { class: 'amt' }, enteros.format(x.tokensSalida)),
+        h('td', { class: 'amt' }, dolares(x.costoUsd)),
+      )));
+    }
+    graficoCostos(c);
+  }
+
+  function graficoCostos(c) {
+    const lienzo = $('#grafico-costos');
+    if (estado.graficoCostos) estado.graficoCostos.destroy();
+    estado.graficoCostos = null;
+    if (!window.Chart) return;
+    estado.graficoCostos = new window.Chart(lienzo, {
+      type: 'bar',
+      data: {
+        labels: c.porDia.map((d) => d.dia),
+        datasets: [{
+          label: 'Costo',
+          data: c.porDia.map((d) => (d.futuro ? null : Number(d.costoUsd))),
+          backgroundColor: color('--bar-dia-max'),
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { title: (items) => `Día ${items[0].label}`, label: (item) => dolares(item.raw) } },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: color('--muted'), maxRotation: 0, autoSkipPadding: 8 } },
+          y: {
+            beginAtZero: true,
+            grid: { color: color('--row') },
+            ticks: { color: color('--muted'), callback: (v) => dolares(v), maxTicksLimit: 5 },
+          },
+        },
+      },
+    });
   }
 
   // --- Recibos de sueldo ---

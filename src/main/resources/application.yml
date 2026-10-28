@@ -39,7 +39,11 @@ gastito:
     url: https://api.anthropic.com
     modelo: claude-haiku-5-5
     max-tokens: 1024
-    # Precios en USD por millón de tokens (prompts de hasta 100.000 tokens).
+    # Tope mensual de gasto en IA, en USD. No bloquea nada: el bot avisa una vez al llegar al 80 % y otra al 100 %.
+    # Con 0 se apagan los avisos.
+    tope-mensual-usd: 2
+    # Precios en USD por millón de tokens (prompts de hasta 100.000 tokens). El costo de cada llamada se calcula al
+    # guardarla y queda fijo: si cambian los precios, el historial no se recalcula.
     precios:
       claude-haiku-5-5:
         entrada: 0.10
@@ -57,6 +61,9 @@ gastito:
     idioma: es
     timeout: 60s
     duracion-maxima: 60s
+  recibos:
+    # Tope de la respuesta de la IA al leer un recibo de sueldo. Los archivos quedan en data/recibos/AAAA/MM/.
+    max-tokens: 3000
   ticket:
     # Las fotos quedan en data/tickets/AAAA/MM/<id>.jpg (data/ está en el .gitignore).
     carpeta-datos: data

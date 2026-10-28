@@ -7,7 +7,6 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +31,6 @@ import ar.gastito.dashboard.DashboardProperties;
 import ar.gastito.ia.IaNoDisponibleException;
 import ar.gastito.ia.PropositoIa;
 import ar.gastito.ia.RegistroUsoIa;
-import ar.gastito.ia.ResumenUsoIa;
 import ar.gastito.fijo.GastoFijo;
 import ar.gastito.fijo.GastoFijoService;
 import ar.gastito.interpretacion.DivisorDeGastos;
@@ -117,7 +115,7 @@ public class ProcesadorMensajes {
             /juntadas – quién te debe plata de las juntadas
             /fijo – agregar un gasto fijo; /fijos, los que tenés
             /cuotas – tus compras en cuotas
-            /costos – lo gastado en IA este mes
+            /costos – lo gastado en IA este mes, lo que se proyecta y el tope
             /dashboard – el link del dashboard, para ver tus gastos con gráficos
             /ayuda – este mensaje""";
 
@@ -140,6 +138,7 @@ public class ProcesadorMensajes {
     private final ConversacionVarios varios;
     private final ConversacionCuotas cuotas;
     private final ConversacionRecibos recibos;
+    private final FormatoCostos formatoCostos;
     private final FormatoResumen formatoResumen;
     private final ConsultaService consultas;
     private final FormatoConsulta formatoConsulta;
@@ -198,12 +197,13 @@ public class ProcesadorMensajes {
             FormatoResumen formatoResumen, ConsultaService consultas, FormatoConsulta formatoConsulta,
             ConversacionRepetidos repetidos, ConversacionJuntadas juntadas, ConversacionFijos fijos,
             GastoFijoService gastosFijos, ConversacionVarios varios, ConversacionCuotas cuotas,
-            ConversacionRecibos recibos, GastitoProperties properties, DashboardProperties dashboard, Clock clock) {
+            ConversacionRecibos recibos, FormatoCostos formatoCostos, GastitoProperties properties, DashboardProperties dashboard, Clock clock) {
         this.fijos = fijos;
         this.gastosFijos = gastosFijos;
         this.varios = varios;
         this.cuotas = cuotas;
         this.recibos = recibos;
+        this.formatoCostos = formatoCostos;
         this.repetidos = repetidos;
         this.juntadas = juntadas;
         this.consultas = consultas;
@@ -905,16 +905,6 @@ public class ProcesadorMensajes {
     }
 
     private String costos() {
-        ResumenUsoIa r = usoIa.resumenMesActual();
-        String mes = formato.mes(YearMonth.now(clock));
-        if (r.llamadas() == 0) {
-            return "En " + mes + " todavía no se usó la IA.";
-        }
-        return """
-                <b>Uso de la IA en %s</b>
-                • Llamadas: %d
-                • Tokens: %d de entrada, %d de salida
-                • Costo: <b>%s</b>""".formatted(mes, r.llamadas(), r.tokensEntrada(), r.tokensSalida(),
-                formato.dolares(r.costoUsd()));
+        return formatoCostos.comando();
     }
 }

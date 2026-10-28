@@ -41,6 +41,7 @@ import ar.gastito.config.GastitoProperties;
 import ar.gastito.fijo.Frecuencia;
 import ar.gastito.fijo.GastoFijoService;
 import ar.gastito.fijo.VistaFijo;
+import ar.gastito.ia.CalculadoraCostoIa;
 import ar.gastito.movimiento.ClaseIngreso;
 import ar.gastito.movimiento.DatosTicket;
 import ar.gastito.movimiento.IngresoService;
@@ -57,8 +58,9 @@ import ar.gastito.recibo.ReciboService;
  * real (perfil postgres) no corre nunca. Al terminar, apaga la aplicación.
  * <p>
  * Borra movimientos (con sus productos y categorías candidatas, y por lo tanto lo aprendido), recibos de sueldo,
- * resúmenes y envíos de resúmenes, y las fotos de los tickets y los recibos de prueba. Deja el catálogo y uso_ia, que es plata de verdad gastada en la
- * API mientras se probaba.
+ * resúmenes y envíos de resúmenes, y las fotos de los tickets y los recibos de prueba. Deja el catálogo y las llamadas
+ * de uso_ia que no sean de prueba, que son plata de verdad gastada en la API; las de prueba (las que genera acá, con
+ * el modelo marcado "(prueba)") se borran y se vuelven a generar.
  */
 @Component
 @Profile("prueba")
@@ -75,6 +77,8 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
     private static final List<String> BORRAR = List.of(
             "UPDATE uso_ia SET movimiento_id = NULL",
             "UPDATE juntada_participante SET gasto_perdido_id = NULL, devolucion_id = NULL",
+            "DELETE FROM aviso_tope_ia",
+            "DELETE FROM uso_ia WHERE modelo LIKE '%" + PlanUsoIaPrueba.MARCA + "'",
             "DELETE FROM resumen_envio",
             "DELETE FROM resumen",
             "DELETE FROM movimiento_item",
@@ -93,6 +97,7 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
     private final IngresoService ingresos;
     private final GastoFijoService fijos;
     private final ReciboService recibos;
+    private final CalculadoraCostoIa calculadora;
     private final GastitoProperties properties;
     private final Environment entorno;
     private final ApplicationContext contexto;
@@ -100,7 +105,8 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
 
     public GeneradorDatosPrueba(DataSource dataSource, JdbcTemplate jdbc, TransactionTemplate transaccion,
             CatalogoService catalogos, MovimientoService movimientos, IngresoService ingresos,
-            GastoFijoService fijos, ReciboService recibos, GastitoProperties properties, Environment entorno, ApplicationContext contexto,
+            GastoFijoService fijos, ReciboService recibos, CalculadoraCostoIa calculadora,
+            GastitoProperties properties, Environment entorno, ApplicationContext contexto,
             Clock clock) {
         this.dataSource = dataSource;
         this.jdbc = jdbc;
@@ -110,6 +116,7 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
         this.ingresos = ingresos;
         this.fijos = fijos;
         this.recibos = recibos;
+        this.calculadora = calculadora;
         this.properties = properties;
         this.entorno = entorno;
         this.contexto = contexto;
@@ -200,7 +207,19 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
                     i.cuenta() == null ? null : buscar(cuentas, i.cuenta()).getId(), i.fecha());
         }
         cargarRecibos();
+        cargarUsoIa();
         cargarFijos(categorias, catalogo.tarjetaCredito().orElse(null));
+    }
+
+    /** Llamadas a la IA de los últimos meses, marcadas como de prueba, con el costo que tendrían con los precios de hoy. */
+    private void cargarUsoIa() {
+        String modelo = properties.ia().modelo();
+        for (PlanUsoIaPrueba.Llamada l : PlanUsoIaPrueba.armar(LocalDateTime.now(clock), MESES, SEMILLA)) {
+            jdbc.update("INSERT INTO uso_ia (fecha_hora, modelo, tokens_entrada, tokens_salida, proposito, costo_usd) "
+                    + "VALUES (?, ?, ?, ?, ?, ?)", java.sql.Timestamp.valueOf(l.fechaHora()),
+                    modelo + PlanUsoIaPrueba.MARCA, l.tokensEntrada(), l.tokensSalida(), l.proposito().name(),
+                    calculadora.costo(modelo, l.tokensEntrada(), l.tokensSalida()));
+        }
     }
 
     /**
