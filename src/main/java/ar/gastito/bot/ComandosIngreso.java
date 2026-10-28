@@ -64,6 +64,12 @@ public class ComandosIngreso {
         return Accion.Enviar.tarjeta(tarjetas.pendiente(m), tarjetas.principal(m), m.getId());
     }
 
+
+    /** El botón "Cambiar el mes del sueldo": pasa el período entre el mes anterior al cobro y el mes del cobro. */
+    public Movimiento alternarPeriodo(long id) {
+        return ingresos.alternarPeriodo(id);
+    }
+
     private static String ejemplo(ClaseIngreso clase, boolean sinNada) {
         String comando = COMANDOS.entrySet().stream().filter(e -> e.getValue() == clase).findFirst()
                 .orElseThrow().getKey();

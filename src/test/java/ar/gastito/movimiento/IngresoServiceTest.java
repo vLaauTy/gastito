@@ -82,6 +82,61 @@ class IngresoServiceTest {
         assertThat(m.getMedioPago().isEfectivo()).isTrue();
     }
 
+
+    @Test
+    void elSueldoCobradoHastaElQuinceEsDelMesAnterior() {
+        assertThat(cargar(ClaseIngreso.SUELDO, "100", null, LocalDate.of(2026, 10, 5)).getPeriodo())
+                .isEqualTo(YearMonth.of(2026, 9));
+        assertThat(cargar(ClaseIngreso.SUELDO, "100", null, LocalDate.of(2026, 10, 15)).getPeriodo())
+                .isEqualTo(YearMonth.of(2026, 9));
+        // El 5 de enero el período es diciembre del año anterior.
+        assertThat(ingresos.periodoPorDefecto(ClaseIngreso.SUELDO, LocalDate.of(2027, 1, 5)))
+                .isEqualTo(YearMonth.of(2026, 12));
+    }
+
+    @Test
+    void elSueldoCobradoDespuesDelQuinceEsDelMismoMes() {
+        assertThat(cargar(ClaseIngreso.SUELDO, "100", null, LocalDate.of(2026, 10, 16)).getPeriodo())
+                .isEqualTo(YearMonth.of(2026, 10));
+        assertThat(cargar(ClaseIngreso.SUELDO, "100", null, LocalDate.of(2026, 10, 21)).getPeriodo())
+                .isEqualTo(YearMonth.of(2026, 10));
+    }
+
+    @Test
+    void elAguinaldoEsDelMesDelCobroYUnExtraNoTienePeriodo() {
+        assertThat(cargar(ClaseIngreso.AGUINALDO, "100", null, LocalDate.of(2026, 10, 5)).getPeriodo())
+                .isEqualTo(YearMonth.of(2026, 10));
+        assertThat(cargar(ClaseIngreso.EXTRA, "100", null, LocalDate.of(2026, 10, 5)).getPeriodo()).isNull();
+    }
+
+    @Test
+    void laFechaDeCobroSigueContandoParaElDisponibleDeEseMes() {
+        cargar(ClaseIngreso.SUELDO, "1000", null, LocalDate.of(2026, 10, 5));
+
+        // Es el sueldo de septiembre, pero entró en octubre.
+        assertThat(ingresos.totalDelMes(OCTUBRE)).isEqualByComparingTo("1000");
+        assertThat(ingresos.totalDelMes(YearMonth.of(2026, 9))).isEqualByComparingTo("0");
+        assertThat(ingresos.sueldoDelPeriodo(YearMonth.of(2026, 9))).isEqualByComparingTo("1000");
+        assertThat(ingresos.sueldoDelPeriodo(OCTUBRE)).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void elPeriodoDeUnSueldoPendienteSeCambiaYVuelve() {
+        Movimiento pendiente = ingresos.crearPendiente(ClaseIngreso.SUELDO, new BigDecimal("1000"), null, null,
+                true, LocalDateTime.of(2026, 10, 5, 12, 0), "/sueldo 1000");
+        assertThat(pendiente.getPeriodo()).isEqualTo(YearMonth.of(2026, 9));
+
+        assertThat(ingresos.alternarPeriodo(pendiente.getId()).getPeriodo()).isEqualTo(OCTUBRE);
+        assertThat(ingresos.alternarPeriodo(pendiente.getId()).getPeriodo()).isEqualTo(YearMonth.of(2026, 9));
+    }
+
+    @Test
+    void unIngresoSinPeriodoCuentaEnElMesDeSuFecha() {
+        Movimiento viejo = cargar(ClaseIngreso.SUELDO, "700", null, LocalDate.of(2026, 10, 1));
+        viejo.definirPeriodo(null);
+
+        assertThat(ingresos.sueldoDelPeriodo(OCTUBRE)).isEqualByComparingTo("700");
+    }
     @Test
     void rechazaMontoFechaFuturaYCuentaInexistente() {
         assertThatThrownBy(() -> cargar(ClaseIngreso.SUELDO, "0", "Galicia", LocalDate.of(2026, 10, 1)))

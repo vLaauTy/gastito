@@ -3,6 +3,7 @@ package ar.gastito.movimiento;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -54,6 +55,9 @@ public class Movimiento {
     /** Solo en los ingresos: sueldo, aguinaldo o extra. */
     @Enumerated(EnumType.STRING)
     private ClaseIngreso claseIngreso;
+
+    /** Solo en un sueldo o aguinaldo: el día 1 del mes trabajado (se cobra después). Null en lo demás. */
+    private LocalDate periodo;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "categoria_id")
@@ -525,6 +529,20 @@ public class Movimiento {
 
     public TipoMovimiento getTipo() {
         return tipo;
+    }
+
+    /** El mes trabajado de un sueldo o aguinaldo; null si no tiene (un extra, o uno cargado antes de que existiera). */
+    public YearMonth getPeriodo() {
+        return periodo == null ? null : YearMonth.from(periodo);
+    }
+
+    /** El período, o el mes de la fecha si no tiene. */
+    public YearMonth periodoOFecha() {
+        return periodo != null ? YearMonth.from(periodo) : YearMonth.from(fechaHora);
+    }
+
+    public void definirPeriodo(YearMonth mes) {
+        this.periodo = mes == null ? null : mes.atDay(1);
     }
 
     public ClaseIngreso getClaseIngreso() {

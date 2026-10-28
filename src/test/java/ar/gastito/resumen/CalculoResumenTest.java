@@ -93,11 +93,14 @@ class CalculoResumenTest {
     @Autowired
     MedioPagoRepository medios;
 
+    @Autowired
+    org.springframework.jdbc.core.JdbcTemplate jdbc;
+
     @BeforeEach
     void cargarGastos() {
-        // El registro empieza antes de las dos semanas: la anterior tiene datos. Un ingreso no cuenta en los gastos.
-        ingresos.cargar(ClaseIngreso.EXTRA, new BigDecimal("1000"), "Inicio del registro", null,
-                LocalDate.of(2026, 9, 30));
+        // El registro empieza antes de las dos semanas: la anterior tiene datos (un gasto de un centavo, antes de las semanas, marca el inicio).
+        java.time.LocalDateTime inicio = LocalDate.of(2026, 9, 30).atStartOfDay().minusDays(1);
+        jdbc.update("INSERT INTO movimiento (fecha_hora, monto, tipo, origen, estado, creado_en, categoria_id) VALUES (?, CAST(0.01 AS NUMERIC(14, 2)), 'GASTO', 'TEXTO', 'CONFIRMADO', ?, (SELECT MIN(id) FROM categoria))", inicio, inicio);
         // Semana anterior: 1.000 de kiosco y 30.000 de súper.
         gasto("Kiosco", "1000", LocalDate.of(2026, 10, 6), true);
         gasto("Supermercado", "30000", LocalDate.of(2026, 10, 8), true);

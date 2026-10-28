@@ -6,7 +6,7 @@
  * la cuenta del sueldo, las diferencias y lo raro de un recibo llegan hechos.
  */
 (() => {
-  const { h, api, pesos, mostrarAviso, nombreMes, mesYAnio, mayuscula, numeroArg, estado } = window.Gastito;
+  const { h, api, pesos, mostrarAviso, nombreMes, mesYAnio, mayuscula, numeroArg, fechaCorta, estado } = window.Gastito;
   const $ = (selector) => document.querySelector(selector);
 
   const JSON_HEADERS = { 'Content-Type': 'application/json' };
@@ -139,10 +139,61 @@
       d.hallazgos.length
         ? h('div', {}, h('h3', {}, 'Para revisar'), h('ul', { class: 'raro' }, d.hallazgos.map((t) => h('li', {}, `⚠️ ${t}`))))
         : h('p', { class: 'mejora' }, d.conCalculo ? '✅ El recibo coincide con tu cálculo' : '✅ No encontré nada raro (sin cálculo ese mes para comparar los conceptos)'),
-      d.cobro ? null : h('p', { class: 'note' }, 'Todavía no cargaste lo que cobraste de este período: cuando lo cargues se compara solo.'),
+      vinculador(d),
       d.conArchivo
         ? h('a', { class: 'ver-todos', href: `/api/recibos/${d.id}/archivo`, target: '_blank', rel: 'noopener' }, 'Ver recibo')
         : null);
+  }
+
+  // --- Vincular el recibo con el sueldo cobrado (para corregir lo que se vinculó solo) ---
+
+  const mesMas = (mes, n) => {
+    const [a, m] = mes.split('-').map(Number);
+    const f = new Date(Date.UTC(a, m - 1 + n, 1));
+    return `${f.getUTCFullYear()}-${String(f.getUTCMonth() + 1).padStart(2, '0')}`;
+  };
+
+  const textoCobro = (c) => (c
+    ? `Sueldo cobrado vinculado: ${pesos(c.monto)} del ${c.fecha.slice(8, 10)}/${c.fecha.slice(5, 7)}${c.aMano ? ' (a mano)' : ' (por período)'}`
+    : 'Todavía no hay un sueldo cobrado vinculado a este recibo.');
+
+  function vinculador(d) {
+    const info = h('p', { class: 'note' }, textoCobro(d.cobro));
+    const caja = h('div', { class: 'vinculo' }, info);
+    const abrir = h('button', { type: 'button', class: 'mini' }, 'Vincular a mano');
+    abrir.addEventListener('click', async () => {
+      abrir.disabled = true;
+      try {
+        const meses = await Promise.all([0, 1, 2].map((n) => api(`/api/ingresos?mes=${mesMas(d.periodo, n)}`)));
+        const candidatos = meses.flatMap((r) => r.ingresos).filter((i) => i.clase === 'SUELDO' || i.clase === 'AGUINALDO');
+        const selector = h('select', { 'aria-label': 'Sueldo cobrado' },
+          h('option', { value: '' }, 'Buscar solo por período'),
+          ...candidatos.map((i) => h('option', { value: i.id, selected: d.cobro && d.cobro.movimientoId === i.id },
+            `${i.claseNombre} del ${fechaCorta(i.fecha)} · ${pesos(i.monto)}`)));
+        const guardar = h('button', { type: 'button', class: 'mini primary' }, 'Guardar vínculo');
+        guardar.addEventListener('click', async () => {
+          guardar.disabled = true;
+          try {
+            const r = await api(`/api/recibos/${d.id}/vincular`, {
+              method: 'POST', headers: JSON_HEADERS,
+              body: JSON.stringify({ movimientoId: selector.value ? Number(selector.value) : null }),
+            });
+            info.textContent = textoCobro(r.cobro);
+            seguimiento(estado.mes);
+          } catch (e) {
+            mostrarAviso(`No pude vincular el recibo: ${e.message}`);
+          } finally {
+            guardar.disabled = false;
+          }
+        });
+        abrir.replaceWith(selector, guardar);
+      } catch (e) {
+        mostrarAviso(`No pude cargar los sueldos cobrados: ${e.message}`);
+        abrir.disabled = false;
+      }
+    });
+    caja.append(abrir);
+    return caja;
   }
 
   // --- Calculadora ---

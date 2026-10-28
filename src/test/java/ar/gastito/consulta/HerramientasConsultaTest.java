@@ -61,6 +61,9 @@ class HerramientasConsultaTest {
     }
 
     @Autowired
+    org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @Autowired
     HerramientasConsulta herramientas;
 
     @Autowired
@@ -139,8 +142,8 @@ class HerramientasConsultaTest {
 
     @Test
     void compararOctubreConSeptiembre() {
-        ingresos.cargar(ClaseIngreso.EXTRA, new BigDecimal("1"), "Inicio del registro", null,
-                LocalDate.of(2026, 9, 1));
+        java.time.LocalDateTime inicio = LocalDate.of(2026, 9, 1).atStartOfDay().minusDays(1);
+        jdbc.update("INSERT INTO movimiento (fecha_hora, monto, tipo, origen, estado, creado_en, categoria_id) VALUES (?, CAST(0.01 AS NUMERIC(14, 2)), 'GASTO', 'TEXTO', 'CONFIRMADO', ?, (SELECT MIN(id) FROM categoria))", inicio, inicio);
         HerramientasConsulta.Comparacion c = herramientas.compararPeriodos(OCT_1, OCT_31, LocalDate.of(2026, 9, 1),
                 LocalDate.of(2026, 9, 30));
 

@@ -79,14 +79,14 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
     int pasarUsoIa(@Param("de") Long de, @Param("a") Long a);
 
     /**
-     * La fecha del primer movimiento confirmado, de cualquier tipo: antes de eso no hay datos. Null si no hay. Un
-     * recibo de sueldo no cuenta: es de un mes que pudo pasar antes de empezar a registrar, y tomarlo como el
-     * inicio haría pasar por "$0 gastado" a los meses sin gastos cargados.
+     * La fecha del primer gasto confirmado: antes de eso no hay datos. Null si no hay. Los ingresos, los recibos y lo
+     * demás no cuentan: un mes con solo un sueldo cargado no tiene gastos registrados, y tomarlo como el inicio
+     * haría pasar por "$0 gastado" a un mes que en realidad no tiene datos.
      */
     @Query("""
             select min(m.fechaHora) from Movimiento m
             where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
-              and m.origen <> ar.gastito.movimiento.Origen.RECIBO""")
+              and m.tipo = ar.gastito.movimiento.TipoMovimiento.GASTO""")
     LocalDateTime primerFechaConfirmada();
 
     /** Últimos gastos confirmados, del más nuevo al más viejo (ejemplos para la IA). */
@@ -171,6 +171,21 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
               and m.tipo = ar.gastito.movimiento.TipoMovimiento.INGRESO
               and m.fechaHora >= :desde and m.fechaHora < :hasta""")
     BigDecimal totalIngresos(@Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta);
+
+    /**
+     * Los ingresos guardados de una clase de un mes trabajado. Los que no tienen período (cargados antes de que
+     * existiera) cuentan en el mes de su fecha.
+     */
+    @Query("""
+            select m from Movimiento m
+            where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
+              and m.tipo = ar.gastito.movimiento.TipoMovimiento.INGRESO
+              and m.claseIngreso = :clase
+              and (m.periodo = :periodo
+                   or (m.periodo is null and m.fechaHora >= :desde and m.fechaHora < :hasta))
+            order by m.fechaHora desc, m.id desc""")
+    List<Movimiento> ingresosDelPeriodo(@Param("clase") ClaseIngreso clase, @Param("periodo") LocalDate periodo,
+            @Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta);
 
     /** Total de ingresos confirmados por año y mes, solo de los meses que tienen alguno. */
     @Query("""

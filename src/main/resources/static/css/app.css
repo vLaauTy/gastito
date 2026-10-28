@@ -212,3 +212,4 @@ tr.detalle-recibo td { background: var(--input-bg); padding: 12px 16px 16px; }
 input.corto { width: 72px; }
 .factor { white-space: nowrap; }
 ul.raro { color: var(--warn); }
+.vinculo { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

@@ -151,7 +151,7 @@ misma fecha sale lo mismo:
 - Algunas compras en el Día con el detalle del ticket y el 20% de ClubDía, basadas en el ticket real de ejemplo.
 - El mes del medio es caro (más salidas, ropa y compras grandes, alrededor de un 25% más), para que las
   comparaciones y los consejos tengan algo para mostrar.
-- Seis meses de sueldo: dos escalas (una paritaria a mitad de camino), el cálculo, lo cobrado y el recibo de cada mes
+- Seis meses de sueldo (cobrados el día 5 del mes siguiente): dos escalas (una paritaria a mitad de camino), el cálculo, lo cobrado y el recibo de cada mes
   (uno con la ley 19.032 al 2,5 %, una cosa rara; el último mes cobró $4.400 menos de lo calculado y todavía no
   tiene recibo), el aguinaldo y algunos extras (con
   descripción). Cada recibo trae sus conceptos y un PDF inventado, para probar **Ver recibo**. Borra y vuelve a
@@ -446,8 +446,13 @@ detalle por concepto.
 
 **Cobrado contra calculado:** al cargar el sueldo (`/sueldo`), si ese mes tiene cálculo, la tarjeta dice
 "Calculaste $1.114.400 · Cobraste $1.110.000 (−$4.400, −0,4%)". Si la diferencia pasa el 1 %
-(`gastito.sueldo.tolerancia-cobro-porcentaje`) lo marca con ⚠️. El ingreso se guarda igual, por lo cobrado. El mes
-de un sueldo cobrado es el de su fecha.
+(`gastito.sueldo.tolerancia-cobro-porcentaje`) lo marca con ⚠️. El ingreso se guarda igual, por lo cobrado.
+
+**Período del sueldo:** el sueldo se cobra alrededor del día 5 del mes siguiente. Cada sueldo (y aguinaldo) guarda la
+fecha de cobro, que cuenta para el disponible de ese mes, y además el **período** (el mes trabajado), con el que se
+vinculan el cálculo y el recibo. Por defecto el período es el mes anterior si se cobra hasta el día 15
+(`gastito.sueldo.dia-limite-periodo-anterior`) y, si no, el mismo mes. La tarjeta lo muestra ("Sueldo de octubre ·
+cobrado el 05/11") y el botón **📆 Cambiar el mes del sueldo** lo alterna.
 
 ### Recibos de sueldo
 

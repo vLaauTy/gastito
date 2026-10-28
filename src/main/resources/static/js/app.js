@@ -1015,7 +1015,7 @@
   }
 
   // Lo que sueldo.js necesita de acá (los formatos, la API y los avisos), sin repetirlo.
-  window.Gastito = Object.assign(window.Gastito || {}, { h, api, pesos, mostrarAviso, nombreMes, mesYAnio, mayuscula, numeroArg, estado });
+  window.Gastito = Object.assign(window.Gastito || {}, { h, api, pesos, mostrarAviso, nombreMes, mesYAnio, mayuscula, numeroArg, fechaCorta, estado });
 
   iniciar();
 })();

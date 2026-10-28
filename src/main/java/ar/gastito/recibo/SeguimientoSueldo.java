@@ -58,7 +58,7 @@ public class SeguimientoSueldo {
 
     public Mes mes(YearMonth mes) {
         BigDecimal calculado = sueldo.calculoDelMes(mes).map(CalculoSueldo::getNetoTotal).orElse(null);
-        BigDecimal cobrado = Optional.of(ingresos.delMes(mes).sueldo()).filter(s -> s.signum() > 0).orElse(null);
+        BigDecimal cobrado = Optional.of(ingresos.sueldoDelPeriodo(mes)).filter(s -> s.signum() > 0).orElse(null);
         Optional<ReciboService.VistaRecibo> recibo = recibos.delPeriodo(mes, TipoRecibo.SUELDO_MENSUAL);
         BigDecimal neto = recibo.map(ReciboService.VistaRecibo::neto).orElse(null);
         return new Mes(mes, calculado, cobrado, comparar(mes, calculado, cobrado),

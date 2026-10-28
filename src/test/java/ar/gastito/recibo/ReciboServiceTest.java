@@ -106,7 +106,7 @@ class ReciboServiceTest {
         GastitoProperties properties = new GastitoProperties(null, null, null, null,
                 new GastitoProperties.Ticket("data", 1568, DataSize.ofMegabytes(1), 4096), null, null);
         recibos = new ReciboService(new LectorPdf(), imagenes, lector, new ValidadorRecibo(clock),
-                new MapeadorConceptos(mapeos, ia, prompts), control, sueldo, reciboRepository, archivos, properties,
+                new MapeadorConceptos(mapeos, ia, prompts), control, sueldo, ingresos, reciboRepository, archivos, properties,
                 transacciones, clock);
         when(imagenes.preparar(any())).thenReturn(new ImagenTicket.Imagen(FOTO, 10, 10));
         when(prompts.cargar(anyString(), any())).thenReturn("instrucciones");
@@ -330,13 +330,28 @@ class ReciboServiceTest {
         assertThat(recibos.cobroDe(id)).isEmpty();
     }
 
+
     @Test
-    void sePuedeVincularAManoUnSueldoDeOtroMes() throws IOException {
-        // El sueldo de octubre se cobró el 3 de noviembre y está cargado en noviembre.
-        Movimiento cobro = cobrar(ClaseIngreso.SUELDO, "1037500", LocalDate.of(2026, 11, 3));
+    void elSueldoDeOctubreCobradoElCuatroDeNoviembreSeVinculaSoloPorPeriodo() throws IOException {
+        // Se cobra alrededor del 5 el sueldo del mes anterior: el período del ingreso es octubre.
+        Movimiento cobro = cobrar(ClaseIngreso.SUELDO, "1037500", LocalDate.of(2026, 11, 4));
+        assertThat(cobro.getPeriodo()).isEqualTo(YearMonth.of(2026, 10));
+        laIaLee(ValidadorReciboTest.octubre());
+
+        ReciboService.VistaRecibo vista = vista(recibos.leerPdf(LectorPdfTest.reciboInventado(), null));
+
+        assertThat(vista.cobro().movimientoId()).isEqualTo(cobro.getId());
+        assertThat(vista.cobro().aMano()).isFalse();
+        assertThat(vista.control().sinNadaRaro()).isTrue();
+    }
+
+    @Test
+    void sePuedeVincularAManoParaCorregirYVolverAlAutomatico() throws IOException {
+        // Cargado por error con el período de septiembre: se corrige vinculando a mano.
+        Movimiento cobro = cobrar(ClaseIngreso.SUELDO, "1037500", LocalDate.of(2026, 9, 20));
+        assertThat(cobro.getPeriodo()).isEqualTo(YearMonth.of(2026, 9));
         laIaLee(ValidadorReciboTest.octubre());
         Long id = vista(recibos.leerPdf(LectorPdfTest.reciboInventado(), null)).id();
-        assertThat(recibos.cobroDe(id)).isEmpty();
 
         ReciboService.VistaRecibo vinculado = recibos.vincular(id, cobro.getId());
 

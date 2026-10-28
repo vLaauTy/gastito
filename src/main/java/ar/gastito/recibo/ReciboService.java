@@ -22,8 +22,8 @@ import org.springframework.util.unit.DataSize;
 
 import ar.gastito.config.GastitoProperties;
 import ar.gastito.ia.ClienteIa;
+import ar.gastito.movimiento.IngresoService;
 import ar.gastito.movimiento.Movimiento;
-import ar.gastito.movimiento.Periodo;
 import ar.gastito.sueldo.CalculoSueldo;
 import ar.gastito.sueldo.SueldoService;
 import ar.gastito.ticket.ImagenInvalidaException;
@@ -46,6 +46,7 @@ public class ReciboService {
     private final MapeadorConceptos mapeador;
     private final ControlRecibo control;
     private final SueldoService sueldo;
+    private final IngresoService ingresos;
     private final ReciboRepository recibos;
     private final ArchivosRecibo archivos;
     private final TransactionTemplate transaccion;
@@ -53,7 +54,7 @@ public class ReciboService {
     private final Clock clock;
 
     public ReciboService(LectorPdf pdfs, ImagenTicket imagenes, LectorRecibo lector, ValidadorRecibo validador,
-            MapeadorConceptos mapeador, ControlRecibo control, SueldoService sueldo, ReciboRepository recibos,
+            MapeadorConceptos mapeador, ControlRecibo control, SueldoService sueldo, IngresoService ingresos, ReciboRepository recibos,
             ArchivosRecibo archivos, GastitoProperties properties, PlatformTransactionManager transacciones,
             Clock clock) {
         this.pdfs = pdfs;
@@ -63,6 +64,7 @@ public class ReciboService {
         this.mapeador = mapeador;
         this.control = control;
         this.sueldo = sueldo;
+        this.ingresos = ingresos;
         this.recibos = recibos;
         this.archivos = archivos;
         this.transaccion = new TransactionTemplate(transacciones);
@@ -263,8 +265,7 @@ public class ReciboService {
         if (!r.getTipo().reemplazaCargaManual()) {
             return null;
         }
-        Periodo mes = Periodo.delMes(r.getPeriodo());
-        return recibos.ingresosGuardados(r.getTipo().claseIngreso(), mes.desde(), mes.hasta()).stream()
+        return ingresos.delPeriodo(r.getTipo().claseIngreso(), r.getPeriodo()).stream()
                 .findFirst().map(m -> cobro(m, false)).orElse(null);
     }
 

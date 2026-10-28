@@ -70,6 +70,8 @@ gastito:
     # Al controlar un recibo: pesos que se perdonan por concepto y puntos que se perdonan en un porcentaje de descuento.
     tolerancia-concepto: 1
     tolerancia-porcentaje: 0.05
+    # Un sueldo cobrado hasta este día del mes es del mes anterior (se cobra alrededor del 5); después, del mismo mes.
+    dia-limite-periodo-anterior: 15
   ticket:
     # Las fotos quedan en data/tickets/AAAA/MM/<id>.jpg (data/ está en el .gitignore).
     carpeta-datos: data

@@ -256,7 +256,9 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
             YearMonth mes = hasta.minusMonths(PlanSueldoPrueba.MESES - 1L - i);
             sueldo.guardar(mes, sueldo.horasPorOrden(PlanSueldoPrueba.horas(i)), Map.of());
             CalculoSueldo calculo = sueldo.calculoDelMes(mes).orElseThrow();
-            LocalDate fechaCobro = mes.atEndOfMonth().isAfter(hoy) ? hoy : mes.atEndOfMonth();
+            // Se cobra el día 5 del mes siguiente (el período queda en el mes trabajado); el mes en curso, hoy.
+            LocalDate finDeMes = mes.atEndOfMonth().isAfter(hoy) ? hoy : mes.atEndOfMonth();
+            LocalDate fechaCobro = mes.equals(hasta) ? finDeMes : minima(mes.plusMonths(1).atDay(5), hoy);
             BigDecimal cobrado;
             if (mes.equals(hasta)) {
                 cobrado = calculo.getNetoTotal().subtract(PlanSueldoPrueba.DIFERENCIA_COBRO);
@@ -273,7 +275,7 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
                 ReciboLeido aguinaldo = PlanRecibosPrueba.aguinaldo(mes, mejorRemuneracion);
                 recibos.guardar(aguinaldo, PlanRecibosPrueba.pdf(aguinaldo), "pdf", false);
                 ingresos.cargar(ClaseIngreso.AGUINALDO, aguinaldo.neto(), "Aguinaldo " + mes, galicia.getId(),
-                        fechaCobro);
+                        finDeMes);
             }
         }
     }
@@ -303,6 +305,10 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
                 buscar(categorias, "Suscripciones"), null, null, tarjeta, 15, Frecuencia.MENSUAL, false,
                 "netflix.com", false));
         fijos.cargarManual(netflix.id(), new BigDecimal("7999"), ahora.minusDays(2), Origen.DASHBOARD, null);
+    }
+
+    private static LocalDate minima(LocalDate a, LocalDate b) {
+        return a.isBefore(b) ? a : b;
     }
 
     private static <T> Map<String, T> porNombre(List<T> elementos, Function<T, String> nombre) {

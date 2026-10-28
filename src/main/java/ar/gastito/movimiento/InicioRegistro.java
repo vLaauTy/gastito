@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Desde cuándo hay datos: el día del primer movimiento confirmado. Un período que empieza antes no tiene datos
+ * Desde cuándo hay datos: el día del primer gasto confirmado. Un período que empieza antes no tiene datos
  * (no es que se gastó $0): no se compara contra él ni se calculan ahorros con él. Si el registro empezó a mitad
  * del período, tampoco cuenta: estaría incompleto y la comparación engañaría.
  */
@@ -21,7 +21,7 @@ public class InicioRegistro {
         this.movimientos = movimientos;
     }
 
-    /** El día del primer movimiento confirmado, o vacío si todavía no hay ninguno. */
+    /** El día del primer gasto confirmado, o vacío si todavía no hay ninguno. */
     @Transactional(readOnly = true)
     public Optional<LocalDate> primerDia() {
         LocalDateTime primero = movimientos.primerFechaConfirmada();

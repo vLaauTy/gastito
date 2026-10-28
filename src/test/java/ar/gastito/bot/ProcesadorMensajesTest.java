@@ -1314,6 +1314,21 @@ class ProcesadorMensajesTest {
         assertThat(procesador.procesarPdf(CHAT, MENSAJE_USUARIO, pdf)).containsExactly(tarjeta);
     }
 
+
+    @Test
+    void elBotonDelMesDelSueldoCambiaElPeriodoYVuelveALaTarjeta() {
+        Movimiento sueldo = ar.gastito.bot.DatosDePrueba.conId(Movimiento.ingreso(
+                ar.gastito.movimiento.ClaseIngreso.SUELDO, new BigDecimal("1110000"), null, null, null,
+                java.time.LocalDateTime.of(2026, 11, 5, 12, 0), Origen.TEXTO, null, AHORA), ID);
+        sueldo.definirPeriodo(java.time.YearMonth.of(2026, 10));
+        when(ingresos.alternarPeriodo(ID)).thenReturn(sueldo);
+
+        Accion.Editar tarjeta = edicion(tocar("pp:" + ID));
+
+        assertThat(tarjeta.html()).contains("Sueldo de octubre · cobrado el 05/11");
+        assertThat(tarjeta.teclado().botones()).extracting(Teclado.Boton::datos).contains("pp:" + ID);
+        verify(movimientos, never()).confirmar(any());
+    }
     @Test
     void elBotonDescartarBorraElRecibo() {
         List<Accion> descartado = List.of(new Accion.Avisar("descartado"));

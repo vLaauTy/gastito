@@ -753,6 +753,7 @@ public class ProcesadorMensajes {
             case Tarjetas.EDITAR -> List.of(new Accion.Editar(mensajeId, tarjetas.pendiente(pendiente(id)),
                     tarjetas.edicion(id)));
             case TarjetasRecibo.DESCARTAR -> recibos.descartar(mensajeId, id);
+            case Tarjetas.PERIODO -> List.of(principal(chatId, mensajeId, comandosIngreso.alternarPeriodo(id)));
             case Tarjetas.OTRA_CATEGORIA -> List.of(new Accion.Editar(mensajeId, tarjetas.pendiente(pendiente(id)),
                     tarjetas.categorias(id, catalogos.cargar().categorias())));
             case Tarjetas.MEDIOS -> List.of(new Accion.Editar(mensajeId, tarjetas.pendiente(pendiente(id)),

@@ -45,6 +45,8 @@ public class Tarjetas {
     static final String EDITAR_FECHA = "ef";
     static final String EDITAR_DESCRIPCION = "ed";
     static final String APLICAR = "a";
+    /** Un sueldo pendiente: cambiar su período entre el mes anterior al cobro y el mes del cobro. */
+    static final String PERIODO = "pp";
     /** Compras repetidas: unir el nuevo con el que ya estaba, o guardar los dos. */
     static final String UNIR = "ru";
     static final String DE_NUEVO = "rd";
@@ -113,7 +115,7 @@ public class Tarjetas {
 
     @Autowired(required = false)
     void usarSueldo(SueldoService servicio) {
-        usarSueldo(m -> servicio.comparar(YearMonth.from(m.getFechaHora()), m.getMonto())
+        usarSueldo(m -> servicio.comparar(m.periodoOFecha(), m.getMonto())
                 .map(c -> "🧮 " + TarjetasRecibo.textoComparacion(c, formato, true)));
     }
 
@@ -404,10 +406,23 @@ public class Tarjetas {
         };
     }
 
+
+    /** "Sueldo de octubre · cobrado el 05/11": el mes trabajado y cuándo se cobró. */
+    private String claseConPeriodo(Movimiento m) {
+        YearMonth periodo = m.getPeriodo();
+        if (periodo == null) {
+            return m.getClaseIngreso().getNombre();
+        }
+        String mes = periodo.getMonth().getDisplayName(java.time.format.TextStyle.FULL,
+                java.util.Locale.forLanguageTag("es-AR"));
+        return m.getClaseIngreso().getNombre() + " de " + mes + (periodo.getYear() == m.getFechaHora().getYear()
+                ? "" : " " + periodo.getYear()) + " · cobrado el "
+                + java.time.format.DateTimeFormatter.ofPattern("dd/MM").format(m.getFechaHora());
+    }
     private String datosIngreso(Movimiento m) {
         List<String> lineas = new ArrayList<>();
         lineas.add("💰 <b>" + formato.pesos(m.getMonto()) + "</b>");
-        lineas.add("🏷 " + m.getClaseIngreso().getNombre());
+        lineas.add("🏷 " + claseConPeriodo(m));
         if (m.getDescripcion() != null && !m.getDescripcion().isBlank()) {
             lineas.add("📝 " + html(m.getDescripcion()));
         }
@@ -434,6 +449,9 @@ public class Tarjetas {
         Teclado.Constructor t = Teclado.constructor();
         if (m.isIngreso()) {
             t.fila(boton("✅ Guardar", GUARDAR, id), boton("❌ Cancelar", CANCELAR, id));
+            if (m.getClaseIngreso() == ClaseIngreso.SUELDO && m.getPeriodo() != null) {
+                t.fila(boton("📆 Cambiar el mes del sueldo", PERIODO, id));
+            }
         } else if (m.getCategoria() == null) {
             for (Categoria c : m.getCandidatas()) {
                 t.fila(boton(c.getNombreConEmoji(), CATEGORIA, id, c.getId()));

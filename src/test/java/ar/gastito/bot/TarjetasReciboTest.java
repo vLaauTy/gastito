@@ -198,4 +198,38 @@ class TarjetasReciboTest {
         assertThat(tarjetasDeMovimientos.pendiente(sueldoCobrado)).contains("🧮 Calculaste $1.114.400");
         assertThat(tarjetasDeMovimientos.pendiente(extra)).doesNotContain("Calculaste");
     }
+
+    private static Movimiento sueldoCobradoEl5DeNoviembre() {
+        Movimiento m = conId(Movimiento.ingreso(ClaseIngreso.SUELDO, new BigDecimal("1110000"), null, null, null,
+                java.time.LocalDateTime.of(2026, 11, 5, 12, 0), Origen.TEXTO, null, AHORA), ID);
+        m.definirPeriodo(YearMonth.of(2026, 10));
+        return m;
+    }
+
+    @Test
+    void laTarjetaDelSueldoDiceElMesTrabajadoYCuandoSeCobro() {
+        Tarjetas tarjetasDeMovimientos = new Tarjetas(new FormatoMensajes(RELOJ));
+
+        assertThat(tarjetasDeMovimientos.pendiente(sueldoCobradoEl5DeNoviembre()))
+                .contains("🏷 Sueldo de octubre · cobrado el 05/11");
+    }
+
+    @Test
+    void elSueldoPendienteTieneElBotonParaCambiarElMes() {
+        Tarjetas tarjetasDeMovimientos = new Tarjetas(new FormatoMensajes(RELOJ));
+
+        assertThat(tarjetasDeMovimientos.principal(sueldoCobradoEl5DeNoviembre()).botones())
+                .extracting(Teclado.Boton::datos).containsExactly("g:" + ID, "c:" + ID, "pp:" + ID);
+    }
+
+    @Test
+    void unExtraNoTienePeriodoNiBotonDeMes() {
+        Tarjetas tarjetasDeMovimientos = new Tarjetas(new FormatoMensajes(RELOJ));
+        Movimiento extra = conId(Movimiento.ingreso(ClaseIngreso.EXTRA, new BigDecimal("25000"), "PC", null, null,
+                AHORA, Origen.TEXTO, null, AHORA), ID);
+
+        assertThat(tarjetasDeMovimientos.pendiente(extra)).doesNotContain("cobrado el");
+        assertThat(tarjetasDeMovimientos.principal(extra).botones()).extracting(Teclado.Boton::datos)
+                .containsExactly("g:" + ID, "c:" + ID);
+    }
 }

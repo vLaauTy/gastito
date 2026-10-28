@@ -135,10 +135,18 @@ class DashboardServiceTest {
 
     /** El registro empieza ese día: un movimiento entre cuentas, que no cuenta en nada. */
     private void registroDesde(LocalDateTime fecha) {
-        otroTipo("ENTRE_CUENTAS", "1", fecha);
+        // Un gasto de un centavo el día anterior: marca el inicio sin tocar los totales de los períodos comparados.
+        marcaDeInicio(fecha.minusDays(1));
     }
 
-    /** Un movimiento confirmado de un tipo que no es gasto. */
+
+    private void marcaDeInicio(LocalDateTime fecha) {
+        jdbc.update("""
+                INSERT INTO movimiento (fecha_hora, monto, tipo, origen, estado, creado_en, categoria_id)
+                VALUES (?, CAST(0.01 AS NUMERIC(14, 2)), 'GASTO', 'TEXTO', 'CONFIRMADO', ?,
+                        (SELECT MIN(id) FROM categoria))""", fecha, fecha);
+    }
+    /** Un movimiento confirmado de ese tipo, sin categoría. */
     private void otroTipo(String tipo, String monto, LocalDateTime fecha) {
         jdbc.update("""
                 INSERT INTO movimiento (fecha_hora, monto, tipo, origen, estado, creado_en)

@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,13 +35,16 @@ public class IngresoService {
     private final CuentaRepository cuentas;
     private final MedioPagoRepository medios;
     private final Clock clock;
+    private final int diaLimitePeriodoAnterior;
 
     public IngresoService(MovimientoRepository movimientos, CuentaRepository cuentas, MedioPagoRepository medios,
-            Clock clock) {
+            Clock clock,
+            @Value("${gastito.sueldo.dia-limite-periodo-anterior:15}") int diaLimitePeriodoAnterior) {
         this.movimientos = movimientos;
         this.cuentas = cuentas;
         this.medios = medios;
         this.clock = clock;
+        this.diaLimitePeriodoAnterior = diaLimitePeriodoAnterior;
     }
 
     /**
@@ -73,6 +77,7 @@ public class IngresoService {
                 .orElseThrow(() -> new IllegalArgumentException("No existe esa cuenta"));
         Movimiento m = Movimiento.ingreso(clase, monto, limpiar(descripcion), cuenta, efectivo(cuenta == null),
                 fecha.atStartOfDay(), Origen.DASHBOARD, null, ahora());
+        m.definirPeriodo(periodoPorDefecto(clase, fecha));
         m.confirmar();
         return movimientos.save(m);
     }
@@ -97,10 +102,53 @@ public class IngresoService {
                         && anterior.get(0).getMedioPago().isEfectivo();
             }
         }
-        return movimientos.save(Movimiento.ingreso(clase, monto, limpiar(descripcion), cuenta, efectivo(enEfectivo),
-                fechaHora, origen, textoOriginal, ahora()));
+        Movimiento m = Movimiento.ingreso(clase, monto, limpiar(descripcion), cuenta, efectivo(enEfectivo),
+                fechaHora, origen, textoOriginal, ahora());
+        m.definirPeriodo(periodoPorDefecto(clase, fechaHora.toLocalDate()));
+        return movimientos.save(m);
     }
 
+
+    /**
+     * El mes trabajado de un ingreso según cuándo se cobró: el sueldo se cobra alrededor del día 5 del mes siguiente,
+     * así que hasta el día límite (15 por omisión) es del mes anterior y después, del mismo mes. El aguinaldo es del
+     * mes en que se cobra. Un extra no tiene período.
+     */
+    public YearMonth periodoPorDefecto(ClaseIngreso clase, LocalDate cobro) {
+        YearMonth mes = YearMonth.from(cobro);
+        return switch (clase) {
+            case SUELDO -> cobro.getDayOfMonth() <= diaLimitePeriodoAnterior ? mes.minusMonths(1) : mes;
+            case AGUINALDO -> mes;
+            case EXTRA -> null;
+        };
+    }
+
+    /** Pasa un sueldo pendiente entre "el mes anterior al cobro" y "el mes del cobro", para corregir el período. */
+    @Transactional
+    public Movimiento alternarPeriodo(Long id) {
+        Movimiento m = movimientos.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("No existe el movimiento " + id));
+        if (m.getPeriodo() == null) {
+            throw new IllegalArgumentException("Este ingreso no tiene período");
+        }
+        YearMonth delCobro = YearMonth.from(m.getFechaHora());
+        m.definirPeriodo(m.getPeriodo().equals(delCobro) ? delCobro.minusMonths(1) : delCobro);
+        return m;
+    }
+
+    /** Los ingresos guardados de una clase que pertenecen a un mes trabajado, del más nuevo al más viejo. */
+    @Transactional(readOnly = true)
+    public List<Movimiento> delPeriodo(ClaseIngreso clase, YearMonth periodo) {
+        Periodo mes = Periodo.delMes(periodo);
+        return movimientos.ingresosDelPeriodo(clase, periodo.atDay(1), mes.desde(), mes.hasta());
+    }
+
+    /** Lo cobrado como sueldo por un mes trabajado. */
+    @Transactional(readOnly = true)
+    public BigDecimal sueldoDelPeriodo(YearMonth periodo) {
+        return delPeriodo(ClaseIngreso.SUELDO, periodo).stream().map(Movimiento::getMonto)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
     /** Borra un ingreso guardado (queda cancelado). */
     @Transactional
     public Movimiento anular(Long id) {
