@@ -163,6 +163,18 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
     @Query(nativeQuery = true, value = "DELETE FROM movimiento WHERE plan_cuotas_id = :plan AND fecha_hora > :hasta")
     int borrarCuotasFuturas(@Param("plan") Long planCuotasId, @Param("hasta") LocalDateTime hasta);
 
+    /** Cancelar un plan desde una cuota: se borran esa cuota y las que siguen (con sus productos, por cascada). */
+    @Modifying
+    @Query(nativeQuery = true,
+            value = "DELETE FROM movimiento WHERE plan_cuotas_id = :plan AND cuota_actual >= :desde")
+    int borrarCuotasDesde(@Param("plan") Long planCuotasId, @Param("desde") int cuotaDesde);
+
+    @Modifying
+    @Query(nativeQuery = true, value = """
+            UPDATE uso_ia SET movimiento_id = NULL WHERE movimiento_id IN
+                (SELECT id FROM movimiento WHERE plan_cuotas_id = :plan AND cuota_actual >= :desde)""")
+    int desvincularUsoIaDeCuotasDesde(@Param("plan") Long planCuotasId, @Param("desde") int cuotaDesde);
+
     /** Antes de borrar un movimiento: el uso de la IA que lo interpretó queda, sin el vínculo. */
     @Modifying
     @Query(nativeQuery = true, value = "UPDATE uso_ia SET movimiento_id = NULL WHERE movimiento_id = :id")

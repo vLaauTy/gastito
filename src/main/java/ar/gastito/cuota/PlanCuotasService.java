@@ -95,6 +95,25 @@ public class PlanCuotasService {
         return vista(plan);
     }
 
+    /**
+     * Desde el dashboard, sobre una cuota: el plan queda cancelado y se borran esa cuota y las que siguen (ya
+     * pasadas o no); las anteriores quedan.
+     */
+    @Transactional
+    public void cancelarDesde(Long movimientoId) {
+        Movimiento cuota = movimiento(movimientoId);
+        if (cuota.getPlanCuotasId() == null) {
+            throw new IllegalArgumentException("El movimiento " + movimientoId + " no es una cuota");
+        }
+        PlanCuotas plan = plan(cuota.getPlanCuotasId());
+        if (plan.getEstado() == EstadoPlanCuotas.ACTIVO) {
+            plan.cancelar();
+        }
+        planes.flush();
+        movimientos.desvincularUsoIaDeCuotasDesde(plan.getId(), cuota.getCuotaActual());
+        movimientos.borrarCuotasDesde(plan.getId(), cuota.getCuotaActual());
+    }
+
     // --- Consultas ---
 
     /** Los planes activos que ya tienen al menos una cuota guardada (si se canceló el gasto, no cuenta). */

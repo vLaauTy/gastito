@@ -35,11 +35,13 @@
     }
   }
 
-  // Tocar la tarjeta despliega el detalle (productos del ticket, conceptos del recibo).
+  // Tocar la tarjeta despliega el detalle (productos del ticket, conceptos del recibo) y, en un gasto, Editar y
+  // Eliminar.
   document.addEventListener('click', (e) => {
     if (!chico.matches) return;
     const fila = e.target.closest('tbody > tr');
     if (!fila || e.target.closest('button, a, input, select, label')) return;
+    if (fila.querySelector('td.acciones')) fila.classList.toggle('abierta');
     const boton = fila.querySelector('button.desplegar');
     if (boton && !boton.disabled) boton.click();
   });

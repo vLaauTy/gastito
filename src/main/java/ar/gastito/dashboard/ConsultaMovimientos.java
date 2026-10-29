@@ -140,10 +140,37 @@ public class ConsultaMovimientos {
      * @param ticket           si vino de la foto de un ticket (la fila se despliega con los productos)
      * @param foto             si guardó la foto del ticket
      * @param estimado         el cobro de un fijo tildado con el monto aproximado, sin corregir
+     * @param medioPagoId      para el diálogo de editar; null si no se sabe
+     * @param cuentaId         para el diálogo de editar; null si no tiene
+     * @param especial         lo que no se borra como un gasto común (ver {@link Especial}), o null
+     * @param cuotaActual      de una cuota, cuál es; si no, null
+     * @param cuotaTotal       de una cuota, de cuántas; si no, null
      */
     public record Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
             String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
-            boolean foto, boolean estimado) {
+            boolean foto, boolean estimado, Long medioPagoId, Long cuentaId, Especial especial, Integer cuotaActual,
+            Integer cuotaTotal) {
+
+        /** Una fila de un gasto común, sin los datos para editar (los tests y lo que no se edita). */
+        public Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
+                String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
+                boolean foto, boolean estimado) {
+            this(id, fechaHora, descripcion, categoriaId, categoria, emoji, medio, sinEspecificar, origen, monto,
+                    ticket, foto, estimado, null, null, null, null, null);
+        }
+    }
+
+    /**
+     * Un gasto que no se borra como uno común: una juntada (se borra entera, o es una parte dada por perdida), una
+     * cuota (se cancela el plan desde ella) o el pago de un fijo (el fijo vuelve a "Falta").
+     */
+    public enum Especial {
+        JUNTADA, CUOTA, FIJO;
+
+        static Especial de(Movimiento m) {
+            return m.isJuntada() ? JUNTADA : m.getPlanCuotasId() != null ? CUOTA : m.getGastoFijoId() != null ? FIJO
+                    : null;
+        }
     }
 
     public record Pagina(List<Fila> elementos, int pagina, int tamanio, long totalElementos, int totalPaginas) {
@@ -237,14 +264,17 @@ public class ConsultaMovimientos {
         return texto.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
-    private static Fila fila(Movimiento m) {
+    static Fila fila(Movimiento m) {
         return new Fila(m.getId(), m.getFechaHora(), m.getDescripcion(),
                 m.getCategoria() == null ? null : m.getCategoria().getId(),
                 m.getCategoria() == null ? null : m.getCategoria().getNombre(),
                 m.getCategoria() == null ? null : m.getCategoria().getEmoji(),
                 medio(m), sinEspecificar(m), m.getOrigen().name(),
                 m.getMonto().setScale(2, RoundingMode.HALF_UP), m.getOrigen() == Origen.TICKET,
-                m.getFotoTicket() != null, m.isMontoEstimado());
+                m.getFotoTicket() != null, m.isMontoEstimado(),
+                m.getMedioPago() == null ? null : m.getMedioPago().getId(),
+                m.getCuenta() == null ? null : m.getCuenta().getId(),
+                Especial.de(m), m.getCuotaActual(), m.getCuotaTotal());
     }
 
     private static boolean sinEspecificar(Movimiento m) {

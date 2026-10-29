@@ -302,6 +302,32 @@ class JuntadaServiceTest {
                 .hasMessageContaining("ya te pagó más que eso");
     }
 
+    // --- Borrar ---
+
+    @Test
+    void unaJuntadaSinPagosSeBorraEnteraConLoQueMeDeben() {
+        VistaJuntada v = guardada(asado("48000", 6, "Martín"));
+
+        juntadas.borrarEntera(v.movimientoId());
+
+        assertThat(repositorio.findById(v.movimientoId())).isEmpty();
+        assertThat(juntadasRepo.findByMovimientoId(v.movimientoId())).isEmpty();
+        assertThat(juntadas.conDeudasPendientes()).isEmpty();
+    }
+
+    @Test
+    void conUnaParteYaPagadaOPerdidaNoSeBorraEntera() {
+        VistaJuntada v = guardada(asado("48000", 6, "Martín"));
+        juntadas.darPorPerdido(v.participantes().get(0).id());
+        Long perdido = juntadaDe(v).getParticipantes().get(0).getGastoPerdidoId();
+
+        assertThatThrownBy(() -> juntadas.borrarEntera(v.movimientoId()))
+                .isInstanceOf(ar.gastito.movimiento.MovimientoEspecialException.class)
+                .hasMessageContaining("ya te devolvieron plata o diste por perdida una parte");
+        assertThatThrownBy(() -> juntadas.borrarEntera(perdido))
+                .hasMessage("Es la parte de Martín que diste por perdida en una juntada: no se borra suelta");
+    }
+
     private Juntada juntadaDe(VistaJuntada v) {
         return juntadasRepo.findByMovimientoId(v.movimientoId()).orElseThrow();
     }

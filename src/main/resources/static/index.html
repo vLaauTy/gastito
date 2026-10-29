@@ -117,7 +117,7 @@
           </div>
           <div class="scroll">
             <table>
-              <thead><tr><th>Fecha</th><th>Detalle</th><th>Categoría</th><th>Medio</th><th>Origen</th><th class="num">Monto</th></tr></thead>
+              <thead><tr><th>Fecha</th><th>Detalle</th><th>Categoría</th><th>Medio</th><th>Origen</th><th class="num">Monto</th><th class="acciones"><span class="sr">Acciones</span></th></tr></thead>
               <tbody id="r-movimientos"></tbody>
             </table>
           </div>
@@ -169,7 +169,7 @@
         </div>
         <div class="scroll">
           <table>
-            <thead><tr><th>Fecha</th><th>Detalle</th><th>Categoría</th><th>Medio</th><th>Origen</th><th class="num">Monto</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Detalle</th><th>Categoría</th><th>Medio</th><th>Origen</th><th class="num">Monto</th><th class="acciones"><span class="sr">Acciones</span></th></tr></thead>
             <tbody id="m-movimientos"></tbody>
           </table>
         </div>
@@ -440,6 +440,43 @@
       <button type="submit" class="primary" id="form-fijo-guardar">Guardar</button>
     </div>
   </form>
+</div>
+
+<!-- ===== Editar un gasto ===== -->
+<div class="modal" id="modal-movimiento" hidden>
+  <form class="card dialog" id="form-movimiento" aria-labelledby="form-movimiento-titulo" novalidate>
+    <h2 id="form-movimiento-titulo">Editar gasto</h2>
+    <label for="mv-monto">Monto</label>
+    <input id="mv-monto" inputmode="decimal" placeholder="3.700" required autocomplete="off">
+    <p class="note" id="mv-monto-nota" hidden></p>
+    <label for="mv-fecha">Fecha</label>
+    <input id="mv-fecha" type="date" required>
+    <label for="mv-desc">Descripción</label>
+    <input id="mv-desc" maxlength="255" autocomplete="off">
+    <label for="mv-categoria">Categoría</label>
+    <select id="mv-categoria" data-categorias required></select>
+    <label for="mv-medio">Medio de pago</label>
+    <select id="mv-medio"><option value="">Sin especificar</option></select>
+    <label for="mv-cuenta">Cuenta</label>
+    <select id="mv-cuenta"><option value="">—</option></select>
+    <p class="error" id="form-movimiento-error" role="alert" hidden></p>
+    <div class="btns fin">
+      <button type="button" data-cerrar-movimiento>Cancelar</button>
+      <button type="submit" class="primary" id="form-movimiento-guardar">Guardar</button>
+    </div>
+  </form>
+</div>
+
+<!-- ===== Eliminar un gasto ===== -->
+<div class="modal" id="modal-borrar" hidden>
+  <div class="card dialog" role="alertdialog" aria-labelledby="borrar-titulo" aria-describedby="borrar-nota">
+    <h2 id="borrar-titulo">¿Eliminar?</h2>
+    <p class="note" id="borrar-nota" hidden></p>
+    <div class="btns fin">
+      <button type="button" data-cerrar-borrar>Cancelar</button>
+      <button type="button" class="peligro" id="borrar-confirmar">Eliminar</button>
+    </div>
+  </div>
 </div>
 
 <!-- ===== Cargar o corregir el monto de un fijo ===== -->

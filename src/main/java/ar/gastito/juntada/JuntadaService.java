@@ -18,6 +18,7 @@ import ar.gastito.catalogo.Cuenta;
 import ar.gastito.catalogo.MedioPago;
 import ar.gastito.movimiento.EstadoMovimiento;
 import ar.gastito.movimiento.Movimiento;
+import ar.gastito.movimiento.MovimientoEspecialException;
 import ar.gastito.movimiento.MovimientoInterpretado;
 import ar.gastito.movimiento.MovimientoRepository;
 import ar.gastito.movimiento.MovimientoService;
@@ -234,6 +235,33 @@ public class JuntadaService {
         gasto.confirmar();
         p.perdido(gasto.getId());
         return vista(j);
+    }
+
+    // --- Borrar ---
+
+    /**
+     * Borra la juntada entera (mi parte, el total y lo que me deben), si todavía nadie devolvió nada ni se dio por
+     * perdida ninguna parte. Una parte dada por perdida es un gasto aparte que no se borra suelto.
+     */
+    @Transactional
+    public void borrarEntera(Long movimientoId) {
+        Optional<Participante> perdido = participantes.findByGastoPerdidoId(movimientoId);
+        if (perdido.isPresent()) {
+            throw new MovimientoEspecialException("Es la parte de " + perdido.get().getNombre()
+                    + " que diste por perdida en una juntada: no se borra suelta");
+        }
+        Juntada j = juntadas.findByMovimientoId(movimientoId)
+                .orElseThrow(() -> new NoSuchElementException("No hay una juntada en el movimiento " + movimientoId));
+        boolean conPagos = j.getParticipantes().stream()
+                .anyMatch(p -> p.getMontoPagado().signum() > 0 || p.getEstado() != EstadoParticipante.PENDIENTE);
+        if (conPagos) {
+            throw new MovimientoEspecialException(
+                    "En esta juntada ya te devolvieron plata o diste por perdida una parte: no se puede borrar entera");
+        }
+        juntadas.delete(j);
+        juntadas.flush();
+        movimientos.desvincularUsoIa(movimientoId);
+        movimientos.deleteById(movimientoId);
     }
 
     /** Las juntadas guardadas en las que alguien todavía me debe. */

@@ -374,3 +374,34 @@ table:has(td.mensaje) thead { display: none; }
 .pager[hidden] { display: none; }
 /* Una clase que pone display (como .card) no puede pisar el atributo hidden */
 [hidden] { display: none !important; }
+
+/* --- Editar y eliminar un gasto: menú ⋯, diálogo de borrar y "Deshacer" --- */
+td.acciones { width: 1%; padding-left: 0; text-align: right; }
+.acciones-fila { display: inline-flex; }
+button.menu-fila { min-height: 32px; width: 32px; padding: 0; justify-content: center; border-color: transparent; background: none; color: var(--muted); }
+button.menu-fila:hover, button.menu-fila[aria-expanded="true"] { border-color: var(--button-border); color: var(--fg); }
+.menu-acciones { display: none; position: fixed; z-index: 35; flex-direction: column; gap: 2px; min-width: 150px; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 4px 16px rgba(0, 0, 0, .18); }
+.menu-acciones.abierto { display: flex; }
+.menu-acciones button { justify-content: flex-start; border-color: transparent; background: none; }
+.menu-acciones button:hover { background: var(--input-bg); }
+.menu-acciones button.peligro { color: var(--warn); }
+button.peligro { background: var(--warn); color: #fff; border-color: var(--warn); }
+tr[hidden] { display: none !important; }
+.toast-accion { pointer-events: auto; min-height: 32px; margin-left: 8px; padding: 0 10px; border: 1px solid currentColor; border-radius: 8px; background: transparent; color: inherit; font-size: 13px; }
+@media (prefers-color-scheme: dark) {
+  .menu-acciones { box-shadow: 0 4px 16px rgba(0, 0, 0, .45); }
+  button.peligro:not(.mini) { color: #0B100D; }
+}
+
+@media (max-width: 719.98px) {
+  /* En la tarjeta: sin ⋯; al desplegarla (tocándola), Editar y Eliminar abajo de todo. */
+  td.acciones { order: 4; flex: 1 1 100%; width: auto; padding: 0; text-align: left; }
+  td.acciones::before { content: none !important; }
+  button.menu-fila { display: none; }
+  .acciones-fila { display: block; width: 100%; }
+  .menu-acciones, .menu-acciones.abierto { display: none; position: static; flex-direction: row; gap: 8px; min-width: 0; padding: 6px 0 0; border: 0; box-shadow: none; background: none; }
+  tr.abierta .menu-acciones { display: flex; }
+  tbody > tr:has(td.acciones) { cursor: pointer; }
+  td.acciones .menu-acciones button { flex: 1; width: auto; justify-content: center; border-color: var(--button-border); background: var(--surface); }
+  .toast-accion { min-height: 40px; }
+}

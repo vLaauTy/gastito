@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import ar.gastito.movimiento.MovimientoEspecialException;
+
 /** Los errores de la API como {"error": "..."}, con un mensaje que el dashboard puede mostrar tal cual. */
 @RestControllerAdvice(basePackageClasses = DashboardController.class)
 class ErroresApi {
@@ -38,6 +40,12 @@ class ErroresApi {
     @ExceptionHandler(NoSuchElementException.class)
     ResponseEntity<Error> noExiste(NoSuchElementException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new Error("No existe"));
+    }
+
+    /** Una juntada, una cuota, un fijo: el mensaje explica qué se puede hacer y se muestra tal cual. */
+    @ExceptionHandler(MovimientoEspecialException.class)
+    ResponseEntity<Error> especial(MovimientoEspecialException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new Error(e.getMessage()));
     }
 
     @ExceptionHandler(IllegalStateException.class)

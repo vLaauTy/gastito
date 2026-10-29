@@ -459,7 +459,7 @@
 
   function filasMovimientos(tbody, pagina, sinResultados) {
     if (!pagina.elementos.length) {
-      filaMensaje(tbody, 6, sinResultados);
+      filaMensaje(tbody, 7, sinResultados);
       return;
     }
     tbody.replaceChildren(...pagina.elementos.map(filaMovimiento));
@@ -469,7 +469,7 @@
     const boton = m.ticket
       ? h('button', { class: 'mini desplegar', type: 'button', 'aria-expanded': 'false' }, window.Iconos.svg('receipt'), 'Productos')
       : null;
-    const fila = h('tr', {},
+    const fila = h('tr', { 'data-movimiento': m.id, hidden: borradosPendientes.has(m.id) },
       h('td', { class: 'date' }, fechaCorta(m.fechaHora)),
       h('td', {}, h('b', {}, m.descripcion || '—'), boton),
       h('td', {}, window.Iconos.etiquetaCategoria(m.categoria)),
@@ -477,9 +477,193 @@
       h('td', {}, h('span', { class: `chip ${m.origen.toLowerCase()}` }, window.Iconos.iconoOrigen(m.origen), origenTexto(m.origen))),
       h('td', { class: 'amt' }, m.estimado ? `≈ ${pesos(m.monto)}` : pesos(m.monto),
         m.estimado ? h('span', { class: 'chip estimado', title: 'Fijo tildado con el monto aproximado: corregilo en Fijos' }, 'estimado') : null),
+      accionesMovimiento(m),
     );
     if (boton) boton.addEventListener('click', () => desplegarTicket(boton, fila, m.id));
     return fila;
+  }
+
+  // --- Editar y eliminar un gasto ---
+
+  /**
+   * El menú ⋯ de una fila, con Editar y Eliminar. En la compu se abre flotando junto al botón; en el celular los
+   * botones van dentro de la tarjeta, al desplegarla (movil.js).
+   */
+  function accionesMovimiento(m) {
+    const menu = h('div', { class: 'menu-acciones', role: 'menu' },
+      h('button', { type: 'button', class: 'mini', role: 'menuitem', onclick: () => { cerrarMenus(); abrirEdicion(m); } },
+        window.Iconos.svg('pencil'), 'Editar'),
+      h('button', { type: 'button', class: 'mini peligro', role: 'menuitem', onclick: () => { cerrarMenus(); pedirBorrado(m); } },
+        window.Iconos.svg('trash-2'), 'Eliminar'));
+    const boton = h('button', {
+      type: 'button', class: 'mini menu-fila', 'aria-haspopup': 'menu', 'aria-expanded': 'false',
+      'aria-label': 'Editar o eliminar', title: 'Editar o eliminar',
+    }, window.Iconos.svg('ellipsis'));
+    boton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const abrir = !menu.classList.contains('abierto');
+      cerrarMenus();
+      if (!abrir) return;
+      // Fijo y no absoluto: la tabla está en un contenedor con scroll, que lo recortaría.
+      const lugar = boton.getBoundingClientRect();
+      menu.style.top = `${lugar.bottom + 4}px`;
+      menu.style.right = `${document.documentElement.clientWidth - lugar.right}px`;
+      menu.classList.add('abierto');
+      boton.setAttribute('aria-expanded', 'true');
+      menu.querySelector('button').focus();
+    });
+    return h('td', { class: 'acciones' }, h('div', { class: 'acciones-fila' }, boton, menu));
+  }
+
+  function cerrarMenus() {
+    for (const menu of $$('.menu-acciones.abierto')) menu.classList.remove('abierto');
+    for (const b of $$('.menu-fila[aria-expanded="true"]')) b.setAttribute('aria-expanded', 'false');
+  }
+
+  /** "3700" → "3.700"; "3700.5" → "3.700,50": como lo escribiría el usuario. */
+  function montoEditable(n) {
+    const v = Number(n);
+    return Number.isInteger(v) ? enteros.format(v) : conDecimales.format(v);
+  }
+
+  let editando = null;
+
+  /** Lo que no se cambia suelto: el monto de una juntada (es tu parte) o de una cuota (sale del plan). */
+  const MONTO_FIJO = {
+    JUNTADA: 'Es tu parte de una juntada: el total se cambia desde el bot, que lo reparte de nuevo.',
+    CUOTA: 'Es el valor de una cuota: sale del plan de cuotas.',
+  };
+
+  function abrirEdicion(m) {
+    editando = m;
+    $('#form-movimiento').reset();
+    $('#form-movimiento-error').hidden = true;
+    $('#mv-monto').value = montoEditable(m.monto);
+    const fijo = MONTO_FIJO[m.especial];
+    $('#mv-monto').disabled = !!fijo;
+    $('#mv-monto-nota').hidden = !fijo;
+    $('#mv-monto-nota').textContent = fijo || '';
+    $('#mv-fecha').value = m.fechaHora.slice(0, 10);
+    $('#mv-desc').value = m.descripcion || '';
+    $('#mv-categoria').value = m.categoriaId == null ? '' : String(m.categoriaId);
+    $('#mv-medio').value = m.medioPagoId == null ? '' : String(m.medioPagoId);
+    $('#mv-cuenta').value = m.cuentaId == null ? '' : String(m.cuentaId);
+    $('#modal-movimiento').hidden = false;
+    (fijo ? $('#mv-fecha') : $('#mv-monto')).focus();
+  }
+
+  function cerrarEdicion() { $('#modal-movimiento').hidden = true; editando = null; }
+
+  async function guardarEdicion(evento) {
+    evento.preventDefault();
+    if (!editando) return;
+    const boton = $('#form-movimiento-guardar');
+    const error = $('#form-movimiento-error');
+    error.hidden = true;
+    boton.disabled = true;
+    try {
+      await api(`/api/movimientos/${editando.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          monto: $('#mv-monto').value,
+          fecha: $('#mv-fecha').value || null,
+          descripcion: $('#mv-desc').value,
+          categoriaId: $('#mv-categoria').value ? Number($('#mv-categoria').value) : null,
+          medioPagoId: $('#mv-medio').value ? Number($('#mv-medio').value) : null,
+          cuentaId: $('#mv-cuenta').value ? Number($('#mv-cuenta').value) : null,
+        }),
+      });
+      cerrarEdicion();
+      window.Iconos.toast('Gasto actualizado');
+      cargar();
+    } catch (e) {
+      error.textContent = e.message;
+      error.hidden = false;
+    } finally {
+      boton.disabled = false;
+    }
+  }
+
+  /** Una juntada, una cuota o un fijo no se borran como un gasto común: qué se ofrece en cada caso. */
+  const BORRADO_ESPECIAL = {
+    JUNTADA: {
+      alcance: 'JUNTADA', boton: 'Borrar la juntada entera',
+      nota: () => 'Es una juntada: se borra entera, con tu parte y lo que te deben. Si alguien ya te devolvió plata (o diste una parte por perdida), no se puede.',
+    },
+    CUOTA: {
+      alcance: 'CUOTAS', boton: 'Cancelar el plan desde esta cuota',
+      nota: (m) => `Es la cuota ${m.cuotaActual} de ${m.cuotaTotal}. Se cancela el plan desde esta cuota: se borran esta y las que siguen; las anteriores quedan.`,
+    },
+    FIJO: {
+      alcance: 'FIJO', boton: 'Deshacer el fijo del mes',
+      nota: () => 'Es el pago de un gasto fijo: si lo borrás, el fijo vuelve a figurar como que falta.',
+    },
+  };
+
+  let aBorrar = null;
+
+  function pedirBorrado(m) {
+    aBorrar = m;
+    const especial = BORRADO_ESPECIAL[m.especial];
+    texto('#borrar-titulo', `¿Eliminar ${m.descripcion || 'este gasto'} · ${pesos(m.monto)}?`);
+    $('#borrar-nota').hidden = !especial;
+    texto('#borrar-nota', especial ? especial.nota(m) : '');
+    texto('#borrar-confirmar', especial ? especial.boton : 'Eliminar');
+    $('#modal-borrar').hidden = false;
+    $('#borrar-confirmar').focus();
+  }
+
+  function cerrarBorrado() { $('#modal-borrar').hidden = true; aBorrar = null; }
+
+  /** Los borrados ya confirmados esperan a que se vaya el aviso con "Deshacer": recién ahí se mandan. */
+  const ESPERA_DESHACER = 6000;
+  const borradosPendientes = new Map();
+
+  function confirmarBorrado() {
+    const m = aBorrar;
+    if (!m) return;
+    cerrarBorrado();
+    const especial = BORRADO_ESPECIAL[m.especial];
+    const ruta = `/api/movimientos/${m.id}${especial ? `?alcance=${especial.alcance}` : ''}`;
+    const filas = $$(`tr[data-movimiento="${m.id}"]`);
+    for (const fila of filas) {
+      fila.hidden = true;
+      const detalle = fila.nextElementSibling;
+      if (detalle && detalle.classList.contains('detalle-ticket')) detalle.remove();
+    }
+    const pendiente = { ruta, espera: setTimeout(() => enviarBorrado(m.id), ESPERA_DESHACER) };
+    borradosPendientes.set(m.id, pendiente);
+    window.Iconos.toast(`Eliminado: ${m.descripcion || 'gasto'} · ${pesos(m.monto)}`, 'ok', {
+      texto: 'Deshacer',
+      ms: ESPERA_DESHACER,
+      alTocar: () => {
+        clearTimeout(pendiente.espera);
+        borradosPendientes.delete(m.id);
+        for (const fila of $$(`tr[data-movimiento="${m.id}"]`)) fila.hidden = false;
+      },
+    });
+  }
+
+  async function enviarBorrado(id) {
+    const pendiente = borradosPendientes.get(id);
+    if (!pendiente) return;
+    borradosPendientes.delete(id);
+    try {
+      await api(pendiente.ruta, { method: 'DELETE' });
+    } catch (error) {
+      mostrarAviso(`No pude eliminar el gasto: ${error.message}`);
+    }
+    cargar();
+  }
+
+  /** Si se cierra la página mientras está el aviso, el borrado se manda igual. */
+  function mandarBorradosPendientes() {
+    for (const pendiente of borradosPendientes.values()) {
+      clearTimeout(pendiente.espera);
+      fetch(pendiente.ruta, { method: 'DELETE', credentials: 'same-origin', keepalive: true });
+    }
+    borradosPendientes.clear();
   }
 
   /** Abre (o cierra) debajo de la fila los productos del ticket. Se piden a la API recién al abrir. */
@@ -493,7 +677,7 @@
     boton.disabled = true;
     try {
       const detalle = await api(`/api/movimientos/${id}/items`);
-      fila.after(h('tr', { class: 'detalle-ticket' }, h('td', { colspan: 6 }, contenidoTicket(detalle))));
+      fila.after(h('tr', { class: 'detalle-ticket' }, h('td', { colspan: 7 }, contenidoTicket(detalle))));
       boton.setAttribute('aria-expanded', 'true');
     } catch (error) {
       mostrarAviso(`No pude cargar el ticket: ${error.message}`);
@@ -1197,6 +1381,8 @@
       h('option', { value: '' }, 'Efectivo'));
     $('#f-medio').append(...c.mediosPago.map((m) => h('option', { value: m.id }, m.nombre)));
     $('#f-cuenta').append(...c.cuentas.map((cu) => h('option', { value: cu.id }, cu.nombre)));
+    $('#mv-medio').append(...c.mediosPago.map((m) => h('option', { value: m.id }, m.nombre)));
+    $('#mv-cuenta').append(...c.cuentas.map((cu) => h('option', { value: cu.id }, cu.nombre)));
   }
 
   // --- Eventos ---
@@ -1212,13 +1398,25 @@
       if (e.target.closest('[data-abrir-fijo]')) { abrirFormularioFijo(null); return; }
       if (e.target.closest('[data-cerrar-fijo]') || e.target.id === 'modal-fijo') cerrarFormularioFijo();
       if (e.target.closest('[data-cerrar-monto]') || e.target.id === 'modal-monto') cerrarDialogoMonto();
+      if (e.target.closest('[data-cerrar-movimiento]') || e.target.id === 'modal-movimiento') cerrarEdicion();
+      if (e.target.closest('[data-cerrar-borrar]') || e.target.id === 'modal-borrar') cerrarBorrado();
+      if (!e.target.closest('.menu-acciones')) cerrarMenus();
     });
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
+      cerrarMenus();
       if (!$('#modal').hidden) cerrarFormulario();
       if (!$('#modal-fijo').hidden) cerrarFormularioFijo();
       if (!$('#modal-monto').hidden) cerrarDialogoMonto();
+      if (!$('#modal-movimiento').hidden) cerrarEdicion();
+      if (!$('#modal-borrar').hidden) cerrarBorrado();
     });
+    // El menú ⋯ flota en un lugar fijo: si la página se mueve, se cierra.
+    window.addEventListener('scroll', cerrarMenus, { passive: true, capture: true });
+    window.addEventListener('resize', cerrarMenus);
+    window.addEventListener('pagehide', mandarBorradosPendientes);
+    $('#form-movimiento').addEventListener('submit', guardarEdicion);
+    $('#borrar-confirmar').addEventListener('click', confirmarBorrado);
     window.addEventListener('hashchange', () => { leerUrl(); mostrarVista(); cargar(); });
     $('#reintentar').addEventListener('click', () => cargar());
     $('#form-ingreso').addEventListener('submit', guardarIngreso);

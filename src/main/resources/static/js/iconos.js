@@ -114,7 +114,11 @@
 
   // --- Avisos cortos ---
 
-  function toast(mensaje, tipo = 'ok') {
+  /**
+   * @param accion opcional: { texto, alTocar, ms } — un botón en el aviso (por ejemplo "Deshacer"), que queda
+   *               ms milisegundos en pantalla. Tocarlo cierra el aviso.
+   */
+  function toast(mensaje, tipo = 'ok', accion = null) {
     let caja = document.getElementById('toasts');
     if (!caja) {
       caja = document.createElement('div');
@@ -124,9 +128,18 @@
       document.body.append(caja);
     }
     const el = span(`toast ${tipo}`, svg(tipo === 'ok' ? 'circle-check' : 'circle-alert'), span('', mensaje));
+    const dura = accion && accion.ms ? accion.ms : 3600;
+    const cerrar = () => { el.classList.add('sale'); setTimeout(() => el.remove(), 400); };
+    if (accion) {
+      const boton = document.createElement('button');
+      boton.type = 'button';
+      boton.className = 'toast-accion';
+      boton.append(svg('undo-2'), accion.texto);
+      boton.addEventListener('click', () => { cerrar(); accion.alTocar(); }, { once: true });
+      el.append(boton);
+    }
     caja.append(el);
-    setTimeout(() => el.classList.add('sale'), 3200);
-    setTimeout(() => el.remove(), 3600);
+    setTimeout(cerrar, dura - 400);
   }
 
   window.Iconos = {

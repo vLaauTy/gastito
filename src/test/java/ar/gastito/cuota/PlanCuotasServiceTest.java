@@ -177,4 +177,21 @@ class PlanCuotasServiceTest {
 
         assertThat(planes.activos()).isEmpty();
     }
+
+    @Test
+    void cancelarDesdeUnaCuotaBorraEsaYLasSiguientesYCancelaElPlan() {
+        Movimiento cuota1 = zapatillas("60000", 6);
+        Long planId = cuota1.getPlanCuotasId();
+        movimientos.confirmar(cuota1.getId());
+        Movimiento cuota3 = planes.alGuardar(cuota1.getId()).get(1);
+
+        planes.cancelarDesde(cuota3.getId());
+
+        assertThat(repositorio.findByPlanCuotasIdOrderByCuotaActual(planId)).extracting(Movimiento::getCuotaActual)
+                .containsExactly(1, 2);
+        assertThat(planes.vista(planId).activo()).isFalse();
+        // Sobre un plan ya cancelado se puede seguir sacando cuotas.
+        planes.cancelarDesde(cuota1.getId());
+        assertThat(repositorio.findByPlanCuotasIdOrderByCuotaActual(planId)).isEmpty();
+    }
 }
