@@ -60,6 +60,18 @@ public class ComandosSueldo {
         return calcular(horas.get());
     }
 
+    /**
+     * Las horas que reconoció la IA, ya normalizadas ("10 al 50, 6 al 100, 30 nocturnas"). Si no se entendió
+     * ninguna, se preguntan.
+     */
+    public Accion calcularDeHoras(String horas, String prefijo) {
+        Optional<Map<Long, BigDecimal>> leidas = ParserHorasSueldo.cantidades(horas, sueldo.conceptosDeHoras());
+        if (leidas.isEmpty()) {
+            return Accion.Enviar.texto(prefijo + ayuda());
+        }
+        return calcular(leidas.get()).conPrefijo(prefijo);
+    }
+
     /** @param texto el mensaje entero, con el comando ("/calcular 10 6 30") */
     public Accion calcularDeComando(String texto) {
         String[] partes = texto.strip().split("\\s+", 2);
@@ -75,7 +87,7 @@ public class ComandosSueldo {
         }
     }
 
-    private Accion calcular(Map<Long, BigDecimal> horas) {
+    private Accion.Enviar calcular(Map<Long, BigDecimal> horas) {
         YearMonth mes = YearMonth.now(clock);
         SueldoService.VistaCalculo v;
         try {
@@ -135,8 +147,8 @@ public class ComandosSueldo {
         }
         return switch (partes[0]) {
             case GUARDAR -> guardar(mensajeId, mes, horas);
-            case EDITAR -> List.of(new Accion.Editar(mensajeId, "✏️ <b>Para cambiar las horas</b>\n"
-                    + "Mandame de nuevo el mensaje, por ejemplo: /calcular 10 6 30\n<i>" + html(nombresDeHoras())
+            case EDITAR -> List.of(new Accion.Editar(mensajeId, "✏️ <b>Para cambiar las horas</b>, contame de nuevo "
+                    + "cuántas hiciste, como te salga (<i>10 al 50 y 30 nocturnas</i>).\n<i>" + html(nombresDeHoras())
                     + "</i>", Teclado.NINGUNO));
             default -> List.of(new Accion.Editar(mensajeId, "❌ <b>Cálculo cancelado</b>", Teclado.NINGUNO),
                     new Accion.Avisar("Cancelado"));
@@ -181,13 +193,12 @@ public class ComandosSueldo {
     }
 
     private String ayuda() {
-        return "🧮 <b>Calculadora de sueldo</b>\nDecime las horas del mes, por ejemplo:\n"
-                + "<i>este mes hice 10 horas al 50, 6 al 100 y 30 nocturnas</i>\no /calcular 10 6 30\n"
-                + html(nombresDeHoras());
+        return "🧮 <b>Calculadora de sueldo</b>\n¿Cuántas horas hiciste este mes? Contámelo como te salga, por "
+                + "ejemplo: <i>este mes hice 10 horas al 50, 6 al 100 y 30 nocturnas</i>.\n" + html(nombresDeHoras());
     }
 
     private String nombresDeHoras() {
-        return "En /calcular van en este orden: " + sueldo.conceptosDeHoras().stream()
+        return "Los tipos de hora que tengo: " + sueldo.conceptosDeHoras().stream()
                 .map(ConceptoSueldo::getNombre).map(n -> n.toLowerCase(java.util.Locale.ROOT))
                 .collect(Collectors.joining(", ")) + ".";
     }

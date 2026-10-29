@@ -53,6 +53,7 @@ import ar.gastito.dashboard.DashboardProperties;
 import ar.gastito.ia.IaNoDisponibleException;
 import ar.gastito.ia.PropositoIa;
 import ar.gastito.ia.RegistroUsoIa;
+import ar.gastito.interpretacion.Intencion;
 import ar.gastito.interpretacion.InterpretadorService;
 import ar.gastito.interpretacion.ParserIngreso;
 import ar.gastito.interpretacion.PedidoFijo;
@@ -94,6 +95,8 @@ class ProcesadorMensajesTest {
     private final ConversacionRepetidos repetidos = mock(ConversacionRepetidos.class);
     private final ConversacionJuntadas juntadas = mock(ConversacionJuntadas.class);
     private final ConversacionFijos fijos = mock(ConversacionFijos.class);
+    private final ConversacionAltaFijo altaFijo = mock(ConversacionAltaFijo.class);
+    private final PedidosNaturales naturales = mock(PedidosNaturales.class);
     private final ar.gastito.fijo.GastoFijoService gastosFijos = mock(ar.gastito.fijo.GastoFijoService.class);
     private final ConversacionVarios varios = mock(ConversacionVarios.class);
     private final ConversacionCuotas cuotas = mock(ConversacionCuotas.class);
@@ -115,7 +118,8 @@ class ProcesadorMensajesTest {
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
                 tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, resumenes,
                 new FormatoResumen(formato, new GraficoMes(formato), dashboard), consultas, new FormatoConsulta(formato),
-                repetidos, juntadas, fijos, gastosFijos, varios, cuotas, recibos, comandosSueldo, new FormatoCostos(costosIa, formato, RELOJ), properties, dashboard,
+                repetidos, juntadas, fijos, altaFijo, naturales, gastosFijos, varios, cuotas, recibos, comandosSueldo,
+                new FormatoCostos(costosIa, formato, RELOJ), properties, dashboard,
                 RELOJ);
         when(costosIa.panel(any())).thenReturn(panelDeCostos(0, "0"));
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));
@@ -396,7 +400,7 @@ class ProcesadorMensajesTest {
     }
 
     @Test
-    void siLaIaNoEstaDisponibleSugiereElFormatoSimple() {
+    void siLaIaNoEstaDisponibleLoDiceYQueLoSimpleAnda() {
         when(interpretador.interpretar(anyString(), eq(PropositoIa.TEXTO)))
                 .thenThrow(new IaNoDisponibleException("No pude consultar a la IA", null));
 
@@ -410,7 +414,7 @@ class ProcesadorMensajesTest {
     void mensajeQueNoEsGasto() {
         when(interpretador.interpretar("hola", PropositoIa.TEXTO)).thenReturn(new InterpretadorService.NoEsGasto());
 
-        assertThat(texto("hola")).contains("No encontré un gasto");
+        assertThat(texto("hola")).contains("No encontré nada para hacer");
     }
 
     // --- Audios ---
@@ -521,7 +525,7 @@ class ProcesadorMensajesTest {
 
         assertThat(((Accion.Enviar) mandarAudio("Hola, ¿cómo estás?").get(0)).html())
                 .startsWith("🎙 Escuché: \"Hola, ¿cómo estás\"")
-                .contains("No encontré un gasto en lo que escuché");
+                .contains("No encontré nada para hacer en lo que escuché");
         verify(movimientos, never()).crearPendiente(any(), any(), anyString());
     }
 
@@ -870,14 +874,17 @@ class ProcesadorMensajesTest {
     }
 
     @Test
-    void sinMontoOMontoRaroMuestraUnEjemplo() {
-        assertThat(texto("/sueldo")).contains("Decime el monto", "/sueldo 380.000 galicia");
-        assertThat(texto("/ingreso arreglo de PC")).contains("No entendí el monto", "/ingreso 25000");
+    void sinMontoPreguntaYUnMontoRaroLoInterpretaLaIa() {
+        assertThat(texto("/sueldo")).startsWith("💰 ¿Cuánto cobraste de sueldo?");
+        when(interpretador.interpretar("ingreso extra: arreglo de PC", PropositoIa.TEXTO))
+                .thenReturn(new InterpretadorService.NoEsGasto());
+        procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "/ingreso arreglo de PC");
+        verify(interpretador).interpretar("ingreso extra: arreglo de PC", PropositoIa.TEXTO);
         verifyNoInteractions(ingresos);
     }
 
     private static Movimiento ingreso(ClaseIngreso clase, String monto, String descripcion) {
-        return conId(Movimiento.ingreso(clase, new BigDecimal(monto), descripcion, null, null, AHORA, Origen.TEXTO,
+        return conId(Movimiento.ingreso(clase, monto == null ? null : new BigDecimal(monto), descripcion, null, null, AHORA, Origen.TEXTO,
                 "x", AHORA), ID);
     }
 
@@ -1219,9 +1226,9 @@ class ProcesadorMensajesTest {
     // --- Gastos fijos ---
 
     @Test
-    void elComandoFijoYElAltaDeLaIaVanALaConversacionDeFijos() {
+    void elComandoFijoYElAltaDeLaIaVanALaConversacionDeAlta() {
         Accion.Enviar tarjeta = Accion.Enviar.texto("📌");
-        when(fijos.alta("seguro 32900 tarjeta día 4")).thenReturn(tarjeta);
+        when(altaFijo.desdeComando(CHAT, "seguro 32900 tarjeta día 4")).thenReturn(Optional.of(tarjeta));
         assertThat(procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "/fijo seguro 32900 tarjeta día 4"))
                 .containsExactly(tarjeta);
 
@@ -1229,10 +1236,174 @@ class ProcesadorMensajesTest {
                 false, false);
         when(interpretador.interpretar("agregá un fijo: el seguro, 32900 el 4", PropositoIa.TEXTO))
                 .thenReturn(new InterpretadorService.AltaFijo(pedido, 5L));
-        when(fijos.tarjetaDeAlta(pedido, "")).thenReturn(tarjeta);
+        when(altaFijo.nueva(CHAT, pedido, "")).thenReturn(tarjeta);
         assertThat(procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "agregá un fijo: el seguro, 32900 el 4"))
                 .containsExactly(tarjeta);
         verify(movimientos, never()).crearPendiente(any(), any(), any());
+    }
+
+    @Test
+    void elComandoFijoQueNoEntiendeElParserLoInterpretaLaIaYSinNadaPregunta() {
+        when(altaFijo.desdeComando(CHAT, "el seguro de la moto")).thenReturn(Optional.empty());
+        when(interpretador.interpretar("agregá un gasto fijo: el seguro de la moto", PropositoIa.TEXTO))
+                .thenReturn(new InterpretadorService.NoEsGasto());
+
+        procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "/fijo el seguro de la moto");
+        verify(interpretador).interpretar("agregá un gasto fijo: el seguro de la moto", PropositoIa.TEXTO);
+
+        assertThat(((Accion.Enviar) procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "/fijo").get(0)).html())
+                .startsWith("📌 ¿Qué gasto fijo querés agregar?");
+    }
+
+    @Test
+    void unAudioConErrorDeTranscripcionDaDeAltaElFijo() {
+        String escuchado = "arreglame un gasto fijo que es el seguro de la moto, que es aproximadamente 32 mil pesos";
+        PedidoFijo pedido = new PedidoFijo("Seguro moto", new BigDecimal("32000"), null, List.of(), null, null, null,
+                null, false, false, "seguro de la moto");
+        when(interpretador.interpretar(escuchado, PropositoIa.AUDIO))
+                .thenReturn(new InterpretadorService.AltaFijo(pedido, 5L));
+        Accion.Enviar tarjeta = Accion.Enviar.texto("📌");
+        when(altaFijo.nueva(eq(CHAT), eq(pedido), anyString())).thenReturn(tarjeta);
+
+        assertThat(mandarAudio(escuchado + ".")).containsExactly(tarjeta);
+        verify(altaFijo).nueva(CHAT, pedido, "🎙 Escuché: \"" + escuchado + "\"\n\n");
+    }
+
+    @Test
+    void elAltaQueEsperaUnDatoLoTomaDelTextoYSiNoSirveSigueNormal() {
+        Accion.Enviar tarjeta = Accion.Enviar.texto("📌");
+        when(altaFijo.esperando(CHAT)).thenReturn(true);
+        when(altaFijo.texto(CHAT, "unos 32 mil")).thenReturn(Optional.of(tarjeta));
+        assertThat(procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "unos 32 mil")).containsExactly(tarjeta);
+        verifyNoInteractions(interpretador);
+
+        when(altaFijo.texto(CHAT, "¿cuánto gasté hoy?")).thenReturn(Optional.empty());
+        when(interpretador.interpretar("¿cuánto gasté hoy?", PropositoIa.TEXTO))
+                .thenReturn(new InterpretadorService.Pregunta("¿cuánto gasté hoy?", null));
+        when(consultas.responder("¿cuánto gasté hoy?")).thenReturn(new ConsultaService.Respuesta("Nada", List.of(), false, null));
+        procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "¿cuánto gasté hoy?");
+        verify(altaFijo).olvidar(CHAT);
+    }
+
+    // --- Todo se puede pedir en lenguaje natural ---
+
+    private List<Accion> mandarOrden(String texto, ValidadorInterpretacion.Resultado orden) {
+        when(interpretador.interpretar(texto, PropositoIa.TEXTO))
+                .thenReturn(new InterpretadorService.Orden(orden, 5L));
+        return procesador.procesarTexto(CHAT, MENSAJE_USUARIO, texto);
+    }
+
+    @Test
+    void lasListasPedidasConPalabrasSonLasMismasQueLosComandos() {
+        List<Accion> lista = List.of(Accion.Enviar.texto("📋"));
+        when(fijos.lista()).thenReturn(lista);
+        when(juntadas.abiertas()).thenReturn(lista);
+        when(cuotas.lista()).thenReturn(lista);
+
+        assertThat(mandarOrden("¿qué fijos me faltan?", new ValidadorInterpretacion.Ver(
+                ValidadorInterpretacion.Lista.FIJOS))).isEqualTo(lista);
+        assertThat(mandarOrden("¿quién me debe plata?", new ValidadorInterpretacion.Ver(
+                ValidadorInterpretacion.Lista.DEUDAS))).isEqualTo(lista);
+        assertThat(mandarOrden("¿qué cuotas tengo?", new ValidadorInterpretacion.Ver(
+                ValidadorInterpretacion.Lista.CUOTAS))).isEqualTo(lista);
+        assertThat(((Accion.Enviar) mandarOrden("¿cuánto llevo de IA?", new ValidadorInterpretacion.Ver(
+                ValidadorInterpretacion.Lista.COSTOS_IA)).get(0)).html()).contains("IA");
+        assertThat(((Accion.Enviar) mandarOrden("¿qué podés hacer?", new ValidadorInterpretacion.Ver(
+                ValidadorInterpretacion.Lista.AYUDA)).get(0)).html()).isEqualTo(ProcesadorMensajes.AYUDA);
+    }
+
+    @Test
+    void unIngresoDichoConPalabrasArmaLaTarjetaYSinMontoLoPregunta() {
+        ValidadorInterpretacion.Ingreso sueldo = new ValidadorInterpretacion.Ingreso(ClaseIngreso.SUELDO,
+                new BigDecimal("980000"), null, null, false, AHORA);
+        when(ingresos.crearPendiente(ClaseIngreso.SUELDO, new BigDecimal("980000"), null, null, false, AHORA,
+                Origen.TEXTO, "cobré el sueldo, 980 lucas")).thenReturn(ingreso(ClaseIngreso.SUELDO, "980000", null));
+
+        Accion.Enviar tarjeta = (Accion.Enviar) mandarOrden("cobré el sueldo, 980 lucas", sueldo).get(0);
+        assertThat(tarjeta.html()).startsWith("💵 <b>Nuevo ingreso</b>");
+        assertThat(tarjeta.tarjetaDeMovimiento()).isEqualTo(ID);
+
+        ValidadorInterpretacion.Ingreso sinMonto = new ValidadorInterpretacion.Ingreso(ClaseIngreso.AGUINALDO, null,
+                null, null, false, AHORA);
+        when(ingresos.crearPendiente(ClaseIngreso.AGUINALDO, null, null, null, false, AHORA, Origen.TEXTO,
+                "cobré el aguinaldo")).thenReturn(ingreso(ClaseIngreso.AGUINALDO, null, null));
+        assertThat(((Accion.Enviar) mandarOrden("cobré el aguinaldo", sinMonto).get(0)).html())
+                .contains("¿Cuánto fue?");
+    }
+
+    @Test
+    void corregirBorrarYLosDemasPedidosVanASuConversacion() {
+        Accion.Enviar respuesta = Accion.Enviar.texto("✏️");
+        ValidadorInterpretacion.Correccion correccion = new ValidadorInterpretacion.Correccion(
+                ValidadorInterpretacion.Campo.MONTO, new BigDecimal("3500"), null, null, null, null);
+        when(naturales.corregir(correccion, "")).thenReturn(respuesta);
+        when(naturales.borrar("")).thenReturn(respuesta);
+        when(naturales.perdonar("Pablo", null, "")).thenReturn(Optional.of(respuesta));
+        when(naturales.bajaDeFijo("Netflix", "")).thenReturn(Optional.of(respuesta));
+        when(naturales.cancelarCuotas("zapatillas", "")).thenReturn(Optional.empty());
+        when(cuotas.lista()).thenReturn(List.of(Accion.Enviar.texto("🗂")));
+        when(comandosSueldo.calcularDeHoras("10 al 50, 30 nocturnas", "")).thenReturn(respuesta);
+
+        assertThat(mandarOrden("el último era 3500, no 3700", correccion)).containsExactly(respuesta);
+        assertThat(mandarOrden("borrá lo último", new ValidadorInterpretacion.Borrar())).containsExactly(respuesta);
+        assertThat(mandarOrden("lo de Pablo dalo por perdido", new ValidadorInterpretacion.Perdonar("Pablo", null)))
+                .containsExactly(respuesta);
+        assertThat(mandarOrden("sacá Netflix de los fijos", new ValidadorInterpretacion.BajaFijo("Netflix")))
+                .containsExactly(respuesta);
+        assertThat(mandarOrden("este mes hice diez horas al cincuenta",
+                new ValidadorInterpretacion.CalculoSueldo("10 al 50, 30 nocturnas"))).containsExactly(respuesta);
+        // Si no se sabe cuál, la lista para elegir.
+        assertThat(((Accion.Enviar) mandarOrden("cancelá las cuotas de las zapatillas",
+                new ValidadorInterpretacion.CancelarCuotas("zapatillas")).get(0)).html()).isEqualTo("🗂");
+    }
+
+    @Test
+    void unPedidoAmbiguoPreguntaConBotonesYLaOpcionElegidaNoVuelveALlamarALaIa() {
+        InterpretadorService.Dudoso dudoso = new InterpretadorService.Dudoso(new InterpretadorService.Interpretado(
+                new MovimientoInterpretado(new BigDecimal("32000"), "Seguro", null, List.of(), null, null, null, AHORA),
+                Confianza.BAJA, 5L), List.of(Intencion.ALTA_FIJO, Intencion.GASTO), null, 5L);
+        when(interpretador.interpretar("el seguro 32 mil", PropositoIa.TEXTO)).thenReturn(dudoso);
+
+        Accion.Enviar pregunta = (Accion.Enviar) procesador.procesarTexto(CHAT, MENSAJE_USUARIO, "el seguro 32 mil")
+                .get(0);
+
+        assertThat(pregunta.html()).isEqualTo("🤔 ¿Qué querés hacer?");
+        assertThat(pregunta.teclado().botones()).extracting(Teclado.Boton::datos)
+                .containsExactly("do:1:" + Intencion.ALTA_FIJO.ordinal(), "dg:1");
+        assertThat(pregunta.teclado().botones()).extracting(Teclado.Boton::texto)
+                .containsExactly("📌 Agregar un gasto fijo", "🧾 Es un gasto");
+
+        PedidoFijo pedido = new PedidoFijo("Seguro", new BigDecimal("32000"), null, List.of(), null, null, null, null,
+                false, false);
+        when(interpretador.reinterpretar(dudoso, Intencion.ALTA_FIJO, "el seguro 32 mil"))
+                .thenReturn(new InterpretadorService.AltaFijo(pedido, 5L));
+        Accion.Enviar tarjeta = Accion.Enviar.texto("📌");
+        when(altaFijo.nueva(CHAT, pedido, "")).thenReturn(tarjeta);
+
+        List<Accion> acciones = procesador.procesarBoton(CHAT, TARJETA, "do:1:" + Intencion.ALTA_FIJO.ordinal());
+
+        assertThat(acciones).contains(tarjeta);
+        verify(interpretador).interpretar(anyString(), any());
+    }
+
+    @Test
+    void ningunMensajeDelBotPideUnFormatoDeComando() {
+        when(interpretador.interpretar("hola", PropositoIa.TEXTO)).thenReturn(new InterpretadorService.NoEsGasto());
+        when(interpretador.interpretar("algo raro", PropositoIa.TEXTO))
+                .thenThrow(new IaNoDisponibleException("sin conexión", null));
+        List<String> textos = new java.util.ArrayList<>(List.of(ProcesadorMensajes.AYUDA,
+                ProcesadorMensajes.BIENVENIDA, ConversacionAltaFijo.preguntaInicial()));
+        for (String mensaje : List.of("hola", "algo raro", "/fijo", "/sueldo", "/aguinaldo", "/ingreso")) {
+            procesador.procesarTexto(CHAT, MENSAJE_USUARIO, mensaje).stream()
+                    .filter(Accion.Enviar.class::isInstance).map(a -> ((Accion.Enviar) a).html())
+                    .forEach(textos::add);
+        }
+
+        assertThat(textos).hasSizeGreaterThan(6).allSatisfy(t -> assertThat(t)
+                .doesNotContainPattern("/(fijo|sueldo|aguinaldo|ingreso|calcular)\\s+\\S")
+                .doesNotContainIgnoringCase("formato")
+                .doesNotContainIgnoringCase("decímelo así")
+                .doesNotContainIgnoringCase("escribilo como"));
     }
 
     // --- Varios gastos en un mensaje ---

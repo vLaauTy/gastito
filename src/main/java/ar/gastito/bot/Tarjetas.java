@@ -421,7 +421,7 @@ public class Tarjetas {
     }
     private String datosIngreso(Movimiento m) {
         List<String> lineas = new ArrayList<>();
-        lineas.add("💰 <b>" + formato.pesos(m.getMonto()) + "</b>");
+        lineas.add(m.getMonto() == null ? "💰 <b>¿Cuánto?</b>" : "💰 <b>" + formato.pesos(m.getMonto()) + "</b>");
         lineas.add("🏷 " + claseConPeriodo(m));
         if (m.getDescripcion() != null && !m.getDescripcion().isBlank()) {
             lineas.add("📝 " + html(m.getDescripcion()));

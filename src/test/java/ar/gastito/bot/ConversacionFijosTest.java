@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,7 +16,6 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 import ar.gastito.catalogo.Catalogo;
 import ar.gastito.catalogo.CatalogoService;
@@ -28,7 +26,6 @@ import ar.gastito.fijo.PagoFijoService;
 import ar.gastito.fijo.RecordatorioFijoService;
 import ar.gastito.fijo.VistaFijo;
 import ar.gastito.interpretacion.CatalogoDePrueba;
-import ar.gastito.interpretacion.ParserFijo;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoInterpretado;
 import ar.gastito.movimiento.MovimientoNoPendienteException;
@@ -45,8 +42,8 @@ class ConversacionFijosTest {
     private final MovimientoService movimientos = mock(MovimientoService.class);
     private final PagoFijoService pagos = mock(PagoFijoService.class);
     private final RecordatorioFijoService recordatorios = mock(RecordatorioFijoService.class);
-    private final ConversacionFijos conversacion = new ConversacionFijos(servicio, new ParserFijo(), catalogos,
-            movimientos, new FormatoMensajes(RELOJ), pagos, recordatorios, RELOJ);
+    private final ConversacionFijos conversacion = new ConversacionFijos(servicio, movimientos,
+            new FormatoMensajes(RELOJ), pagos, recordatorios, RELOJ);
 
     @BeforeEach
     void setUp() {
@@ -58,81 +55,6 @@ class ConversacionFijosTest {
 
     private static List<String> datos(Teclado t) {
         return t.botones().stream().map(Teclado.Boton::datos).toList();
-    }
-
-    @Test
-    void laTarjetaDeAltaMuestraTodoAntesDeGuardar() {
-        Accion.Enviar tarjeta = (Accion.Enviar) conversacion.alta("seguro 32900 tarjeta día 4");
-
-        assertThat(tarjeta.html()).isEqualTo("""
-                📌 <b>Nuevo gasto fijo</b>
-                💰 <b>$32.900</b> · todos los meses, el día 4
-                📝 Seguro
-                🛡️ Seguros
-                💳 Tarjeta de crédito
-                📅 Primer cobro: miércoles 4/11""");
-        assertThat(datos(tarjeta.teclado())).containsExactly("fa:1", "fz:1");
-        verify(servicio, never()).alta(any());
-    }
-
-    @Test
-    void alGuardarSeDaDeAlta() {
-        conversacion.alta("seguro 32900 tarjeta día 4");
-        when(servicio.alta(any())).thenReturn(new VistaFijo(7L, "Seguro", new BigDecimal("32900.00"),
-                new BigDecimal("32900.00"), "Seguros", "🛡️", null, 4, Frecuencia.MENSUAL, false, null, true, true,
-                PRIMER_COBRO));
-
-        List<Accion> acciones = conversacion.boton(MENSAJE, ConversacionFijos.GUARDAR, 1, null);
-
-        ArgumentCaptor<GastoFijoService.NuevoFijo> alta = ArgumentCaptor.forClass(GastoFijoService.NuevoFijo.class);
-        verify(servicio).alta(alta.capture());
-        assertThat(alta.getValue().nombre()).isEqualTo("Seguro");
-        assertThat(alta.getValue().monto()).isEqualByComparingTo("32900");
-        assertThat(alta.getValue().categoria()).isEqualTo(SEGUROS);
-        assertThat(alta.getValue().diaDelMes()).isEqualTo(4);
-        assertThat(alta.getValue().frecuencia()).isEqualTo(Frecuencia.MENSUAL);
-        assertThat(((Accion.Editar) acciones.get(0)).html()).startsWith("✅ <b>Gasto fijo guardado</b>\n"
-                + "Seguro: $32.900 por mes, el día 4.\n📅 Primer cobro: miércoles 4/11.");
-        // Ya no está pendiente: otro toque no lo vuelve a dar de alta.
-        assertThat(((Accion.Editar) conversacion.boton(MENSAJE, ConversacionFijos.GUARDAR, 1, null).get(0)).html())
-                .startsWith("📌 Esa alta ya no está pendiente.");
-    }
-
-    @Test
-    void sinCategoriaSeEligeConBotones() {
-        Accion.Enviar tarjeta = (Accion.Enviar) conversacion.alta("gimnasio 25000 débito el 5");
-
-        assertThat(tarjeta.html()).contains("🏷 <b>¿Qué categoría?</b>");
-        assertThat(datos(tarjeta.teclado())).containsExactly("fk:1:9", "fk:1:1", "fk:1:13", "fz:1");
-
-        Accion.Editar elegida = (Accion.Editar) conversacion.boton(MENSAJE, ConversacionFijos.CATEGORIA, 1, 13L).get(0);
-
-        assertThat(elegida.html()).contains("📦 Otros");
-        assertThat(datos(elegida.teclado())).containsExactly("fa:1", "fz:1");
-    }
-
-    @Test
-    void sinDiaOSinMontoPideElFormato() {
-        assertThat(((Accion.Enviar) conversacion.alta("spotify 4999 tarjeta")).html())
-                .startsWith("📌 ¿Qué día del mes se cobra?");
-        assertThat(((Accion.Enviar) conversacion.alta("spotify")).html())
-                .startsWith("📌 Para agregar un gasto fijo necesito");
-    }
-
-    @Test
-    void losVariablesLoDicen() {
-        assertThat(((Accion.Enviar) conversacion.alta("luz 28000 débito el 10 bimestral")).html())
-                .contains("cada dos meses, el día 10")
-                .contains("📈 Monto variable: cada mes te propongo el promedio de los últimos 3 cobros.");
-    }
-
-    @Test
-    void cancelarNoGuardaNada() {
-        conversacion.alta("seguro 32900 tarjeta día 4");
-
-        assertThat(((Accion.Editar) conversacion.boton(MENSAJE, ConversacionFijos.CANCELAR, 1, null).get(0)).html())
-                .startsWith("❌ <b>Cancelado</b>");
-        verify(servicio, never()).alta(any());
     }
 
     @Test
@@ -161,7 +83,7 @@ class ConversacionFijosTest {
         assertThat(datos(lista.teclado())).containsExactly("fe:8");
 
         when(servicio.checklist(YearMonth.of(2026, 10))).thenReturn(List.of(cargado));
-        List<Accion> resultado = conversacion.boton(MENSAJE, ConversacionFijos.ESTE_MES_NO_CHECKLIST, 8, null);
+        List<Accion> resultado = conversacion.boton(MENSAJE, ConversacionFijos.ESTE_MES_NO_CHECKLIST, 8);
         verify(servicio).esteMesNoDelPeriodo(8L, YearMonth.of(2026, 10));
         assertThat(resultado).contains(new Accion.Avisar("⏭ Listo"));
     }

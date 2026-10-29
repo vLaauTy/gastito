@@ -93,17 +93,17 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
                 new BotCommand("mes", "Total del mes por categoría"),
                 new BotCommand("resumen", "Tu semana hasta hoy (/resumen mes: el mes)"),
                 new BotCommand("juntadas", "Quién te debe plata de las juntadas"),
-                new BotCommand("fijo", "Agregar un gasto fijo: /fijo seguro 32900 tarjeta día 4"),
+                new BotCommand("fijo", "Agregar un gasto fijo (o decí: agregá un fijo…)"),
                 new BotCommand("fijos", "Tus gastos fijos y su próximo cobro"),
                 new BotCommand("cuotas", "Tus compras en cuotas"),
-                new BotCommand("calcular", "Calcula el sueldo del mes con tus horas"),
+                new BotCommand("calcular", "Calcula el sueldo del mes (o decí: hice 10 horas…)"),
                 new BotCommand("calculo", "El cálculo de sueldo del mes"),
                 new BotCommand("costos", "Lo gastado en IA este mes"),
-                new BotCommand("sueldo", "Cargar el sueldo: /sueldo 380.000 galicia"),
+                new BotCommand("sueldo", "Cargar el sueldo (o decí: cobré el sueldo…)"),
                 new BotCommand("aguinaldo", "Cargar el aguinaldo"),
-                new BotCommand("ingreso", "Cargar otro ingreso: /ingreso 25000 arreglo de PC"),
+                new BotCommand("ingreso", "Cargar otro ingreso (o decí: me pagaron…)"),
                 new BotCommand("dashboard", "El link del dashboard (se abre en la PC)"),
-                new BotCommand("ayuda", "Cómo cargar gastos"),
+                new BotCommand("ayuda", "Ejemplos de todo lo que podés pedir"),
                 new BotCommand("start", "Empezar y mostrar el menú"))).build());
     }
 

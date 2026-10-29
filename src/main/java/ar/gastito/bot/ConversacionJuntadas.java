@@ -161,7 +161,7 @@ public class ConversacionJuntadas {
                 case PARTE -> {
                     Optional<BigDecimal> monto = Montos.parsear(texto.replaceAll("(?i)\\s*pesos$", "").strip());
                     if (monto.isEmpty()) {
-                        return List.of(new Accion.Avisar("No entendí el monto: escribilo como 5000 o 5.000"));
+                        return List.of(new Accion.Avisar("No entendí el monto 🤔 ¿Cuánto es?"));
                     }
                     juntadas.cambiarParte(e.participanteId(), monto.get());
                 }
@@ -222,8 +222,8 @@ public class ConversacionJuntadas {
      */
     public Accion devolucion(ValidadorInterpretacion.Devolucion d, Origen origen, String texto, String prefijo) {
         if (d.monto() == null) {
-            return Accion.Enviar.texto(prefijo + "↩️ ¿Cuánto te devolvieron? Escribime, por ejemplo: "
-                    + "\"Pablo me pasó 8000\".");
+            return Accion.Enviar.texto(prefijo + "↩️ ¿Cuánto te devolvi" + (d.persona() == null ? "eron?"
+                    : "ó " + html(d.persona()) + "?") + " Contámelo con el monto y lo anoto.");
         }
         List<JuntadaService.Deudor> deudores = juntadas.deudores(d.persona(), d.de(), d.monto());
         if (deudores.isEmpty()) {

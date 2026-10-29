@@ -194,7 +194,7 @@ class ConversacionJuntadasTest {
         assertThat(((Accion.Enviar) conversacion.devolucion(pablo("8000"), Origen.TEXTO, "x", "")).html())
                 .contains("no tenés juntadas con plata a cobrar");
         assertThat(((Accion.Enviar) conversacion.devolucion(pablo(null), Origen.TEXTO, "x", "")).html())
-                .contains("¿Cuánto te devolvieron?");
+                .contains("¿Cuánto te devolvió Pablo?");
         verify(servicio, never()).devolucionPendiente(any(), any(), any(), any(), any(), any());
     }
 

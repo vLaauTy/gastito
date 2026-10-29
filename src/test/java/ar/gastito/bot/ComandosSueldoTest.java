@@ -98,7 +98,8 @@ class ComandosSueldoTest {
     void calcularSinNumerosExplicaComoUsarlo() {
         String texto = enviar(comandos.calcularDeComando("/calcular")).html();
 
-        assertThat(texto).contains("/calcular 10 6 30", "horas al 50%, horas al 100%, horas nocturnas");
+        assertThat(texto).contains("este mes hice 10 horas al 50", "horas al 50%, horas al 100%, horas nocturnas")
+                .doesNotContain("/calcular");
     }
 
     @Test
@@ -142,7 +143,7 @@ class ComandosSueldoTest {
     void editarPideMandarDeNuevoLasHoras() {
         Accion.Editar editada = (Accion.Editar) comandos.boton(100, "ce:202610:10_6_30").get(0);
 
-        assertThat(editada.html()).contains("/calcular 10 6 30");
+        assertThat(editada.html()).contains("contame de nuevo").doesNotContain("/calcular");
         assertThat(editada.teclado().isVacio()).isTrue();
     }
 

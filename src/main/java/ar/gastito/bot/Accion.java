@@ -27,6 +27,12 @@ public sealed interface Accion {
         public static Enviar conBotones(String html, Teclado teclado) {
             return new Enviar(html, teclado, false, null);
         }
+
+        /** El mismo mensaje con un texto antes (por ejemplo, "🎙 Escuché: …" arriba de lo que se entendió de un audio). */
+        public Enviar conPrefijo(String prefijo) {
+            return prefijo == null || prefijo.isEmpty() ? this
+                    : new Enviar(prefijo + html, teclado, conMenu, tarjetaDeMovimiento);
+        }
     }
 
     /** Saca los botones de un mensaje sin cambiar su texto (por ejemplo, "Ver anteriores" después de tocarlo). */

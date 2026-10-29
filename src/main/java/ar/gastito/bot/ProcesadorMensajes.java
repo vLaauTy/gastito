@@ -34,9 +34,12 @@ import ar.gastito.ia.RegistroUsoIa;
 import ar.gastito.fijo.GastoFijo;
 import ar.gastito.fijo.GastoFijoService;
 import ar.gastito.interpretacion.DivisorDeGastos;
+import ar.gastito.interpretacion.Intencion;
 import ar.gastito.interpretacion.InterpretadorService;
 import ar.gastito.interpretacion.Montos;
+import ar.gastito.interpretacion.ParserHorasSueldo;
 import ar.gastito.interpretacion.ResolvedorFechas;
+import ar.gastito.interpretacion.ValidadorInterpretacion;
 import ar.gastito.movimiento.ClaseIngreso;
 import ar.gastito.movimiento.EstadoMovimiento;
 import ar.gastito.movimiento.Movimiento;
@@ -62,66 +65,56 @@ public class ProcesadorMensajes {
 
     static final String BIENVENIDA = """
             ¡Hola! Soy <b>Gastito</b> 👋
-            Mandame tus gastos como si me escribieras por chat, por ejemplo:
+            Contame lo que quieras como si me escribieras por chat, o mandame un audio 🎙:
 
             • kiosco 1500
-            • 3700 en pan de pancho y papas, efectivo
             • pagué 12000 de nafta con la tarjeta
+            • cobré el sueldo, 980 mil en Galicia
+            • agregá un fijo: el seguro de la moto, unos 32 mil por mes
+            • ¿cuánto gasté en el súper este mes?
 
-            También me lo podés decir en un audio 🎙 o mandarme la foto del ticket 🧾
-            Te muestro lo que entendí y lo guardás con un toque.""";
+            También podés mandarme la foto del ticket 🧾. Te muestro lo que entendí y lo guardás con un toque.""";
 
     static final String AYUDA = """
-            <b>Cómo cargar un gasto</b>
-            • Lo más rápido: categoría y monto, en cualquier orden ("kiosco 1500", "1500 super"). Podés sumar el medio de pago ("super 8000 débito").
-            • Si escribís algo más largo ("ayer 3700 en pan y papas con QR"), lo interpreta la IA.
-            • Montos a la argentina: 1.500 o 1500,50.
-            • Fechas: "ayer", "anteayer", "el sábado", "12/10".
-            • Por audio 🎙: decilo como lo escribirías ("gasto 3700 en pan y papas, efectivo"), un gasto por audio. Arriba de la tarjeta te muestro lo que escuché.
-            • Con la foto del ticket 🧾: leo el comercio, los productos y el total. Si querés, escribí algo con la foto ("efectivo", "con la de Galicia"). Un ticket por foto, entero y sin reflejos.
+            Decime las cosas como te salgan, por escrito o en un audio 🎙. Si me falta un dato te lo pregunto con botones, y si no estoy seguro de qué querés, te doy opciones.
 
-            <b>La tarjeta</b>
-            Te muestro lo que entendí. Si no estoy seguro de la categoría, te la pregunto con botones. Con ✏️ Editar cambiás cualquier dato antes de guardar.
-            Aprendo de lo que guardás: la próxima vez que cargues algo parecido, uso la misma categoría.
+            <b>🧾 Gastos</b>
+            • "kiosco 1500", "ayer 3700 en pan y papas con QR"
+            • "pagué 48000 el asado, éramos 6": en tus gastos cuenta solo tu parte
+            • "zapatillas 84 lucas en 6 cuotas con la tarjeta"
+            • La foto del ticket: leo el comercio, los productos y el total
 
-            <b>Ingresos</b>
-            /sueldo 380.000 galicia
-            /aguinaldo 190 mil galicia
-            /ingreso 25000 arreglo de PC a mercado pago (cualquier otro ingreso: una venta, un regalo…)
-            Si no decís la cuenta, uso la del último ingreso de ese tipo. Te muestro la tarjeta y lo guardás con un toque.
+            <b>💰 Ingresos</b>
+            • "cobré el sueldo, 980 mil en Galicia", "cobré el aguinaldo"
+            • "me pagaron 25 mil por arreglar una PC"
+            • "Pablo me pasó 8000 del asado" (te devuelven plata de una juntada)
 
-            <b>Calculadora de sueldo</b> 🧮
-            "este mes hice 10 horas al 50, 6 al 100 y 30 nocturnas" o /calcular 10 6 30: calculo el sueldo del mes y lo guardás con un toque. /calculo muestra el del mes. Cuando cargás lo que cobraste con /sueldo, lo comparo con el cálculo.
+            <b>📌 Gastos fijos</b>
+            • "agregá un fijo: el seguro de la moto, unos 32 mil por mes con la tarjeta"
+            • "de luz pagué 87.500", "ya pagué el seguro"
+            • "¿qué fijos me faltan pagar?", "sacá Netflix de los fijos"
 
-            <b>Recibo de sueldo</b> 💼
-            Mandame el PDF del recibo (o una foto, con la palabra "recibo" en el texto): lo guardo y te cuento si tiene algo raro contra tu cálculo y lo que cobraste. No carga ningún ingreso.
+            <b>✏️ Corregir</b>
+            • "el último era 3500, no 3700", "lo de recién fue con débito"
+            • "borrá lo último que cargué"
+            • "cancelá las cuotas de las zapatillas", "lo de Pablo dalo por perdido"
 
-            <b>Juntadas</b>
-            "pagué 48000 el asado, éramos 6, con mercado pago": en tus gastos cuenta solo tu parte y el resto queda a cobrar. Cuando alguien te paga, decímelo: "Pablo me pasó 8000". Con /juntadas ves quién te debe.
+            <b>🧮 Sueldo</b>
+            • "este mes hice 10 horas al 50, 6 al 100 y 30 nocturnas": calculo el sueldo del mes
+            • "¿cuánto me da el sueldo calculado?"
+            • El PDF o la foto del recibo: lo comparo con tu cálculo y con lo que cobraste
 
-            <b>Gastos fijos</b>
-            "/fijo seguro 32900 tarjeta día 4" (o "agregá un fijo: …"). El día del cobro te pregunto si se cobró; la luz y el gas, con el promedio de los últimos cobros. Con /fijos los ves y los das de baja.
+            <b>❓ Preguntas y listas</b>
+            • "¿cuánto gasté en kiosco este mes?", "compará octubre con septiembre"
+            • "¿quién me debe plata?", "¿qué cuotas tengo?", "¿cuánto llevo de IA este mes?"
+            • "mandame el resumen de la semana" (o del mes), "pasame el link del dashboard"
+            Los números los calculo con tu base, no los inventa la IA.
 
-            <b>Compras en cuotas</b>
-            "zapatillas 84000 en 6 cuotas" (o "6 cuotas de 14000 con la tarjeta"): cada mes cuenta solo esa cuota. Con /cuotas las ves y podés cancelar un plan (se borran las cuotas futuras, no las que ya pasaron).
+            <b>📬 Lo que te mando solo</b>
+            El domingo a las 21 te mando cómo fue tu semana y el día 1 a las 9, cómo fue el mes. Si la PC estaba apagada, te llega apenas la prendés.
 
-            <b>Preguntas</b>
-            Preguntame por escrito o por audio: "¿cuánto gasté en kiosco este mes?", "compará octubre con septiembre", "¿cuántas Seven Up compré?", "¿cuánto me queda disponible?". Los números los calculo con tu base, no los inventa la IA.
-
-            <b>Resúmenes</b>
-            El domingo a las 21 te mando cómo fue tu semana, y el día 1 a las 9, cómo fue el mes. Si la PC estaba apagada, te llega apenas la prendés.
-
-            <b>Comandos</b>
-            /hoy – gastos de hoy y el total
-            /mes – total del mes por categoría
-            /resumen – tu semana hasta hoy, con lo que noté; /resumen mes, el mes
-            /juntadas – quién te debe plata de las juntadas
-            /fijo – agregar un gasto fijo; /fijos, los que tenés
-            /cuotas – tus compras en cuotas
-            /calcular – calcula el sueldo del mes con tus horas; /calculo, el del mes
-            /costos – lo gastado en IA este mes, lo que se proyecta y el tope
-            /dashboard – el link del dashboard, para ver tus gastos con gráficos
-            /ayuda – este mensaje""";
+            <b>Atajos</b> (si preferís comandos)
+            /hoy · /mes · /resumen · /juntadas · /fijos · /cuotas · /calculo · /costos · /dashboard""";
 
     private final InterpretadorService interpretador;
     private final MovimientoService movimientos;
@@ -138,6 +131,8 @@ public class ProcesadorMensajes {
     private final ConversacionRepetidos repetidos;
     private final ConversacionJuntadas juntadas;
     private final ConversacionFijos fijos;
+    private final ConversacionAltaFijo altaFijo;
+    private final PedidosNaturales naturales;
     private final GastoFijoService gastosFijos;
     private final ConversacionVarios varios;
     private final ConversacionCuotas cuotas;
@@ -148,14 +143,20 @@ public class ProcesadorMensajes {
     private final ConsultaService consultas;
     private final FormatoConsulta formatoConsulta;
 
-    /** Botones de un mensaje dudoso: "dg:<id>" (es un gasto) y "dp:<id>" (es una pregunta). */
+    /**
+     * Botones de un mensaje dudoso: "dg:<id>" (es un gasto), "dp:<id>" (es una pregunta) y "do:<id>:<intención>"
+     * (cualquier otra de las opciones, por su ordinal).
+     */
     static final String ES_GASTO = "dg";
     static final String ES_PREGUNTA = "dp";
+    static final String ES_OTRA = "do";
+    /** "Fue ≈ $32.000": el pago de un fijo dicho sin monto toma el aproximado del fijo. */
+    static final String PAGO_APROXIMADO = "fy";
     /** Cuántos mensajes dudosos se recuerdan esperando un botón (los más viejos se olvidan). */
     static final int DUDOSOS_RECORDADOS = 20;
 
-    /** Un mensaje que puede ser un gasto o una pregunta, esperando que el usuario elija. */
-    private record Dudoso(InterpretadorService.Interpretado gasto, String texto, Origen origen) {
+    /** Un mensaje que no está claro qué pide, esperando que el usuario elija entre las opciones. */
+    private record Dudoso(InterpretadorService.Dudoso dudoso, String texto, Origen origen) {
     }
 
     private final AtomicLong siguienteDudoso = new AtomicLong();
@@ -201,9 +202,13 @@ public class ProcesadorMensajes {
             TranscripcionService transcripciones, TicketService tickets, ResumenService resumenes,
             FormatoResumen formatoResumen, ConsultaService consultas, FormatoConsulta formatoConsulta,
             ConversacionRepetidos repetidos, ConversacionJuntadas juntadas, ConversacionFijos fijos,
-            GastoFijoService gastosFijos, ConversacionVarios varios, ConversacionCuotas cuotas,
-            ConversacionRecibos recibos, ComandosSueldo comandosSueldo, FormatoCostos formatoCostos, GastitoProperties properties, DashboardProperties dashboard, Clock clock) {
+            ConversacionAltaFijo altaFijo, PedidosNaturales naturales, GastoFijoService gastosFijos,
+            ConversacionVarios varios, ConversacionCuotas cuotas, ConversacionRecibos recibos,
+            ComandosSueldo comandosSueldo, FormatoCostos formatoCostos, GastitoProperties properties,
+            DashboardProperties dashboard, Clock clock) {
         this.fijos = fijos;
+        this.altaFijo = altaFijo;
+        this.naturales = naturales;
         this.gastosFijos = gastosFijos;
         this.varios = varios;
         this.cuotas = cuotas;
@@ -242,6 +247,17 @@ public class ProcesadorMensajes {
         String comando = comando(limpio);
         List<Accion> acciones = new ArrayList<>();
 
+        // El alta de un fijo esperaba un dato (el monto, el día, el nombre). Si no sirve, se procesa normal.
+        if (altaFijo.esperando(chatId)) {
+            if (comando == null) {
+                Optional<Accion.Enviar> respuesta = altaFijo.texto(chatId, limpio);
+                if (respuesta.isPresent()) {
+                    return List.of(respuesta.get());
+                }
+            }
+            altaFijo.olvidar(chatId);
+        }
+
         // El cobro de un fijo esperaba el monto ("Cambió el monto").
         if (fijos.esperando(chatId)) {
             if (comando == null) {
@@ -270,28 +286,64 @@ public class ProcesadorMensajes {
             acciones.addAll(restaurar(espera));
         }
 
-        if ("/resumen".equals(comando)) {
-            acciones.add(resumen(limpio));
-        } else if ("/juntadas".equals(comando)) {
-            acciones.addAll(juntadas.abiertas());
-        } else if ("/fijo".equals(comando)) {
-            acciones.add(fijos.alta(limpio.replaceFirst("^/\\S+\\s*", "")));
-        } else if ("/fijos".equals(comando)) {
-            acciones.addAll(fijos.lista());
-        } else if ("/cuotas".equals(comando)) {
-            acciones.addAll(cuotas.lista());
-        } else if ("/calcular".equals(comando)) {
-            acciones.add(comandosSueldo.calcularDeComando(limpio));
-        } else if ("/calculo".equals(comando)) {
-            acciones.add(comandosSueldo.verCalculo());
-        } else if (comando != null) {
-            ClaseIngreso clase = ComandosIngreso.clase(comando);
-            acciones.add(clase != null ? comandosIngreso.responder(clase, limpio) : responderComando(comando));
+        if (comando != null) {
+            acciones.addAll(ejecutarComando(chatId, comando, limpio));
+        } else if (comandosSueldo.pareceCalculo(limpio)) {
+            acciones.add(comandosSueldo.calcularDeTexto(limpio));
         } else {
-            acciones.add(comandosSueldo.pareceCalculo(limpio) ? comandosSueldo.calcularDeTexto(limpio)
-                    : nuevoGasto(chatId, limpio, Origen.TEXTO));
+            acciones.addAll(nuevoGasto(chatId, limpio, Origen.TEXTO));
         }
         return acciones;
+    }
+
+    /**
+     * Un comando (los atajos) o lo mismo pedido en lenguaje natural ("¿qué fijos me faltan?" → /fijos). Si los
+     * argumentos de un atajo no se entienden sin IA, se interpretan como cualquier mensaje: nunca se le pide al
+     * usuario que respete un formato.
+     *
+     * @param limpio el mensaje entero, con el comando ("/fijo seguro 32900 tarjeta día 4")
+     */
+    private List<Accion> ejecutarComando(long chatId, String comando, String limpio) {
+        String argumentos = limpio.replaceFirst("^/\\S+\\s*", "");
+        return switch (comando) {
+            case "/resumen" -> List.of(resumen(limpio));
+            case "/juntadas" -> juntadas.abiertas();
+            case "/fijo" -> argumentos.isBlank() ? List.of(Accion.Enviar.texto(ConversacionAltaFijo.preguntaInicial()))
+                    : altaFijo.desdeComando(chatId, argumentos).<List<Accion>>map(List::of)
+                            .orElseGet(() -> nuevoGasto(chatId, "agregá un gasto fijo: " + argumentos, Origen.TEXTO));
+            case "/fijos" -> fijos.lista();
+            case "/cuotas" -> cuotas.lista();
+            case "/calcular" -> argumentos.isBlank() || ParserHorasSueldo.posicionales(argumentos).isPresent()
+                    ? List.of(comandosSueldo.calcularDeComando(limpio))
+                    : nuevoGasto(chatId, "este mes hice " + argumentos, Origen.TEXTO);
+            case "/calculo" -> List.of(comandosSueldo.verCalculo());
+            default -> {
+                ClaseIngreso clase = ComandosIngreso.clase(comando);
+                if (clase == null) {
+                    yield List.of(responderComando(comando));
+                }
+                yield comandosIngreso.responder(clase, limpio).<List<Accion>>map(List::of)
+                        .orElseGet(() -> nuevoGasto(chatId, ComandosIngreso.comoFrase(clase) + argumentos,
+                                Origen.TEXTO));
+            }
+        };
+    }
+
+    /** El comando que muestra lo mismo que una lista pedida en lenguaje natural. */
+    static String comandoDe(ValidadorInterpretacion.Lista lista) {
+        return switch (lista) {
+            case FIJOS -> "/fijos";
+            case DEUDAS -> "/juntadas";
+            case CUOTAS -> "/cuotas";
+            case COSTOS_IA -> "/costos";
+            case RESUMEN_SEMANA -> "/resumen";
+            case RESUMEN_MES -> "/resumen mes";
+            case HOY -> "/hoy";
+            case MES -> "/mes";
+            case CALCULO -> "/calculo";
+            case DASHBOARD -> "/dashboard";
+            case AYUDA -> "/ayuda";
+        };
     }
 
     /** Telegram confirmó el envío de la tarjeta de un gasto: si se espera un valor para ella, se anota dónde está. */
@@ -333,6 +385,14 @@ public class ProcesadorMensajes {
                     Probá de nuevo hablando cerca del micrófono, o mandámelo escrito."""));
         }
 
+        // El alta de un fijo esperaba un dato ("unos 32 mil"): si sirve, se usa; si no, se procesa normal.
+        if (altaFijo.esperando(chatId)) {
+            Optional<Accion.Enviar> respuesta = altaFijo.texto(chatId, escuchado);
+            if (respuesta.isPresent()) {
+                return List.of(respuesta.get().conPrefijo(escuche(escuchado)));
+            }
+        }
+
         List<Accion> acciones = new ArrayList<>();
         Espera espera = esperas.remove(chatId);
         if (espera != null) {
@@ -342,8 +402,11 @@ public class ProcesadorMensajes {
             }
             acciones.addAll(restaurar(espera));
         }
-        acciones.add(comandosSueldo.pareceCalculo(escuchado) ? comandosSueldo.calcularDeTexto(escuchado)
-                : nuevoGasto(chatId, escuchado, Origen.AUDIO));
+        if (comandosSueldo.pareceCalculo(escuchado)) {
+            acciones.add(comandosSueldo.calcularDeTexto(escuchado));
+        } else {
+            acciones.addAll(nuevoGasto(chatId, escuchado, Origen.AUDIO));
+        }
         return acciones;
     }
 
@@ -474,56 +537,125 @@ public class ProcesadorMensajes {
 
     // --- Gasto nuevo y edición de campos ---
 
-    private Accion nuevoGasto(long chatId, String texto, Origen origen) {
+    /** Lo que diga el mensaje (un gasto, un ingreso, un fijo, una pregunta, una corrección…), interpretado. */
+    private List<Accion> nuevoGasto(long chatId, String texto, Origen origen) {
         boolean audio = origen == Origen.AUDIO;
         List<String> partes = DivisorDeGastos.separar(texto);
         if (partes.size() > 1) {
             Optional<Accion> varios = intentarVarios(partes, origen, texto, audio);
             if (varios.isPresent()) {
-                return varios.get();
+                return List.of(varios.get());
             }
         }
         InterpretadorService.Resultado resultado;
         try {
             resultado = interpretador.interpretar(texto, audio ? PropositoIa.AUDIO : PropositoIa.TEXTO);
         } catch (IaNoDisponibleException e) {
-            return Accion.Enviar.texto((audio ? escuche(texto) : "") + """
-                    No pude interpretar el mensaje: %s.
-                    Mientras tanto podés usar el formato simple, por ejemplo: kiosco 1500"""
-                    .formatted(html(e.getMessage())));
+            return List.of(Accion.Enviar.texto((audio ? escuche(texto) : "") + """
+                    No pude usar la IA para entender el mensaje: %s.
+                    Lo simple lo entiendo igual (kiosco 1500); lo demás, probá de nuevo en un rato."""
+                    .formatted(html(e.getMessage()))));
         }
+        return responder(chatId, resultado, texto, origen);
+    }
+
+    private List<Accion> responder(long chatId, InterpretadorService.Resultado resultado, String texto,
+            Origen origen) {
+        boolean audio = origen == Origen.AUDIO;
+        String prefijo = audio ? escuche(texto) : "";
         return switch (resultado) {
-            case InterpretadorService.Interpretado i -> {
-                Movimiento m = crearGasto(i, origen, texto);
-                if (m.isPendiente()) {
-                    gastosFijos.vincular(texto).ifPresent(fijo -> gastosFijos.vincular(m, fijo));
-                }
+            case InterpretadorService.Interpretado i -> List.of(gastoInterpretado(chatId, i, texto, origen));
+            case InterpretadorService.Pregunta _ -> List.of(Accion.Enviar.conMenu(responderPregunta(texto, audio)));
+            case InterpretadorService.Dudoso d -> List.of(preguntarQueQuiere(d, texto, origen, prefijo));
+            case InterpretadorService.Devolucion d -> List.of(juntadas.devolucion(d.datos(), origen, texto, prefijo));
+            case InterpretadorService.AltaFijo a -> List.of(altaFijo.nueva(chatId, a.pedido(), prefijo));
+            case InterpretadorService.Orden o -> orden(chatId, o.orden(), texto, origen, prefijo);
+            case InterpretadorService.NoEsGasto _ -> List.of(Accion.Enviar.texto(prefijo + """
+                    🤔 No encontré nada para hacer en %s.
+                    Contame un gasto o un ingreso, preguntame algo o pedime una lista, como te salga. En /ayuda tenés ejemplos."""
+                    .formatted(audio ? "lo que escuché" : "el mensaje")));
+        };
+    }
+
+    private Accion gastoInterpretado(long chatId, InterpretadorService.Interpretado i, String texto, Origen origen) {
+        Movimiento m = crearGasto(i, origen, texto);
+        Optional<GastoFijo> fijo = m.isPendiente() ? gastosFijos.vincular(texto) : Optional.empty();
+        fijo.ifPresent(f -> gastosFijos.vincular(m, f));
+        if (m.getMonto() == null) {
+            esperas.put(chatId, new Espera(m.getId(), Campo.MONTO, null));
+            // "Ya pagué el seguro": si el fijo tiene un monto de referencia, un botón lo usa.
+            Teclado teclado = fijo.flatMap(f -> fijos.aproximado(f.getId()))
+                    .map(a -> conFila(tarjetas.principal(m), new Teclado.Boton("✅ Fue ≈ " + formato.pesos(a),
+                            PAGO_APROXIMADO + ":" + m.getId())))
+                    .orElseGet(() -> tarjetas.principal(m));
+            return Accion.Enviar.tarjeta(tarjetas.pidiendoMontoFaltante(m), teclado, m.getId());
+        }
+        return tarjetaNueva(m);
+    }
+
+    private static Teclado conFila(Teclado teclado, Teclado.Boton boton) {
+        List<List<Teclado.Boton>> filas = new ArrayList<>();
+        filas.add(List.of(boton));
+        filas.addAll(teclado.filas());
+        return new Teclado(filas);
+    }
+
+    /** No está claro qué quiere: un botón por opción (2 o 3), la más probable primero. */
+    private Accion preguntarQueQuiere(InterpretadorService.Dudoso d, String texto, Origen origen, String prefijo) {
+        long id = siguienteDudoso.incrementAndGet();
+        dudosos.put(id, new Dudoso(d, texto, origen));
+        boolean gastoOPregunta = d.opciones().equals(List.of(Intencion.GASTO, Intencion.PREGUNTA));
+        List<Teclado.Boton> botones = d.opciones().stream().map(o -> botonDeOpcion(o, id)).toList();
+        return Accion.Enviar.conBotones(prefijo + (gastoOPregunta
+                ? "🤔 ¿Es un gasto para cargar o una pregunta sobre tus gastos?" : "🤔 ¿Qué querés hacer?"),
+                Teclado.constructor().grilla(botones, botones.size() <= 2 ? 2 : 1).build());
+    }
+
+    static Teclado.Boton botonDeOpcion(Intencion opcion, long id) {
+        return switch (opcion) {
+            case GASTO -> new Teclado.Boton("🧾 Es un gasto", ES_GASTO + ":" + id);
+            case PREGUNTA -> new Teclado.Boton("❓ Es una pregunta", ES_PREGUNTA + ":" + id);
+            default -> new Teclado.Boton(switch (opcion) {
+                case INGRESO -> "💰 Es un ingreso";
+                case DEVOLUCION -> "🤝 Me devolvieron plata";
+                case ALTA_FIJO -> "📌 Agregar un gasto fijo";
+                case BAJA_FIJO -> "🗑 Dar de baja un fijo";
+                case CORREGIR -> "✏️ Corregir lo último";
+                case BORRAR -> "🗑 Borrar lo último";
+                case CALCULO_SUELDO -> "🧮 Calcular el sueldo";
+                case CANCELAR_CUOTAS -> "🗂 Cancelar unas cuotas";
+                case PERDONAR -> "🚫 Dar por perdida una deuda";
+                default -> "📋 Ver una lista";
+            }, ES_OTRA + ":" + id + ":" + opcion.ordinal());
+        };
+    }
+
+    /** Los demás pedidos: un ingreso, corregir o borrar lo último, una lista, el sueldo, cuotas, deudas, fijos. */
+    private List<Accion> orden(long chatId, ValidadorInterpretacion.Resultado orden, String texto, Origen origen,
+            String prefijo) {
+        return switch (orden) {
+            case ValidadorInterpretacion.Ver v -> ejecutarComando(chatId, comandoDe(v.lista()).split(" ")[0],
+                    comandoDe(v.lista()));
+            case ValidadorInterpretacion.Ingreso i -> {
+                Movimiento m = comandosIngreso.crear(i, origen, texto);
                 if (m.getMonto() == null) {
                     esperas.put(chatId, new Espera(m.getId(), Campo.MONTO, null));
-                    yield Accion.Enviar.tarjeta(tarjetas.pidiendoMontoFaltante(m), tarjetas.principal(m), m.getId());
+                    yield List.of(Accion.Enviar.tarjeta(prefijo + tarjetas.pidiendoMontoFaltante(m),
+                            tarjetas.principal(m), m.getId()));
                 }
-                yield tarjetaNueva(m);
+                yield List.of(Accion.Enviar.tarjeta(prefijo + tarjetas.pendiente(m), tarjetas.principal(m),
+                        m.getId()));
             }
-            case InterpretadorService.Pregunta _ -> Accion.Enviar.conMenu(responderPregunta(texto, audio));
-            case InterpretadorService.Dudoso d -> {
-                long id = siguienteDudoso.incrementAndGet();
-                dudosos.put(id, new Dudoso(d.comoGasto(), texto, origen));
-                yield Accion.Enviar.conBotones((audio ? escuche(texto) : "")
-                        + "🤔 ¿Es un gasto para cargar o una pregunta sobre tus gastos?", Teclado.constructor()
-                                .fila(new Teclado.Boton("🧾 Es un gasto", ES_GASTO + ":" + id),
-                                        new Teclado.Boton("❓ Es una pregunta", ES_PREGUNTA + ":" + id))
-                                .build());
-            }
-            case InterpretadorService.Devolucion d ->
-                    juntadas.devolucion(d.datos(), origen, texto, audio ? escuche(texto) : "");
-            case InterpretadorService.AltaFijo a -> fijos.tarjetaDeAlta(a.pedido(), audio ? escuche(texto) : "");
-            case InterpretadorService.NoEsGasto _ -> Accion.Enviar.texto(audio
-                    ? escuche(texto) + """
-                            No encontré un gasto en lo que escuché 🤔
-                            Probá de nuevo, por ejemplo: "kiosco 1500", o mandámelo escrito."""
-                    : """
-                            No encontré un gasto en el mensaje 🤔
-                            Probá con algo como "kiosco 1500" o mirá /ayuda""");
+            case ValidadorInterpretacion.Correccion c -> List.of(naturales.corregir(c, prefijo));
+            case ValidadorInterpretacion.Borrar _ -> List.of(naturales.borrar(prefijo));
+            case ValidadorInterpretacion.CalculoSueldo c -> List.of(comandosSueldo.calcularDeHoras(c.horas(), prefijo));
+            case ValidadorInterpretacion.CancelarCuotas c -> naturales.cancelarCuotas(c.cual(), prefijo)
+                    .<List<Accion>>map(List::of).orElseGet(cuotas::lista);
+            case ValidadorInterpretacion.Perdonar p -> naturales.perdonar(p.persona(), p.de(), prefijo)
+                    .<List<Accion>>map(List::of).orElseGet(juntadas::abiertas);
+            case ValidadorInterpretacion.BajaFijo b -> naturales.bajaDeFijo(b.cual(), prefijo)
+                    .<List<Accion>>map(List::of).orElseGet(fijos::lista);
+            default -> List.of(Accion.Enviar.texto(prefijo + "🤔 No entendí qué querés hacer. ¿Me lo contás de otra forma?"));
         };
     }
 
@@ -592,7 +724,7 @@ public class ProcesadorMensajes {
         if (dudoso == null) {
             return List.of(new Accion.Avisar("Ese mensaje ya no está pendiente"));
         }
-        Movimiento m = crearGasto(dudoso.gasto(), dudoso.origen(), dudoso.texto());
+        Movimiento m = crearGasto(dudoso.dudoso().comoGasto(), dudoso.origen(), dudoso.texto());
         return List.of(m.getMonto() == null ? principal(chatId, mensajeId, m)
                 : repetidos.siEsRepetido(m, mensajeId).orElseGet(() -> principal(chatId, mensajeId, m)));
     }
@@ -616,6 +748,35 @@ public class ProcesadorMensajes {
                 responderPregunta(dudoso.texto(), dudoso.origen() == Origen.AUDIO), Teclado.NINGUNO));
     }
 
+
+    /**
+     * Eligió otra de las opciones (un ingreso, un fijo, corregir lo último…): se valida la misma respuesta de la IA
+     * con esa intención, sin volver a llamarla, y el mensaje de la pregunta queda con lo que eligió.
+     */
+    private List<Accion> esOtra(long chatId, int mensajeId, long id, long ordinal) {
+        Dudoso dudoso = dudosos.remove(id);
+        if (dudoso == null || ordinal < 0 || ordinal >= Intencion.values().length) {
+            return List.of(new Accion.Avisar("Ese mensaje ya no está pendiente"));
+        }
+        Intencion elegida = Intencion.values()[(int) ordinal];
+        List<Accion> acciones = new ArrayList<>();
+        acciones.add(new Accion.Editar(mensajeId, "👉 " + html(botonDeOpcion(elegida, id).texto()),
+                Teclado.NINGUNO));
+        acciones.addAll(responder(chatId, interpretador.reinterpretar(dudoso.dudoso(), elegida, dudoso.texto()),
+                dudoso.texto(), dudoso.origen()));
+        return acciones;
+    }
+
+    /** "✅ Fue ≈ $32.000": el pago de un fijo dicho sin monto toma el monto de referencia del fijo. */
+    private List<Accion> pagoAproximado(long chatId, int mensajeId, long movimientoId) {
+        Movimiento m = pendiente(movimientoId);
+        Optional<java.math.BigDecimal> aproximado = m.getGastoFijoId() == null ? Optional.empty()
+                : fijos.aproximado(m.getGastoFijoId());
+        if (aproximado.isEmpty()) {
+            return List.of(principal(chatId, mensajeId, m), new Accion.Avisar("Ese fijo no tiene monto de referencia"));
+        }
+        return List.of(principal(chatId, mensajeId, movimientos.cambiarMonto(movimientoId, aproximado.get())));
+    }
     private static String escuche(String texto) {
         return "🎙 Escuché: \"" + html(texto) + "\"\n\n";
     }
@@ -707,6 +868,7 @@ public class ProcesadorMensajes {
         List<Accion> acciones = new ArrayList<>();
         juntadas.olvidar(chatId);
         fijos.olvidar(chatId);
+        altaFijo.olvidar(chatId);
         Espera previa = esperas.remove(chatId);
         if (previa != null && (previa.mensajeId() == null || previa.mensajeId() != mensajeId)) {
             acciones.addAll(restaurar(previa));
@@ -774,9 +936,16 @@ public class ProcesadorMensajes {
             case Tarjetas.JUNTADA_NOMBRES, Tarjetas.JUNTADA_PARTE, Tarjetas.JUNTADA_PERDIDO, Tarjetas.JUNTADA_MENSAJE,
                     Tarjetas.JUNTADA_VER, Tarjetas.DEVOLUCION_DE, Tarjetas.DEVOLUCION_QUEDA_DEBIENDO,
                     Tarjetas.DEVOLUCION_SALDADO -> juntadas.boton(chatId, mensajeId, accion, id, elegido);
-            case ConversacionFijos.GUARDAR, ConversacionFijos.CANCELAR, ConversacionFijos.CATEGORIA,
-                    ConversacionFijos.BAJA, ConversacionFijos.ESTE_MES_NO_CHECKLIST ->
-                    fijos.boton(mensajeId, accion, id, elegido);
+            case ConversacionFijos.BAJA, ConversacionFijos.ESTE_MES_NO_CHECKLIST -> fijos.boton(mensajeId, accion, id);
+            case ConversacionAltaFijo.GUARDAR, ConversacionAltaFijo.CANCELAR, ConversacionAltaFijo.CATEGORIA,
+                    ConversacionAltaFijo.DIA, ConversacionAltaFijo.MEDIO, ConversacionAltaFijo.MONTO_NO_SE,
+                    ConversacionAltaFijo.EDITAR, ConversacionAltaFijo.CAMBIAR, ConversacionAltaFijo.FRECUENCIA,
+                    ConversacionAltaFijo.VOLVER, ConversacionAltaFijo.ACTUALIZAR_EXISTENTE, ConversacionAltaFijo.ES_OTRO ->
+                    altaFijo.boton(chatId, mensajeId, accion, id, elegido);
+            case PedidosNaturales.APLICAR_CORRECCION, PedidosNaturales.BORRAR, PedidosNaturales.BAJA_FIJO,
+                    PedidosNaturales.NADA -> naturales.boton(mensajeId, accion, id);
+            case PAGO_APROXIMADO -> pagoAproximado(chatId, mensajeId, id);
+            case ES_OTRA -> esOtra(chatId, mensajeId, id, requerido(elegido));
             case ConversacionFijos.CONFIRMAR_COBRO, ConversacionFijos.CAMBIO_EL_MONTO, ConversacionFijos.ESTE_MES_NO ->
                     fijos.botonDeCobro(chatId, mensajeId, accion, id);
             case ConversacionFijos.PAGADO, ConversacionFijos.ACTUALIZAR_ESTIMADO ->
