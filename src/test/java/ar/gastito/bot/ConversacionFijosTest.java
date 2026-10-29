@@ -24,6 +24,8 @@ import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.catalogo.Categoria;
 import ar.gastito.fijo.Frecuencia;
 import ar.gastito.fijo.GastoFijoService;
+import ar.gastito.fijo.PagoFijoService;
+import ar.gastito.fijo.RecordatorioFijoService;
 import ar.gastito.fijo.VistaFijo;
 import ar.gastito.interpretacion.CatalogoDePrueba;
 import ar.gastito.interpretacion.ParserFijo;
@@ -41,8 +43,10 @@ class ConversacionFijosTest {
     private final GastoFijoService servicio = mock(GastoFijoService.class);
     private final CatalogoService catalogos = mock(CatalogoService.class);
     private final MovimientoService movimientos = mock(MovimientoService.class);
+    private final PagoFijoService pagos = mock(PagoFijoService.class);
+    private final RecordatorioFijoService recordatorios = mock(RecordatorioFijoService.class);
     private final ConversacionFijos conversacion = new ConversacionFijos(servicio, new ParserFijo(), catalogos,
-            movimientos, new FormatoMensajes(RELOJ), RELOJ);
+            movimientos, new FormatoMensajes(RELOJ), pagos, recordatorios, RELOJ);
 
     @BeforeEach
     void setUp() {
@@ -135,13 +139,13 @@ class ConversacionFijosTest {
     void elChecklistMuestraCadaEstadoYElTotalConBotonParaEsteMesNo() {
         GastoFijoService.ItemChecklist cargado = new GastoFijoService.ItemChecklist(7L, "Seguro", "🛡️",
                 GastoFijoService.EstadoChecklist.CARGADO, new BigDecimal("32900"), LocalDate.of(2026, 10, 4),
-                new BigDecimal("30000"), new BigDecimal("9.7"), LocalDate.of(2026, 10, 4), true);
+                new BigDecimal("30000"), new BigDecimal("9.7"), LocalDate.of(2026, 10, 4), true, 70L, false, null);
         GastoFijoService.ItemChecklist falta = new GastoFijoService.ItemChecklist(8L, "Luz", "💡",
                 GastoFijoService.EstadoChecklist.FALTA, null, null, new BigDecimal("28000"), null,
-                LocalDate.of(2026, 10, 27), false);
+                LocalDate.of(2026, 10, 27), false, null, false, new BigDecimal("28000"));
         GastoFijoService.ItemChecklist esteMesNo = new GastoFijoService.ItemChecklist(9L, "Gimnasio", "🏋️",
                 GastoFijoService.EstadoChecklist.ESTE_MES_NO, null, null, null, null, LocalDate.of(2026, 10, 15),
-                false);
+                false, null, false, null);
         when(servicio.checklist(YearMonth.of(2026, 10))).thenReturn(List.of(cargado, falta, esteMesNo));
         when(servicio.cobrosPendientes()).thenReturn(List.of());
 
@@ -258,5 +262,92 @@ class ConversacionFijosTest {
 
         assertThat(acciones).hasSize(2);
         assertThat(((Accion.Enviar) acciones.get(1)).html()).startsWith("📌 <b>Se cobró el seguro de la moto");
+    }
+
+    // --- Monto estimado ---
+
+    private Movimiento luz(String monto, long id, boolean estimado) {
+        Movimiento m = Movimiento.cobroManualDeFijo(MovimientoInterpretado.conCategoria(new BigDecimal(monto), "Luz",
+                SEGUROS, null, null, null, LocalDate.of(2026, 10, 10).atTime(9, 0)), 8L, LocalDate.of(2026, 10, 1),
+                ar.gastito.movimiento.Origen.TEXTO, null, DatosDePrueba.AHORA);
+        if (estimado) {
+            m.marcarMontoEstimado();
+        }
+        return DatosDePrueba.conId(m, id);
+    }
+
+    @Test
+    void elRecordatorioTraeUnBotonPorFijoConElAproximado() {
+        Accion.Enviar mensaje = conversacion.recordatorio(List.of(
+                new RecordatorioFijoService.Vencido(8L, "Luz", 10, new BigDecimal("85000")),
+                new RecordatorioFijoService.Vencido(9L, "Gas", 12, new BigDecimal("40000"))));
+
+        assertThat(mensaje.html()).startsWith("📌 <b>Te falta cargar:</b> Luz (vence el 10), Gas (vence el 12).");
+        assertThat(mensaje.teclado().botones()).extracting(Teclado.Boton::texto)
+                .containsExactly("✅ Luz ≈ $85.000", "✅ Gas ≈ $40.000");
+        assertThat(datos(mensaje.teclado())).containsExactly("fp:8", "fp:9");
+    }
+
+    @Test
+    void elBotonDelRecordatorioLoTildaPagadoYQuedanLosDemas() {
+        when(pagos.pagado(8L, YearMonth.of(2026, 10), ar.gastito.movimiento.Origen.TEXTO))
+                .thenReturn(luz("85000", 30, true));
+        when(recordatorios.vencidos()).thenReturn(List.of(
+                new RecordatorioFijoService.Vencido(9L, "Gas", 12, new BigDecimal("40000"))));
+
+        List<Accion> acciones = conversacion.botonDePago(MENSAJE, ConversacionFijos.PAGADO, 8);
+
+        verify(pagos).pagado(8L, YearMonth.of(2026, 10), ar.gastito.movimiento.Origen.TEXTO);
+        Accion.Editar editado = (Accion.Editar) acciones.get(0);
+        assertThat(editado.html()).contains("Gas (vence el 12)").doesNotContain("Luz");
+        assertThat(datos(editado.teclado())).containsExactly("fp:9");
+        assertThat(acciones).contains(new Accion.Avisar("✅ Luz ≈ $85.000"));
+
+        when(recordatorios.vencidos()).thenReturn(List.of());
+        Accion.Editar ultimo = (Accion.Editar) conversacion.botonDePago(MENSAJE, ConversacionFijos.PAGADO, 9).get(0);
+        assertThat(ultimo.html()).startsWith("✅ <b>Listo:</b>");
+    }
+
+    @Test
+    void unGastoDeUnFijoEstimadoProponeActualizarElMonto() {
+        Movimiento nuevo = luz("87500", 31, false);
+        Movimiento estimado = luz("85000", 30, true);
+        when(pagos.estimadoDelPeriodo(8L, YearMonth.of(2026, 10))).thenReturn(Optional.of(estimado));
+
+        Accion.Enviar propuesta = conversacion.siActualizaUnEstimado(nuevo).orElseThrow();
+
+        assertThat(propuesta.html()).contains("monto estimado (≈ $85.000)");
+        assertThat(propuesta.teclado().botones()).extracting(Teclado.Boton::texto)
+                .containsExactly("🔄 Actualizar el monto ($85.000 → $87.500)", "➕ Es otro pago");
+        assertThat(datos(propuesta.teclado())).containsExactly("fu:31", "fo:31");
+
+        when(pagos.actualizarEstimadoCon(31L)).thenReturn(new PagoFijoService.Actualizacion(
+                luz("87500", 30, false), new BigDecimal("85000")));
+        Accion.Editar actualizado = (Accion.Editar) conversacion.botonDePago(MENSAJE,
+                ConversacionFijos.ACTUALIZAR_ESTIMADO, 31).get(0);
+        assertThat(actualizado.html()).isEqualTo("✅ <b>Monto actualizado</b>\n📌 Luz: $85.000 → $87.500");
+    }
+
+    @Test
+    void sobreUnFijoConElMontoRealQuedaElAvisoDeSiempre() {
+        Movimiento nuevo = luz("87500", 31, false);
+        when(pagos.estimadoDelPeriodo(8L, YearMonth.of(2026, 10))).thenReturn(Optional.empty());
+        when(servicio.yaCargadoEstePeriodo(8L, YearMonth.of(2026, 10))).thenReturn(Optional.of(luz("86000", 30,
+                false)));
+
+        assertThat(conversacion.siActualizaUnEstimado(nuevo)).isEmpty();
+        assertThat(conversacion.avisoYaCargado(nuevo)).isEqualTo("\n\n⚠️ Ya cargaste luz este mes ($86.000). ¿Es otro "
+                + "pago?");
+    }
+
+    @Test
+    void elChecklistDelBotMuestraLosEstimados() {
+        GastoFijoService.ItemChecklist estimado = new GastoFijoService.ItemChecklist(8L, "Luz", "💡",
+                GastoFijoService.EstadoChecklist.CARGADO, new BigDecimal("85000"), LocalDate.of(2026, 10, 10),
+                new BigDecimal("80000"), new BigDecimal("6.3"), LocalDate.of(2026, 10, 10), false, 30L, true, null);
+        when(servicio.checklist(YearMonth.of(2026, 10))).thenReturn(List.of(estimado));
+        when(servicio.cobrosPendientes()).thenReturn(List.of());
+
+        assertThat(((Accion.Enviar) conversacion.lista().get(0)).html()).contains("✅ Luz: ≈ $85.000 · estimado\n");
     }
 }

@@ -599,8 +599,11 @@ public class ProcesadorMensajes {
 
     /** La tarjeta de un gasto recién creado con monto: la de siempre, o la de "¿ya lo tenías registrado?". */
     private Accion.Enviar tarjetaNueva(Movimiento m) {
-        return repetidos.siEsRepetido(m)
-                .orElseGet(() -> Accion.Enviar.tarjeta(tarjetas.pendiente(m), tarjetas.principal(m), m.getId()));
+        return fijos.siActualizaUnEstimado(m)
+                .or(() -> repetidos.siEsRepetido(m))
+                .orElseGet(() -> Accion.Enviar.tarjeta(tarjetas.pendiente(m)
+                        + (m.getGastoFijoId() == null ? "" : fijos.avisoYaCargado(m)), tarjetas.principal(m),
+                        m.getId()));
     }
 
     /** "Es una pregunta": la respuesta reemplaza a los botones. */
@@ -776,6 +779,9 @@ public class ProcesadorMensajes {
                     fijos.boton(mensajeId, accion, id, elegido);
             case ConversacionFijos.CONFIRMAR_COBRO, ConversacionFijos.CAMBIO_EL_MONTO, ConversacionFijos.ESTE_MES_NO ->
                     fijos.botonDeCobro(chatId, mensajeId, accion, id);
+            case ConversacionFijos.PAGADO, ConversacionFijos.ACTUALIZAR_ESTIMADO ->
+                    fijos.botonDePago(mensajeId, accion, id);
+            case ConversacionFijos.OTRO_PAGO -> List.of(principal(chatId, mensajeId, pendiente(id)));
             case ConversacionCuotas.CANCELAR_PLAN -> cuotas.boton(mensajeId, id);
             case ConversacionVarios.GUARDAR_TODO, ConversacionVarios.CANCELAR_TODOS -> varios.boton(mensajeId,
                     accion, id);

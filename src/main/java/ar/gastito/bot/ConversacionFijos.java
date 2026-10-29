@@ -23,6 +23,7 @@ import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.fijo.Frecuencia;
 import ar.gastito.fijo.GastoFijoService;
+import ar.gastito.fijo.PagoFijoService;
 import ar.gastito.fijo.RecordatorioFijoService;
 import ar.gastito.fijo.VistaFijo;
 import ar.gastito.interpretacion.Montos;
@@ -31,6 +32,7 @@ import ar.gastito.interpretacion.PedidoFijo;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoNoPendienteException;
 import ar.gastito.movimiento.MovimientoService;
+import ar.gastito.movimiento.Origen;
 
 /**
  * Los gastos fijos en el chat: el alta ("/fijo seguro 32900 tarjeta día 4" o "agregá un fijo: …") con su tarjeta
@@ -59,6 +61,8 @@ public class ConversacionFijos {
     private final CatalogoService catalogos;
     private final MovimientoService movimientos;
     private final FormatoMensajes formato;
+    private final PagoFijoService pagos;
+    private final RecordatorioFijoService recordatorios;
     private final Clock clock;
 
     private final AtomicLong siguiente = new AtomicLong();
@@ -70,12 +74,15 @@ public class ConversacionFijos {
     });
 
     public ConversacionFijos(GastoFijoService fijos, ParserFijo parser, CatalogoService catalogos,
-            MovimientoService movimientos, FormatoMensajes formato, Clock clock) {
+            MovimientoService movimientos, FormatoMensajes formato, PagoFijoService pagos,
+            RecordatorioFijoService recordatorios, Clock clock) {
         this.fijos = fijos;
         this.parser = parser;
         this.catalogos = catalogos;
         this.movimientos = movimientos;
         this.formato = formato;
+        this.pagos = pagos;
+        this.recordatorios = recordatorios;
         this.clock = clock;
     }
 
@@ -323,8 +330,9 @@ public class ConversacionFijos {
             sb.append('\n');
             switch (item.estado()) {
                 case CARGADO -> {
-                    sb.append("✅ ").append(html(item.nombre())).append(": ").append(formato.pesos(item.monto()));
-                    if (item.porcentaje() != null) {
+                    sb.append("✅ ").append(html(item.nombre())).append(": ").append(item.estimado() ? "≈ " : "")
+                            .append(formato.pesos(item.monto())).append(item.estimado() ? " · estimado" : "");
+                    if (item.porcentaje() != null && !item.estimado()) {
                         sb.append(" (").append(item.porcentaje().signum() > 0 ? "+" : "")
                                 .append(item.porcentaje().stripTrailingZeros().toPlainString().replace('.', ','))
                                 .append("%)");
@@ -359,11 +367,109 @@ public class ConversacionFijos {
 
     // --- Recordatorio agrupado ---
 
-    /** "Te falta cargar: luz (vence el 10), gas (vence el 12)." */
+    /** Botón del recordatorio: "✅ Luz ≈ $85.000" lo tilda como pagado con el monto estimado. */
+    static final String PAGADO = "fp";
+
+    /**
+     * "Te falta cargar: luz (vence el 10), gas (vence el 12)", con un botón por fijo para tildarlo pagado con el
+     * monto aproximado (igual que en la web).
+     */
     public Accion.Enviar recordatorio(List<RecordatorioFijoService.Vencido> vencidos) {
+        return Accion.Enviar.conBotones(textoDeRecordatorio(vencidos), tecladoDeRecordatorio(vencidos));
+    }
+
+    private static String textoDeRecordatorio(List<RecordatorioFijoService.Vencido> vencidos) {
         String lista = vencidos.stream()
                 .map(v -> html(v.nombre()) + " (vence el " + v.diaVencimiento() + ")")
                 .reduce((a, b) -> a + ", " + b).orElse("");
-        return Accion.Enviar.texto("📌 <b>Te falta cargar:</b> " + lista + ". Mandame el gasto cuando lo tengas.");
+        return "📌 <b>Te falta cargar:</b> " + lista + ". Si ya lo pagaste, tocalo y queda con el monto aproximado; "
+                + "el real me lo decís cuando lo sepas.";
+    }
+
+    private Teclado tecladoDeRecordatorio(List<RecordatorioFijoService.Vencido> vencidos) {
+        Teclado.Constructor t = Teclado.constructor();
+        vencidos.forEach(v -> t.fila(new Teclado.Boton("✅ " + v.nombre() + " ≈ " + formato.pesos(v.aproximado()),
+                PAGADO + ":" + v.fijoId())));
+        return t.build();
+    }
+
+    /** "✅ Luz ≈ $85.000" del recordatorio, o "Actualizar el monto" de un estimado. */
+    public List<Accion> botonDePago(int mensajeId, String accion, long id) {
+        if (ACTUALIZAR_ESTIMADO.equals(accion)) {
+            return actualizarEstimado(mensajeId, id);
+        }
+        Movimiento m;
+        try {
+            m = pagos.pagado(id, YearMonth.now(clock), Origen.TEXTO);
+        } catch (IllegalStateException e) {
+            m = null;
+        }
+        List<RecordatorioFijoService.Vencido> faltan = recordatorios.vencidos();
+        Accion.Editar editado = faltan.isEmpty()
+                ? new Accion.Editar(mensajeId, "✅ <b>Listo:</b> no te falta cargar ningún fijo vencido. Los que "
+                        + "quedaron con monto aproximado los corregís cuando sepas el real.", Teclado.NINGUNO)
+                : new Accion.Editar(mensajeId, textoDeRecordatorio(faltan), tecladoDeRecordatorio(faltan));
+        return List.of(editado, new Accion.Avisar(m == null ? "Ya estaba cargado"
+                : "✅ " + m.getDescripcion() + " ≈ " + formato.pesos(m.getMonto())));
+    }
+
+    // --- Monto estimado ---
+
+    /** Botón de la propuesta: el gasto que se acaba de mandar es el real del que se tildó con el estimado. */
+    static final String ACTUALIZAR_ESTIMADO = "fu";
+    /** "Es otro pago": sigue como un gasto nuevo, con su tarjeta de siempre. */
+    static final String OTRO_PAGO = "fo";
+
+    /**
+     * "De luz pagué 87.500" y la luz de este mes estaba tildada con el estimado: se propone actualizar ese monto
+     * (sin crear otro gasto) o, si no, seguir con un gasto aparte.
+     */
+    public Accion.Enviar propuestaDeActualizar(Movimiento nuevo, Movimiento estimado) {
+        String nombre = html(estimado.getDescripcion());
+        return Accion.Enviar.conBotones("📌 <b>" + nombre + "</b> de " + formato.mes(YearMonth.from(
+                estimado.getFijoPeriodo())) + " está cargada con monto estimado (≈ " + formato.pesos(
+                        estimado.getMonto()) + ").\n¿Es este el monto real?",
+                Teclado.constructor()
+                        .fila(new Teclado.Boton("🔄 Actualizar el monto (" + formato.pesos(estimado.getMonto()) + " → "
+                                + formato.pesos(nuevo.getMonto()) + ")", ACTUALIZAR_ESTIMADO + ":" + nuevo.getId()))
+                        .fila(new Teclado.Boton("➕ Es otro pago", OTRO_PAGO + ":" + nuevo.getId()))
+                        .build());
+    }
+
+    /** La propuesta de actualizar, si el gasto nuevo es de un fijo que este mes quedó con el monto estimado. */
+    public Optional<Accion.Enviar> siActualizaUnEstimado(Movimiento nuevo) {
+        if (nuevo.getGastoFijoId() == null || !nuevo.isPendiente() || nuevo.getMonto() == null) {
+            return Optional.empty();
+        }
+        return pagos.estimadoDelPeriodo(nuevo.getGastoFijoId(), YearMonth.from(nuevo.getFijoPeriodo()))
+                .map(estimado -> propuestaDeActualizar(nuevo, estimado));
+    }
+
+    private List<Accion> actualizarEstimado(int mensajeId, long pendienteId) {
+        try {
+            PagoFijoService.Actualizacion a = pagos.actualizarEstimadoCon(pendienteId);
+            Movimiento m = a.movimiento();
+            return List.of(new Accion.Editar(mensajeId, "✅ <b>Monto actualizado</b>\n📌 " + html(m.getDescripcion())
+                    + ": " + formato.pesos(a.anterior()) + " → " + formato.pesos(m.getMonto()), Teclado.NINGUNO),
+                    new Accion.Avisar("✅ Actualizado"));
+        } catch (IllegalStateException e) {
+            return List.of(new Accion.Editar(mensajeId, "📌 " + html(e.getMessage()) + ".", Teclado.NINGUNO));
+        }
+    }
+
+    /** "⚠️ Ya cargaste luz este mes ($88.000). ¿Es otro pago?" si el fijo ya tenía su cobro real, o "". */
+    public String avisoYaCargado(Movimiento nuevo) {
+        if (nuevo.getGastoFijoId() == null) {
+            return "";
+        }
+        return fijos.yaCargadoEstePeriodo(nuevo.getGastoFijoId(), YearMonth.from(nuevo.getFijoPeriodo()))
+                .map(a -> "\n\n⚠️ Ya cargaste " + html(minusculaSinArticulo(nuevo.getDescripcion())) + " este mes ("
+                        + formato.pesos(a.getMonto()) + "). ¿Es otro pago?")
+                .orElse("");
+    }
+
+    private static String minusculaSinArticulo(String texto) {
+        return texto == null || texto.isEmpty() ? "ese gasto"
+                : Character.toLowerCase(texto.charAt(0)) + texto.substring(1);
     }
 }

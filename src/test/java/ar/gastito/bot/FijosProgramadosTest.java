@@ -60,7 +60,7 @@ class FijosProgramadosTest {
     void mandaElRecordatorioAgrupadoSiCorresponde() {
         when(fijos.generarCobros()).thenReturn(List.of());
         List<ar.gastito.fijo.RecordatorioFijoService.Vencido> vencidos =
-                List.of(new ar.gastito.fijo.RecordatorioFijoService.Vencido("Luz", 10));
+                List.of(new ar.gastito.fijo.RecordatorioFijoService.Vencido(1L, "Luz", 10, new java.math.BigDecimal("85000")));
         when(recordatorios.siCorresponde()).thenReturn(java.util.Optional.of(vencidos));
         Accion.Enviar mensaje = Accion.Enviar.texto("recordatorio");
         when(conversacion.recordatorio(vencidos)).thenReturn(mensaje);
