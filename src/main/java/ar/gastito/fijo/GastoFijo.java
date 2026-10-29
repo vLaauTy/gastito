@@ -42,7 +42,10 @@ public class GastoFijo {
 
     private String nombre;
 
-    /** El último monto confirmado (o el de alta); en los variables se propone el promedio de los últimos cobros. */
+    /**
+     * El último monto confirmado (o el de alta); en los variables se propone el promedio de los últimos cobros. Null
+     * si no se sabe: sin monto de referencia hasta el primer pago.
+     */
     private BigDecimal montoEsperado;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -61,7 +64,8 @@ public class GastoFijo {
     @JoinColumn(name = "tarjeta_id")
     private TarjetaCredito tarjeta;
 
-    private int diaDelMes;
+    /** Null si no se sabe ("No sé"): sin recordatorio de vencimiento ni cobro automático. */
+    private Integer diaDelMes;
 
     @Enumerated(EnumType.STRING)
     private Frecuencia frecuencia;
@@ -90,11 +94,9 @@ public class GastoFijo {
     }
 
     public GastoFijo(String nombre, BigDecimal montoEsperado, Categoria categoria, MedioPago medioPago, Cuenta cuenta,
-            TarjetaCredito tarjeta, int diaDelMes, Frecuencia frecuencia, YearMonth mesInicio, boolean montoVariable,
-            String alias, boolean proponerMonto, LocalDateTime ahora) {
-        if (diaDelMes < 1 || diaDelMes > 31) {
-            throw new IllegalArgumentException("El día del cobro tiene que ser del 1 al 31");
-        }
+            TarjetaCredito tarjeta, Integer diaDelMes, Frecuencia frecuencia, YearMonth mesInicio,
+            boolean montoVariable, String alias, boolean proponerMonto, LocalDateTime ahora) {
+        validar(diaDelMes);
         String limpio = nombre.strip();
         this.nombre = limpio.length() > LARGO_MAXIMO_NOMBRE ? limpio.substring(0, LARGO_MAXIMO_NOMBRE) : limpio;
         this.montoEsperado = montoEsperado;
@@ -107,8 +109,24 @@ public class GastoFijo {
         this.mesInicio = mesInicio.atDay(1);
         this.montoVariable = montoVariable;
         this.alias = limpiarAlias(alias);
-        this.proponerMonto = proponerMonto;
+        this.proponerMonto = puedeProponer(proponerMonto, diaDelMes, montoEsperado);
         this.creadoEn = ahora;
+    }
+
+    private static void validar(Integer diaDelMes) {
+        if (diaDelMes != null && (diaDelMes < 1 || diaDelMes > 31)) {
+            throw new IllegalArgumentException("El día del cobro tiene que ser del 1 al 31");
+        }
+    }
+
+    /** Sin día o sin monto no hay qué proponer: queda en el checklist, esperando que se cargue el gasto. */
+    private static boolean puedeProponer(boolean proponerMonto, Integer diaDelMes, BigDecimal montoEsperado) {
+        return proponerMonto && diaDelMes != null && montoEsperado != null;
+    }
+
+    /** Si se sabe qué día se cobra (sin día no hay recordatorio de vencimiento ni cobro automático). */
+    public boolean tieneDia() {
+        return diaDelMes != null;
     }
 
     private static String limpiarAlias(String alias) {
@@ -151,9 +169,9 @@ public class GastoFijo {
         return ChronoUnit.MONTHS.between(inicio, mes) % frecuencia.getMeses() == 0;
     }
 
-    /** El día del cobro en ese mes: el día del fijo, o el último del mes si no lo tiene. */
+    /** El día del cobro en ese mes: el día del fijo, o el último del mes si no lo tiene (o si no se sabe). */
     public LocalDate diaDeCobro(YearMonth mes) {
-        return mes.atDay(Math.min(diaDelMes, mes.lengthOfMonth()));
+        return diaDelMes == null ? mes.atEndOfMonth() : mes.atDay(Math.min(diaDelMes, mes.lengthOfMonth()));
     }
 
     /** El próximo cobro a partir de hoy (incluido), o null si está inactivo. */
@@ -181,11 +199,19 @@ public class GastoFijo {
 
     // --- Cambios ---
 
-    /** Se confirmó un cobro de un fijo de monto fijo: lo próximo que se propone es ese monto. */
+    /**
+     * Se confirmó un cobro de un fijo de monto fijo: lo próximo que se propone es ese monto. Si no tenía monto de
+     * referencia, el primer pago pasa a serlo.
+     */
     void cobrado(BigDecimal monto) {
-        if (!montoVariable) {
+        if (!montoVariable || montoEsperado == null) {
             this.montoEsperado = monto;
         }
+    }
+
+    /** El usuario dijo un monto nuevo de referencia ("el seguro ahora es 36 mil"). */
+    void nuevoMontoEsperado(BigDecimal monto) {
+        this.montoEsperado = monto;
     }
 
     void darDeBaja() {
@@ -194,11 +220,9 @@ public class GastoFijo {
 
     /** ABM: cambia todos los datos editables (el alta y la baja tienen su propio flujo). */
     void editar(String nombre, BigDecimal montoEsperado, Categoria categoria, MedioPago medioPago, Cuenta cuenta,
-            TarjetaCredito tarjeta, int diaDelMes, Frecuencia frecuencia, boolean montoVariable, String alias,
+            TarjetaCredito tarjeta, Integer diaDelMes, Frecuencia frecuencia, boolean montoVariable, String alias,
             boolean proponerMonto) {
-        if (diaDelMes < 1 || diaDelMes > 31) {
-            throw new IllegalArgumentException("El día del cobro tiene que ser del 1 al 31");
-        }
+        validar(diaDelMes);
         String limpio = nombre.strip();
         this.nombre = limpio.length() > LARGO_MAXIMO_NOMBRE ? limpio.substring(0, LARGO_MAXIMO_NOMBRE) : limpio;
         this.montoEsperado = montoEsperado;
@@ -210,7 +234,7 @@ public class GastoFijo {
         this.frecuencia = frecuencia;
         this.montoVariable = montoVariable;
         this.alias = limpiarAlias(alias);
-        this.proponerMonto = proponerMonto;
+        this.proponerMonto = puedeProponer(proponerMonto, diaDelMes, montoEsperado);
     }
 
     public Long getId() {
@@ -241,7 +265,8 @@ public class GastoFijo {
         return tarjeta;
     }
 
-    public int getDiaDelMes() {
+    /** Null si no se sabe. */
+    public Integer getDiaDelMes() {
         return diaDelMes;
     }
 

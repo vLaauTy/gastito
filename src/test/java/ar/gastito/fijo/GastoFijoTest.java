@@ -88,4 +88,20 @@ class GastoFijoTest {
         assertThatThrownBy(() -> fijo(0, Frecuencia.MENSUAL, YearMonth.of(2026, 1)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void sinDiaNiMontoQuedaEnElChecklistSinProponerNadaHastaElPrimerPago() {
+        GastoFijo f = new GastoFijo("Seguro moto", null, null, null, null, null, null, Frecuencia.MENSUAL,
+                YearMonth.of(2026, 10), false, "seguro de la moto", true, LocalDateTime.now());
+
+        assertThat(f.tieneDia()).isFalse();
+        assertThat(f.isProponerMonto()).as("sin día ni monto no hay qué proponer").isFalse();
+        assertThat(f.seCobraEn(YearMonth.of(2026, 10))).isTrue();
+        assertThat(f.diaDeCobro(YearMonth.of(2026, 10))).isEqualTo(LocalDate.of(2026, 10, 31));
+        assertThat(f.montoAproximado(null)).isNull();
+        assertThat(f.coincideCon("ya pagué el seguro de la moto")).isTrue();
+
+        f.cobrado(new BigDecimal("32500"));
+        assertThat(f.getMontoEsperado()).as("el primer pago pasa a ser la referencia").isEqualByComparingTo("32500");
+    }
 }

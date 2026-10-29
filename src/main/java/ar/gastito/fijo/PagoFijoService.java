@@ -54,7 +54,11 @@ public class PagoFijoService {
         BigDecimal anterior = movimientos.cobrosConfirmados(fijoId, PageRequest.of(0, 12)).stream()
                 .filter(c -> c.getFijoPeriodo().isBefore(mes.atDay(1))).findFirst().map(Movimiento::getMonto)
                 .orElse(null);
-        BigDecimal monto = fijo.montoAproximado(anterior).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal aproximado = fijo.montoAproximado(anterior);
+        if (aproximado == null) {
+            throw new IllegalStateException(fijo.getNombre() + " no tiene un monto de referencia: decime cuánto pagaste");
+        }
+        BigDecimal monto = aproximado.setScale(2, RoundingMode.HALF_UP);
         Movimiento m = delPeriodo.stream().filter(c -> c.isPendiente() && c.getOrigen() == Origen.AUTOMATICO)
                 .findFirst().orElse(null);
         if (m != null) {

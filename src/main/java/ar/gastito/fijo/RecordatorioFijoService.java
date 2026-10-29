@@ -56,7 +56,8 @@ public class RecordatorioFijoService {
     public List<Vencido> vencidos() {
         LocalDate hoy = LocalDate.now(clock);
         return fijos.checklist(YearMonth.from(hoy)).stream()
-                .filter(i -> i.estado() == GastoFijoService.EstadoChecklist.FALTA && i.vencimiento().isBefore(hoy))
+                .filter(i -> i.estado() == GastoFijoService.EstadoChecklist.FALTA && i.vencimiento() != null
+                        && i.vencimiento().isBefore(hoy))
                 .map(i -> new Vencido(i.fijoId(), i.nombre(), i.vencimiento().getDayOfMonth(), i.aproximado()))
                 .toList();
     }

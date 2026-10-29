@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -66,11 +67,11 @@ public class GastoFijoService {
      *                      que el usuario cargue el gasto y lo vincule por nombre o alias
      */
     public record NuevoFijo(String nombre, BigDecimal monto, Categoria categoria, MedioPago medioPago, Cuenta cuenta,
-            TarjetaCredito tarjeta, int diaDelMes, Frecuencia frecuencia, boolean montoVariable, String alias,
+            TarjetaCredito tarjeta, Integer diaDelMes, Frecuencia frecuencia, boolean montoVariable, String alias,
             boolean proponerMonto) {
 
         public NuevoFijo(String nombre, BigDecimal monto, Categoria categoria, MedioPago medioPago, Cuenta cuenta,
-                TarjetaCredito tarjeta, int diaDelMes, Frecuencia frecuencia, boolean montoVariable) {
+                TarjetaCredito tarjeta, Integer diaDelMes, Frecuencia frecuencia, boolean montoVariable) {
             this(nombre, monto, categoria, medioPago, cuenta, tarjeta, diaDelMes, frecuencia, montoVariable, null,
                     true);
         }
@@ -85,7 +86,7 @@ public class GastoFijoService {
         validar(f);
         LocalDate hoy = LocalDate.now(clock);
         YearMonth inicio = primerMes(f.diaDelMes(), hoy);
-        GastoFijo fijo = fijos.save(new GastoFijo(f.nombre(), f.monto().setScale(2, RoundingMode.HALF_UP),
+        GastoFijo fijo = fijos.save(new GastoFijo(f.nombre(), escala(f.monto()),
                 f.categoria(), f.medioPago(), f.cuenta(), f.tarjeta(), f.diaDelMes(), f.frecuencia(), inicio,
                 f.montoVariable(), f.alias(), f.proponerMonto(), LocalDateTime.now(clock)));
         return vista(fijo, hoy);
@@ -96,19 +97,23 @@ public class GastoFijoService {
     public VistaFijo editar(Long fijoId, NuevoFijo f) {
         validar(f);
         GastoFijo fijo = fijo(fijoId);
-        fijo.editar(f.nombre(), f.monto().setScale(2, RoundingMode.HALF_UP), f.categoria(), f.medioPago(),
+        fijo.editar(f.nombre(), escala(f.monto()), f.categoria(), f.medioPago(),
                 f.cuenta(), f.tarjeta(), f.diaDelMes(), f.frecuencia(), f.montoVariable(), f.alias(),
                 f.proponerMonto());
         return vista(fijo, LocalDate.now(clock));
     }
 
     private static void validar(NuevoFijo f) {
-        if (f.monto() == null || f.monto().signum() <= 0) {
+        if (f.monto() != null && f.monto().signum() <= 0) {
             throw new IllegalArgumentException("El monto tiene que ser mayor a cero");
         }
         if (f.categoria() == null) {
             throw new IllegalArgumentException("Falta la categoría");
         }
+    }
+
+    private static BigDecimal escala(BigDecimal monto) {
+        return monto == null ? null : monto.setScale(2, RoundingMode.HALF_UP);
     }
 
     /** Cuándo sería el primer cobro de un fijo que se da de alta hoy con ese día. */
@@ -118,15 +123,41 @@ public class GastoFijoService {
         return mes.atDay(Math.min(diaDelMes, mes.lengthOfMonth()));
     }
 
-    /** El primer mes de cobro: este, si el día todavía no pasó (o es hoy); si no, el que viene. */
-    static YearMonth primerMes(int diaDelMes, LocalDate hoy) {
+    /**
+     * El primer mes de cobro: este, si el día todavía no pasó (o es hoy); si no, el que viene. Sin día, este mes
+     * (aparece en el checklist desde ya).
+     */
+    static YearMonth primerMes(Integer diaDelMes, LocalDate hoy) {
         YearMonth este = YearMonth.from(hoy);
+        if (diaDelMes == null) {
+            return este;
+        }
         return hoy.getDayOfMonth() <= Math.min(diaDelMes, este.lengthOfMonth()) ? este : este.plusMonths(1);
     }
 
     @Transactional
     public void darDeBaja(Long fijoId) {
         fijo(fijoId).darDeBaja();
+    }
+
+    /** "Ya tenés el fijo Seguro moto": un fijo activo cuyo nombre o alias aparece en alguno de los textos. */
+    @Transactional(readOnly = true)
+    public Optional<VistaFijo> parecido(String... textos) {
+        LocalDate hoy = LocalDate.now(clock);
+        return fijos.findByActivoTrueOrderByDiaDelMesAscNombreAsc().stream()
+                .filter(f -> Arrays.stream(textos).filter(t -> t != null && !t.isBlank()).anyMatch(f::coincideCon))
+                .findFirst().map(f -> vista(f, hoy));
+    }
+
+    /** "¿Actualizo el monto?": el fijo que ya existía pasa a tener ese monto de referencia. */
+    @Transactional
+    public VistaFijo actualizarMonto(Long fijoId, BigDecimal monto) {
+        if (monto == null || monto.signum() <= 0) {
+            throw new IllegalArgumentException("El monto tiene que ser mayor a cero");
+        }
+        GastoFijo fijo = fijo(fijoId);
+        fijo.nuevoMontoEsperado(escala(monto));
+        return vista(fijo, LocalDate.now(clock));
     }
 
     // --- Cobros ---
@@ -298,7 +329,7 @@ public class GastoFijoService {
 
     /** Para el ABM de la web: los datos con los ids del catálogo, no solo los nombres. */
     public record VistaAbm(Long id, String nombre, BigDecimal montoEsperado, Categoria categoria,
-            MedioPago medioPago, Cuenta cuenta, TarjetaCredito tarjeta, int diaDelMes, Frecuencia frecuencia,
+            MedioPago medioPago, Cuenta cuenta, TarjetaCredito tarjeta, Integer diaDelMes, Frecuencia frecuencia,
             boolean montoVariable, String alias, boolean proponerMonto, boolean activo) {
     }
 
@@ -329,7 +360,7 @@ public class GastoFijoService {
         return new VistaFijo(f.getId(), f.getNombre(), f.getMontoEsperado(), montoPropuesto(f),
                 f.getCategoria().getNombre(), f.getCategoria().getEmoji(), billetera, f.getDiaDelMes(),
                 f.getFrecuencia(), f.isMontoVariable(), f.getAlias(), f.isProponerMonto(), f.isActivo(),
-                f.proximoCobro(hoy));
+                f.tieneDia() ? f.proximoCobro(hoy) : null);
     }
 
     private GastoFijo fijo(Long id) {
@@ -374,10 +405,10 @@ public class GastoFijoService {
      * @param fecha         con CARGADO, cuándo se cargó
      * @param montoAnterior el monto del período anterior (de referencia si FALTA, para la diferencia si CARGADO)
      * @param porcentaje    con CARGADO y si hay anterior, la diferencia (puede ser negativa)
-     * @param vencimiento   el día aproximado del cobro de este mes
+     * @param vencimiento   el día aproximado del cobro de este mes, o null si el fijo no tiene día
      * @param movimientoId  con CARGADO, el gasto (para corregirle el monto)
      * @param estimado      con CARGADO, si se tildó con el monto aproximado y falta el real
-     * @param aproximado    con FALTA, con cuánto se tilda "Pagado"
+     * @param aproximado    con FALTA, con cuánto se tilda "Pagado" (null si no hay monto de referencia)
      */
     public record ItemChecklist(Long fijoId, String nombre, String emoji, EstadoChecklist estado, BigDecimal monto,
             LocalDate fecha, BigDecimal montoAnterior, BigDecimal porcentaje, LocalDate vencimiento,
@@ -397,7 +428,7 @@ public class GastoFijoService {
     }
 
     private ItemChecklist itemChecklist(GastoFijo fijo, YearMonth mes) {
-        LocalDate vencimiento = fijo.diaDeCobro(mes);
+        LocalDate vencimiento = fijo.tieneDia() ? fijo.diaDeCobro(mes) : null;
         List<Movimiento> delPeriodo = movimientos.findByGastoFijoIdAndFijoPeriodoOrderByIdDesc(fijo.getId(),
                 mes.atDay(1));
         Optional<Movimiento> confirmado = delPeriodo.stream()

@@ -837,7 +837,7 @@
   function accionesChecklist(i) {
     if (i.estado === 'FALTA') {
       return h('div', { class: 'row-btns' },
-        h('button', { type: 'button', class: 'mini primary', title: `Lo tilda con ≈ ${pesos(i.aproximado)}; el real lo corregís después`, onclick: () => pagadoFijo(i) }, 'Pagado'),
+        i.aproximado != null ? h('button', { type: 'button', class: 'mini primary', title: `Lo tilda con ≈ ${pesos(i.aproximado)}; el real lo corregís después`, onclick: () => pagadoFijo(i) }, 'Pagado') : null,
         h('button', { type: 'button', class: 'mini', onclick: () => cargarFijo(i) }, 'Cargar monto'),
         h('button', { type: 'button', class: 'mini', onclick: () => esteMesNoFijo(i) }, 'Este mes no'));
     }
@@ -855,7 +855,7 @@
     texto('#f-cargado', pesos(data.cargado));
     texto('#f-cargado-nota', Number(data.estimado) > 0 ? `≈ ${pesos(data.estimado)} con monto estimado` : '');
     texto('#f-faltan', data.faltan);
-    const proximo = data.items.filter((i) => i.estado === 'FALTA').sort((a, b) => a.vencimiento.localeCompare(b.vencimiento))[0];
+    const proximo = data.items.filter((i) => i.estado === 'FALTA' && i.vencimiento).sort((a, b) => a.vencimiento.localeCompare(b.vencimiento))[0];
     texto('#f-proximo', proximo ? proximo.nombre : '—');
     texto('#f-proximo-nota', proximo ? `vence el ${proximo.vencimiento.slice(-2)}` : 'No falta nada este mes');
     const tbody = $('#f-checklist');
@@ -864,7 +864,7 @@
       h('td', {}, h('span', { class: 'nombre-con-icono' }, window.Iconos.iconoCategoria(window.Iconos.categoriaPorEmoji(i.emoji)), i.nombre)),
       h('td', {}, estadoChecklist(i)),
       h('td', { class: i.estimado ? 'amt estimado' : 'amt' }, montoChecklist(i)),
-      h('td', {}, i.estado === 'CARGADO' ? fechaCorta(i.fecha) : `vence el ${i.vencimiento.slice(-2)}`),
+      h('td', {}, i.estado === 'CARGADO' ? fechaCorta(i.fecha) : i.vencimiento ? `vence el ${i.vencimiento.slice(-2)}` : 'sin día'),
       h('td', {}, accionesChecklist(i)),
     )));
   }
@@ -982,8 +982,8 @@
     tbody.replaceChildren(...lista.map((f) => h('tr', { class: f.activo ? null : 'inactivo' },
       h('td', {}, f.nombre),
       h('td', {}, window.Iconos.etiquetaCategoria(f.categoria)),
-      h('td', { class: 'amt' }, pesos(f.montoEsperado)),
-      h('td', {}, f.diaDelMes),
+      h('td', { class: 'amt' }, f.montoEsperado != null ? pesos(f.montoEsperado) : '—'),
+      h('td', {}, f.diaDelMes ?? 'sin día'),
       h('td', {}, f.frecuencia === 'BIMESTRAL' ? 'Cada dos meses' : 'Mensual'),
       h('td', {}, f.proponerMonto ? 'Sí' : 'No'),
       h('td', {}, h('div', { class: 'row-btns' },
@@ -1011,9 +1011,9 @@
     $('#f-id').value = f ? f.id : '';
     $('#form-fijo-titulo').textContent = f ? `Editar ${f.nombre}` : 'Nuevo gasto fijo';
     $('#f-nombre').value = f ? f.nombre : '';
-    $('#f-monto').value = f ? f.montoEsperado : '';
+    $('#f-monto').value = f && f.montoEsperado != null ? f.montoEsperado : '';
     $('#f-categoria').value = f ? f.categoriaId : '';
-    $('#f-dia').value = f ? f.diaDelMes : '';
+    $('#f-dia').value = f && f.diaDelMes != null ? f.diaDelMes : '';
     $('#f-frecuencia').value = f ? f.frecuencia : 'MENSUAL';
     $('#f-medio').value = f && f.medioPagoId ? f.medioPagoId : '';
     $('#f-cuenta').value = f && f.cuentaId ? f.cuentaId : '';
@@ -1036,12 +1036,12 @@
     const id = $('#f-id').value;
     const cuerpo = {
       nombre: $('#f-nombre').value,
-      monto: numeroArg($('#f-monto').value),
+      monto: $('#f-monto').value.trim() ? numeroArg($('#f-monto').value) : null,
       categoriaId: Number($('#f-categoria').value),
       medioPagoId: $('#f-medio').value ? Number($('#f-medio').value) : null,
       cuentaId: $('#f-cuenta').value ? Number($('#f-cuenta').value) : null,
       tarjeta: $('#f-tarjeta').checked,
-      diaDelMes: Number($('#f-dia').value),
+      diaDelMes: $('#f-dia').value ? Number($('#f-dia').value) : null,
       frecuencia: $('#f-frecuencia').value,
       montoVariable: $('#f-variable').checked,
       alias: $('#f-alias').value || null,

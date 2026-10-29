@@ -131,7 +131,7 @@ public class FijosController {
     // --- ABM ---
 
     public record FijoAbm(long id, String nombre, BigDecimal montoEsperado, Long categoriaId, String categoria,
-            Long medioPagoId, Long cuentaId, boolean tarjeta, int diaDelMes, String frecuencia,
+            Long medioPagoId, Long cuentaId, boolean tarjeta, Integer diaDelMes, String frecuencia,
             boolean montoVariable, String alias, boolean proponerMonto, boolean activo) {
     }
 
@@ -148,7 +148,7 @@ public class FijosController {
     }
 
     public record NuevoFijoRequest(String nombre, BigDecimal monto, Long categoriaId, Long medioPagoId,
-            Long cuentaId, boolean tarjeta, int diaDelMes, String frecuencia, boolean montoVariable, String alias,
+            Long cuentaId, boolean tarjeta, Integer diaDelMes, String frecuencia, boolean montoVariable, String alias,
             boolean proponerMonto) {
     }
 
