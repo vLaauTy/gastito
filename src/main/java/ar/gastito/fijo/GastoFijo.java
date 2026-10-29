@@ -171,6 +171,14 @@ public class GastoFijo {
         return null;
     }
 
+    /**
+     * Con cuánto se tilda "Pagado" si todavía no se sabe el real: el esperado o, si es variable, el del cobro
+     * anterior si lo hay.
+     */
+    public BigDecimal montoAproximado(BigDecimal anterior) {
+        return montoVariable && anterior != null ? anterior : montoEsperado;
+    }
+
     // --- Cambios ---
 
     /** Se confirmó un cobro de un fijo de monto fijo: lo próximo que se propone es ese monto. */

@@ -37,6 +37,7 @@ import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.catalogo.Categoria;
 import ar.gastito.fijo.Frecuencia;
 import ar.gastito.fijo.GastoFijoService;
+import ar.gastito.fijo.PagoFijoService;
 import ar.gastito.fijo.VistaFijo;
 import ar.gastito.movimiento.Origen;
 
@@ -66,16 +67,19 @@ class FijosControllerTest {
     GastoFijoService fijos;
 
     @MockitoBean
+    PagoFijoService pagos;
+
+    @MockitoBean
     CatalogoService catalogos;
 
     @Test
     void elChecklistTraeElTotalCargadoYLoQueFalta() throws Exception {
         GastoFijoService.ItemChecklist cargado = new GastoFijoService.ItemChecklist(1L, "Seguro", "🛡️",
                 GastoFijoService.EstadoChecklist.CARGADO, new BigDecimal("32900.00"), LocalDate.of(2026, 10, 4),
-                null, null, LocalDate.of(2026, 10, 4), true);
+                null, null, LocalDate.of(2026, 10, 4), true, 70L, false, null);
         GastoFijoService.ItemChecklist falta = new GastoFijoService.ItemChecklist(2L, "Luz", "💡",
                 GastoFijoService.EstadoChecklist.FALTA, null, null, new BigDecimal("28000.00"), null,
-                LocalDate.of(2026, 10, 27), false);
+                LocalDate.of(2026, 10, 27), false, null, false, new BigDecimal("28000.00"));
         when(fijos.checklist(OCTUBRE)).thenReturn(List.of(cargado, falta));
 
         mvc.perform(get("/api/fijos/checklist").param("mes", "2026-10"))
@@ -85,7 +89,10 @@ class FijosControllerTest {
                 .andExpect(jsonPath("$.faltan").value(1))
                 .andExpect(jsonPath("$.items[0].nombre").value("Seguro"))
                 .andExpect(jsonPath("$.items[0].estado").value("CARGADO"))
-                .andExpect(jsonPath("$.items[1].estado").value("FALTA"));
+                .andExpect(jsonPath("$.items[1].estado").value("FALTA"))
+                .andExpect(jsonPath("$.items[1].aproximado").value(28000.00))
+                .andExpect(jsonPath("$.items[0].movimientoId").value(70))
+                .andExpect(jsonPath("$.estimado").value(0));
     }
 
     @Test
@@ -103,6 +110,25 @@ class FijosControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(fijos).cargarManual(eq(2L), eq(new BigDecimal("31000")), any(), eq(Origen.DASHBOARD), eq(null));
+    }
+
+    @Test
+    void pagadoTildaConElEstimadoYCorregirCambiaElMonto() throws Exception {
+        mvc.perform(post("/api/fijos/2/pagado").param("mes", "2026-10")).andExpect(status().isNoContent());
+        verify(pagos).pagado(2L, OCTUBRE, Origen.DASHBOARD);
+
+        mvc.perform(put("/api/fijos/cobros/70/monto").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"monto\": 87500}"))
+                .andExpect(status().isNoContent());
+        verify(pagos).corregirMonto(70L, new BigDecimal("87500"));
+    }
+
+    @Test
+    void pagadoSobreUnMesYaCargadoEsUnConflicto() throws Exception {
+        when(pagos.pagado(2L, OCTUBRE, Origen.DASHBOARD))
+                .thenThrow(new IllegalStateException("Ya cargaste Luz este mes"));
+
+        mvc.perform(post("/api/fijos/2/pagado").param("mes", "2026-10")).andExpect(status().is4xxClientError());
     }
 
     @Test

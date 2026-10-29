@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -27,7 +28,7 @@ class RecordatorioFijoServiceTest {
 
     private GastoFijoService.ItemChecklist vencido(String nombre, int dia) {
         return new GastoFijoService.ItemChecklist(1L, nombre, null, GastoFijoService.EstadoChecklist.FALTA, null,
-                null, null, null, LocalDate.of(2026, 10, dia), false);
+                null, null, null, LocalDate.of(2026, 10, dia), false, null, false, new BigDecimal("28000"));
     }
 
     @Test
@@ -46,6 +47,7 @@ class RecordatorioFijoServiceTest {
         assertThat(resultado).isPresent();
         assertThat(resultado.orElseThrow()).extracting(RecordatorioFijoService.Vencido::nombre)
                 .containsExactly("Luz", "Gas");
+        assertThat(resultado.orElseThrow().get(0).aproximado()).isEqualByComparingTo("28000");
     }
 
     @Test

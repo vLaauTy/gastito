@@ -139,10 +139,11 @@ public class ConsultaMovimientos {
      * @param sinEspecificar   si no se sabe con qué se pagó (se muestra en gris, para corregirlo)
      * @param ticket           si vino de la foto de un ticket (la fila se despliega con los productos)
      * @param foto             si guardó la foto del ticket
+     * @param estimado         el cobro de un fijo tildado con el monto aproximado, sin corregir
      */
     public record Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
             String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
-            boolean foto) {
+            boolean foto, boolean estimado) {
     }
 
     public record Pagina(List<Fila> elementos, int pagina, int tamanio, long totalElementos, int totalPaginas) {
@@ -243,7 +244,7 @@ public class ConsultaMovimientos {
                 m.getCategoria() == null ? null : m.getCategoria().getEmoji(),
                 medio(m), sinEspecificar(m), m.getOrigen().name(),
                 m.getMonto().setScale(2, RoundingMode.HALF_UP), m.getOrigen() == Origen.TICKET,
-                m.getFotoTicket() != null);
+                m.getFotoTicket() != null, m.isMontoEstimado());
     }
 
     private static boolean sinEspecificar(Movimiento m) {

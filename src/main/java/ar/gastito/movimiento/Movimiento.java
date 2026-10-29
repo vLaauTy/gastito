@@ -129,6 +129,9 @@ public class Movimiento {
     /** Con gastoFijoId: el mes (día 1) al que corresponde el cobro. */
     private LocalDate fijoPeriodo;
 
+    /** El cobro de un fijo se tildó con el monto aproximado ("Pagado") y todavía no se corrigió con el real. */
+    private boolean montoEstimado;
+
     /** Una cuota de una compra en cuotas, o null. */
     private Long planCuotasId;
 
@@ -352,6 +355,37 @@ public class Movimiento {
             throw new IllegalArgumentException("El monto tiene que ser mayor a cero");
         }
         this.monto = nuevo;
+    }
+
+    /** "Pagado" desde el checklist: el cobro de un fijo se guarda con el monto aproximado, hasta saber el real. */
+    public void marcarMontoEstimado() {
+        verificarPendiente();
+        if (gastoFijoId == null) {
+            throw new IllegalStateException("El movimiento " + id + " no es el cobro de un gasto fijo");
+        }
+        this.montoEstimado = true;
+    }
+
+    /**
+     * "Corregir monto": el cobro ya guardado de un fijo pasa a tener el monto real (sea o no estimado), sin crear
+     * otro movimiento.
+     */
+    public void corregirMontoDeFijo(BigDecimal real) {
+        if (gastoFijoId == null || estado != EstadoMovimiento.CONFIRMADO) {
+            throw new IllegalStateException("El movimiento " + id + " no es el cobro guardado de un gasto fijo");
+        }
+        if (real == null || real.signum() <= 0) {
+            throw new IllegalArgumentException("El monto tiene que ser mayor a cero");
+        }
+        this.monto = real;
+        this.montoEstimado = false;
+    }
+
+    /** El gasto pendiente ya no es el cobro de su fijo (por ejemplo, porque actualizó el monto de un estimado). */
+    public void desvincularFijo() {
+        verificarPendiente();
+        this.gastoFijoId = null;
+        this.fijoPeriodo = null;
     }
 
     // --- Compras en cuotas ---
@@ -631,6 +665,10 @@ public class Movimiento {
 
     public LocalDate getFijoPeriodo() {
         return fijoPeriodo;
+    }
+
+    public boolean isMontoEstimado() {
+        return montoEstimado;
     }
 
     public Long getPlanCuotasId() {

@@ -157,7 +157,7 @@ class DashboardControllerTest {
     void movimientosPasaLosFiltrosYLaPagina() throws Exception {
         when(movimientos.buscar(any(), anyInt(), anyInt())).thenReturn(new ConsultaMovimientos.Pagina(List.of(
                 new ConsultaMovimientos.Fila(7L, LocalDateTime.of(2026, 10, 21, 16, 42), "Pan de pancho y papas", 2L,
-                        "Supermercado", "🛒", "Efectivo", false, "AUDIO", pesos("3700"), false, false)), 1, 10, 11, 2));
+                        "Supermercado", "🛒", "Efectivo", false, "AUDIO", pesos("3700"), false, false, false)), 1, 10, 11, 2));
 
         mvc.perform(get("/api/movimientos").param("mes", "2026-10").param("categoria", "2").param("medioPago", "1")
                 .param("origen", "AUDIO").param("q", "pan").param("pagina", "1").param("tamanio", "10"))

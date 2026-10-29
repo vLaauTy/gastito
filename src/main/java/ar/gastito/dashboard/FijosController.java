@@ -27,6 +27,7 @@ import ar.gastito.catalogo.Cuenta;
 import ar.gastito.catalogo.MedioPago;
 import ar.gastito.fijo.Frecuencia;
 import ar.gastito.fijo.GastoFijoService;
+import ar.gastito.fijo.PagoFijoService;
 import ar.gastito.fijo.VistaFijo;
 import ar.gastito.movimiento.Origen;
 
@@ -36,11 +37,13 @@ import ar.gastito.movimiento.Origen;
 public class FijosController {
 
     private final GastoFijoService fijos;
+    private final PagoFijoService pagos;
     private final CatalogoService catalogos;
     private final Clock clock;
 
-    public FijosController(GastoFijoService fijos, CatalogoService catalogos, Clock clock) {
+    public FijosController(GastoFijoService fijos, PagoFijoService pagos, CatalogoService catalogos, Clock clock) {
         this.fijos = fijos;
+        this.pagos = pagos;
         this.catalogos = catalogos;
         this.clock = clock;
     }
@@ -49,10 +52,12 @@ public class FijosController {
 
     public record ChecklistItem(long fijoId, String nombre, String emoji, String estado, BigDecimal monto,
             LocalDate fecha, BigDecimal montoAnterior, BigDecimal porcentaje, LocalDate vencimiento,
-            boolean proponerMonto) {
+            boolean proponerMonto, Long movimientoId, boolean estimado, BigDecimal aproximado) {
     }
 
-    public record Checklist(String mes, List<ChecklistItem> items, BigDecimal cargado, int faltan) {
+    /** @param estimado cuánto de lo cargado es monto estimado (tildado con "Pagado" y sin corregir) */
+    public record Checklist(String mes, List<ChecklistItem> items, BigDecimal cargado, BigDecimal estimado,
+            int faltan) {
     }
 
     @GetMapping("/checklist")
@@ -61,12 +66,15 @@ public class FijosController {
         List<GastoFijoService.ItemChecklist> items = fijos.checklist(m);
         BigDecimal cargado = items.stream().filter(i -> i.estado() == GastoFijoService.EstadoChecklist.CARGADO)
                 .map(GastoFijoService.ItemChecklist::monto).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal estimado = items.stream().filter(GastoFijoService.ItemChecklist::estimado)
+                .map(GastoFijoService.ItemChecklist::monto).reduce(BigDecimal.ZERO, BigDecimal::add);
         int faltan = (int) items.stream().filter(i -> i.estado() == GastoFijoService.EstadoChecklist.FALTA).count();
         List<ChecklistItem> dto = items.stream()
                 .map(i -> new ChecklistItem(i.fijoId(), i.nombre(), i.emoji(), i.estado().name(), i.monto(),
-                        i.fecha(), i.montoAnterior(), i.porcentaje(), i.vencimiento(), i.proponerMonto()))
+                        i.fecha(), i.montoAnterior(), i.porcentaje(), i.vencimiento(), i.proponerMonto(),
+                        i.movimientoId(), i.estimado(), i.aproximado()))
                 .toList();
-        return new Checklist(m.toString(), dto, cargado, faltan);
+        return new Checklist(m.toString(), dto, cargado, estimado, faltan);
     }
 
     public record CargaRequest(BigDecimal monto, LocalDate fecha) {
@@ -77,6 +85,24 @@ public class FijosController {
     public ResponseEntity<Void> cargar(@PathVariable long id, @RequestBody CargaRequest pedido) {
         LocalDate fecha = pedido.fecha() == null ? LocalDate.now(clock) : pedido.fecha();
         fijos.cargarManual(id, pedido.monto(), fecha.atTime(LocalTime.now(clock)), Origen.DASHBOARD, null);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** "Pagado": el gasto del mes con el monto aproximado, marcado como estimado. */
+    @PostMapping("/{id}/pagado")
+    public ResponseEntity<Void> pagado(@PathVariable long id,
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM") YearMonth mes) {
+        pagos.pagado(id, mes, Origen.DASHBOARD);
+        return ResponseEntity.noContent().build();
+    }
+
+    public record MontoRequest(BigDecimal monto) {
+    }
+
+    /** "Corregir monto": cambia el monto del mismo gasto (y deja de ser estimado). */
+    @PutMapping("/cobros/{movimientoId}/monto")
+    public ResponseEntity<Void> corregirMonto(@PathVariable long movimientoId, @RequestBody MontoRequest pedido) {
+        pagos.corregirMonto(movimientoId, pedido.monto());
         return ResponseEntity.noContent().build();
     }
 

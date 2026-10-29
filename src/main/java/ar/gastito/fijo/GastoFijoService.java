@@ -375,10 +375,13 @@ public class GastoFijoService {
      * @param montoAnterior el monto del período anterior (de referencia si FALTA, para la diferencia si CARGADO)
      * @param porcentaje    con CARGADO y si hay anterior, la diferencia (puede ser negativa)
      * @param vencimiento   el día aproximado del cobro de este mes
+     * @param movimientoId  con CARGADO, el gasto (para corregirle el monto)
+     * @param estimado      con CARGADO, si se tildó con el monto aproximado y falta el real
+     * @param aproximado    con FALTA, con cuánto se tilda "Pagado"
      */
     public record ItemChecklist(Long fijoId, String nombre, String emoji, EstadoChecklist estado, BigDecimal monto,
             LocalDate fecha, BigDecimal montoAnterior, BigDecimal porcentaje, LocalDate vencimiento,
-            boolean proponerMonto) {
+            boolean proponerMonto, Long movimientoId, boolean estimado, BigDecimal aproximado) {
     }
 
     /** Los fijos activos que corresponden a ese mes (los bimestrales, solo en los suyos). */
@@ -404,16 +407,19 @@ public class GastoFijoService {
             BigDecimal anterior = ultimoConfirmadoAntesDe(fijo.getId(), mes).map(Movimiento::getMonto).orElse(null);
             return new ItemChecklist(fijo.getId(), fijo.getNombre(), fijo.getCategoria().getEmoji(),
                     EstadoChecklist.CARGADO, m.getMonto(), m.getFechaHora().toLocalDate(), anterior,
-                    anterior == null ? null : variacion(anterior, m.getMonto()), vencimiento, fijo.isProponerMonto());
+                    anterior == null ? null : variacion(anterior, m.getMonto()), vencimiento, fijo.isProponerMonto(),
+                    m.getId(), m.isMontoEstimado(), null);
         }
         if (delPeriodo.stream().anyMatch(m -> m.getEstado() == EstadoMovimiento.CANCELADO)) {
             return new ItemChecklist(fijo.getId(), fijo.getNombre(), fijo.getCategoria().getEmoji(),
-                    EstadoChecklist.ESTE_MES_NO, null, null, null, null, vencimiento, fijo.isProponerMonto());
+                    EstadoChecklist.ESTE_MES_NO, null, null, null, null, vencimiento, fijo.isProponerMonto(), null,
+                    false, null);
         }
         BigDecimal anterior = ultimoConfirmadoAntesDe(fijo.getId(), mes.plusMonths(1)).map(Movimiento::getMonto)
                 .orElse(null);
         return new ItemChecklist(fijo.getId(), fijo.getNombre(), fijo.getCategoria().getEmoji(),
-                EstadoChecklist.FALTA, null, null, anterior, null, vencimiento, fijo.isProponerMonto());
+                EstadoChecklist.FALTA, null, null, anterior, null, vencimiento, fijo.isProponerMonto(), null, false,
+                fijo.montoAproximado(anterior));
     }
 
     private Optional<Movimiento> ultimoConfirmadoAntesDe(Long fijoId, YearMonth mes) {
