@@ -7,69 +7,47 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 /**
  * Lo que devuelve la IA al interpretar un mensaje (el schema JSON se genera desde este record).
  * Todo viene como texto y lo valida {@link ValidadorInterpretacion}: la IA puede equivocarse.
- * Los campos que el mensaje no menciona vienen vacíos.
+ * Los campos que el mensaje no menciona vienen vacíos. Cómo completar cada uno lo explica el prompt
+ * ({@code interpretar-gasto.txt}); acá las descripciones son mínimas para no pagar dos veces los mismos tokens.
  */
 public record InterpretacionIa(
-        @JsonPropertyDescription("GASTO si el mensaje carga un gasto; PREGUNTA si pregunta por sus gastos o ingresos; "
-                + "DEVOLUCION si alguien le devolvió plata (su parte de una juntada); "
-                + "FIJO si pide agregar un gasto que se repite todos los meses (un gasto fijo); "
-                + "OTRO si es un saludo, una prueba u otra cosa; DUDOSO si podría ser un gasto o una pregunta")
+        @JsonPropertyDescription("Una de las intenciones del prompt")
         String intencion,
-
-        @JsonPropertyDescription("Monto en pesos, solo dígitos y punto decimal, sin separador de miles. "
-                + "Ejemplos: 3700, 1250.50, 15000. Vacío si el mensaje no dice cuánto fue.")
+        @JsonPropertyDescription("Solo dígitos y punto decimal")
         String monto,
-
-        @JsonPropertyDescription("Descripción corta de qué se compró o pagó, con mayúscula inicial. "
-                + "Ejemplo: Pan de pancho y papas")
         String descripcion,
-
-        @JsonPropertyDescription("Entre 1 y 3 nombres de la lista de categorías, de la más probable a la menos probable")
+        @JsonPropertyDescription("1 a 3 nombres exactos de categorías")
         List<String> categorias,
-
-        @JsonPropertyDescription("Qué tan segura es la primera categoría: alta, media o baja")
+        @JsonPropertyDescription("alta, media o baja")
         String confianza,
-
-        @JsonPropertyDescription("Exactamente uno de los nombres de la lista de medios de pago, o vacío si no se menciona")
         String medioPago,
-
-        @JsonPropertyDescription("Exactamente uno de los nombres de la lista de cuentas, o vacío si no se menciona")
         String cuenta,
-
-        @JsonPropertyDescription("Cuándo fue, tal como lo dice el mensaje: hoy, ayer, anteayer, un día de la semana "
-                + "(lunes, martes, miércoles, jueves, viernes, sábado, domingo) o una fecha dd/mm o dd/mm/aaaa. "
-                + "Vacío si no se menciona.")
         String fecha,
-
-        @JsonPropertyDescription("Hora en formato HH:mm si el mensaje la menciona; si no, vacío")
+        @JsonPropertyDescription("HH:mm")
         String hora,
-        @JsonPropertyDescription("Si pagó por un grupo (una juntada: 'éramos 6', 'con Martín, Sofi y Pablo'): cuántas "
-                + "personas eran en total, contándolo a él, solo dígitos. Vacío si no es una juntada.")
         String juntadaPersonas,
-        @JsonPropertyDescription("En una juntada, los nombres de los demás si los dice ('Martín', 'Sofi'). Vacío si no "
-                + "dice nombres o no es una juntada.")
         List<String> juntadaNombres,
-        @JsonPropertyDescription("Si intencion es DEVOLUCION: quién le pasó la plata ('Pablo'), o vacío si no lo dice")
+        @JsonPropertyDescription("Quién (DEVOLUCION o PERDONAR)")
         String devolucionPersona,
-        @JsonPropertyDescription("Si intencion es DEVOLUCION: de qué gasto era la plata, como lo dice ('el asado'), o "
-                + "vacío")
+        @JsonPropertyDescription("De qué gasto (DEVOLUCION o PERDONAR)")
         String devolucionDe,
-        @JsonPropertyDescription("Si intencion es FIJO: qué día del mes se cobra, solo dígitos del 1 al 31 ('el 4' → "
-                + "4). Vacío si no lo dice.")
         String fijoDia,
-        @JsonPropertyDescription("Si intencion es FIJO: MENSUAL, o BIMESTRAL si dice que es cada dos meses. Vacío si "
-                + "no es FIJO.")
+        @JsonPropertyDescription("MENSUAL o BIMESTRAL")
         String fijoFrecuencia,
-        @JsonPropertyDescription("Si intencion es FIJO: si si el monto cambia todos los meses (la luz, el gas), no si "
-                + "es siempre el mismo. Vacío si no es FIJO.")
+        @JsonPropertyDescription("si o no")
         String fijoVariable,
-
-        @JsonPropertyDescription("Si paga algo en varias cuotas: cuántas son, solo dígitos. Vacío si no es en cuotas.")
         String cuotasCantidad,
-
-        @JsonPropertyDescription("Si dice el valor de cada cuota en vez del total ('6 cuotas de 14000'): ese valor, "
-                + "solo dígitos y punto decimal. Vacío si dice el total, o si no es en cuotas.")
-        String cuotasValorCuota) {
+        String cuotasValorCuota,
+        String fijoAlias,
+        @JsonPropertyDescription("SUELDO, AGUINALDO o EXTRA")
+        String claseIngreso,
+        @JsonPropertyDescription("CORREGIR: MONTO, DESCRIPCION, FECHA, CATEGORIA o MEDIO")
+        String campo,
+        @JsonPropertyDescription("VER: qué lista")
+        String ver,
+        String horas,
+        @JsonPropertyDescription("DUDOSO: 2 o 3 intenciones")
+        List<String> opciones) {
 
     /** Sin los datos de juntadas, devoluciones ni gastos fijos. */
     public InterpretacionIa(String intencion, String monto, String descripcion, List<String> categorias,
@@ -84,5 +62,22 @@ public record InterpretacionIa(
             List<String> juntadaNombres, String devolucionPersona, String devolucionDe) {
         this(intencion, monto, descripcion, categorias, confianza, medioPago, cuenta, fecha, hora, juntadaPersonas,
                 juntadaNombres, devolucionPersona, devolucionDe, "", "", "", "", "");
+    }
+
+    /** Sin los datos de las intenciones que no son gastos (ingresos, correcciones, listas…). */
+    public InterpretacionIa(String intencion, String monto, String descripcion, List<String> categorias,
+            String confianza, String medioPago, String cuenta, String fecha, String hora, String juntadaPersonas,
+            List<String> juntadaNombres, String devolucionPersona, String devolucionDe, String fijoDia,
+            String fijoFrecuencia, String fijoVariable, String cuotasCantidad, String cuotasValorCuota) {
+        this(intencion, monto, descripcion, categorias, confianza, medioPago, cuenta, fecha, hora, juntadaPersonas,
+                juntadaNombres, devolucionPersona, devolucionDe, fijoDia, fijoFrecuencia, fijoVariable, cuotasCantidad,
+                cuotasValorCuota, "", "", "", "", "", List.of());
+    }
+
+    /** La misma respuesta con otra intención: el usuario eligió qué quería entre las opciones de un DUDOSO. */
+    public InterpretacionIa conIntencion(Intencion elegida) {
+        return new InterpretacionIa(elegida.name(), monto, descripcion, categorias, confianza, medioPago, cuenta,
+                fecha, hora, juntadaPersonas, juntadaNombres, devolucionPersona, devolucionDe, fijoDia, fijoFrecuencia,
+                fijoVariable, cuotasCantidad, cuotasValorCuota, fijoAlias, claseIngreso, campo, ver, horas, opciones);
     }
 }

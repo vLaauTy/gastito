@@ -92,7 +92,9 @@ public class IngresoService {
         return crearPendiente(clase, monto, descripcion, cuenta, enEfectivo, fechaHora, Origen.TEXTO, textoOriginal);
     }
 
-    private Movimiento crearPendiente(ClaseIngreso clase, BigDecimal monto, String descripcion, Cuenta cuenta,
+    /** Como el otro, con el origen (un audio también puede cargar un ingreso). */
+    @Transactional
+    public Movimiento crearPendiente(ClaseIngreso clase, BigDecimal monto, String descripcion, Cuenta cuenta,
             boolean enEfectivo, LocalDateTime fechaHora, Origen origen, String textoOriginal) {
         if (cuenta == null && !enEfectivo) {
             List<Movimiento> anterior = movimientos.ultimosIngresos(clase, PageRequest.of(0, 1));

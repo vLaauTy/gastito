@@ -50,4 +50,27 @@ class ClasificadorIntencionTest {
     void diasAniosYFechasNoSonMontos(String texto) {
         assertThat(ClasificadorIntencion.tieneMonto(texto)).isFalse();
     }
+
+    @org.junit.jupiter.api.Test
+    void losPedidosDeListasObviosSeReconocenSinIa() {
+        assertThat(ClasificadorIntencion.pedidoDeLista("¿Qué fijos me faltan pagar?"))
+                .contains(ValidadorInterpretacion.Lista.FIJOS);
+        assertThat(ClasificadorIntencion.pedidoDeLista("quién me debe plata"))
+                .contains(ValidadorInterpretacion.Lista.DEUDAS);
+        assertThat(ClasificadorIntencion.pedidoDeLista("¿Cuánto llevo de IA este mes?"))
+                .contains(ValidadorInterpretacion.Lista.COSTOS_IA);
+        assertThat(ClasificadorIntencion.pedidoDeLista("mandame el resumen de la semana"))
+                .contains(ValidadorInterpretacion.Lista.RESUMEN_SEMANA);
+        assertThat(ClasificadorIntencion.pedidoDeLista("pasame el resumen del mes"))
+                .contains(ValidadorInterpretacion.Lista.RESUMEN_MES);
+        assertThat(ClasificadorIntencion.pedidoDeLista("¿qué cuotas me quedan?"))
+                .contains(ValidadorInterpretacion.Lista.CUOTAS);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"agregá un fijo: el seguro", "sacá Netflix de los fijos", "cancelá las cuotas",
+            "de luz pagué 87.500", "¿cuánto gasté en cuotas?", "¿cuánto gasto en fijos por mes?", "3700 en pan"})
+    void loQueNoEsUnaListaLoDecideLaIa(String texto) {
+        assertThat(ClasificadorIntencion.pedidoDeLista(texto)).isEmpty();
+    }
 }

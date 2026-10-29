@@ -268,6 +268,58 @@ public class Movimiento {
         }
     }
 
+    /**
+     * "El último era 3500, no 3700": cambia lo que se cargó, pendiente o ya guardado. Solo se cambia lo que no es
+     * null. El monto de una juntada o de una cuota depende de otros datos: no se cambia acá.
+     */
+    public void corregir(BigDecimal nuevoMonto, String nuevaDescripcion, LocalDateTime nuevaFecha,
+            Categoria nuevaCategoria, MedioPago nuevoMedio, TarjetaCredito tarjetaCredito) {
+        if (estado == EstadoMovimiento.CANCELADO) {
+            throw new IllegalStateException("El movimiento " + id + " está cancelado");
+        }
+        if (nuevoMonto != null) {
+            if (isJuntada() || planCuotasId != null) {
+                throw new IllegalStateException("El monto de una juntada o de una cuota no se corrige así");
+            }
+            if (nuevoMonto.signum() <= 0) {
+                throw new IllegalArgumentException("El monto tiene que ser mayor a cero");
+            }
+            this.monto = nuevoMonto;
+        }
+        if (nuevaDescripcion != null) {
+            this.descripcion = nuevaDescripcion;
+        }
+        if (nuevaFecha != null) {
+            this.fechaHora = nuevaFecha;
+        }
+        if (nuevaCategoria != null && !isIngreso()) {
+            this.categoria = nuevaCategoria;
+        }
+        if (nuevoMedio != null) {
+            this.medioPago = nuevoMedio;
+            if (nuevoMedio.esTarjetaDeCredito()) {
+                this.tarjeta = tarjetaCredito;
+                this.cuenta = null;
+            } else {
+                this.tarjeta = null;
+            }
+        }
+    }
+
+    /**
+     * "Borrá lo último que cargué": queda CANCELADO (no cuenta, pero queda el registro). Una juntada o una cuota
+     * tienen su propio camino (dar por perdida, cancelar el plan).
+     */
+    public void anular() {
+        if (estado == EstadoMovimiento.CANCELADO) {
+            throw new IllegalStateException("El movimiento " + id + " ya está cancelado");
+        }
+        if (isJuntada() || planCuotasId != null) {
+            throw new IllegalStateException("Una juntada o una cuota no se borran así");
+        }
+        estado = EstadoMovimiento.CANCELADO;
+    }
+
     private void verificarPendiente() {
         if (estado != EstadoMovimiento.PENDIENTE) {
             throw new IllegalStateException("El movimiento " + id + " ya está " + estado + ": no se puede editar");

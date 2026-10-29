@@ -15,6 +15,7 @@ import ar.gastito.catalogo.ConPalabrasClave;
 import ar.gastito.catalogo.Cuenta;
 import ar.gastito.catalogo.MedioPago;
 import ar.gastito.catalogo.TarjetaCredito;
+import ar.gastito.movimiento.ClaseIngreso;
 import ar.gastito.movimiento.Confianza;
 import ar.gastito.movimiento.MovimientoInterpretado;
 
@@ -81,8 +82,82 @@ public class ValidadorInterpretacion {
     public record Pregunta() implements Resultado {
     }
 
-    /** Puede ser un gasto o una pregunta: se le pregunta al usuario. Si dice que es un gasto, se usa este. */
-    public record Dudosa(Valida comoGasto) implements Resultado {
+    /**
+     * No está claro qué quiere: se le pregunta con botones entre las opciones (2 o 3, la más probable primero). Si
+     * elige gasto, se usa este.
+     */
+    public record Dudosa(Valida comoGasto, List<Intencion> opciones) implements Resultado {
+
+        public Dudosa(Valida comoGasto) {
+            this(comoGasto, OPCIONES_POR_DEFECTO);
+        }
+    }
+
+    /** Si la IA no dijo entre qué duda: un gasto o una pregunta, como siempre. */
+    static final List<Intencion> OPCIONES_POR_DEFECTO = List.of(Intencion.GASTO, Intencion.PREGUNTA);
+    static final int MAXIMO_OPCIONES = 3;
+
+    /**
+     * "Cobré el sueldo, 980 mil en Galicia". Sin cuenta, IngresoService usa la del último ingreso de esa clase.
+     *
+     * @param monto null si no se dijo
+     */
+    public record Ingreso(ClaseIngreso clase, BigDecimal monto, String descripcion, Cuenta cuenta, boolean efectivo,
+            LocalDateTime fechaHora) implements Resultado {
+    }
+
+    /** Qué dato de lo último cargado se corrige. */
+    public enum Campo {
+        MONTO, DESCRIPCION, FECHA, CATEGORIA, MEDIO
+    }
+
+    /**
+     * "El último era 3500, no 3700": solo viene el valor del campo que se corrige.
+     *
+     * @param campo null si no se entendió qué cambiar (o el valor nuevo no es válido)
+     */
+    public record Correccion(Campo campo, BigDecimal monto, String descripcion, LocalDateTime fechaHora,
+            Categoria categoria, MedioPago medio) implements Resultado {
+    }
+
+    /** "Borrá lo último que cargué". */
+    public record Borrar() implements Resultado {
+    }
+
+    /** "Este mes hice 10 horas al 50…": las horas, normalizadas por la IA ("10 al 50, 30 nocturnas"). */
+    public record CalculoSueldo(String horas) implements Resultado {
+    }
+
+    /** Las listas y resúmenes que también tienen un comando. */
+    public enum Lista {
+        FIJOS, DEUDAS, CUOTAS, COSTOS_IA, RESUMEN_SEMANA, RESUMEN_MES, HOY, MES, CALCULO, DASHBOARD, AYUDA;
+
+        static Optional<Lista> de(String texto) {
+            if (texto == null || texto.isBlank()) {
+                return Optional.empty();
+            }
+            try {
+                return Optional.of(valueOf(texto.strip().toUpperCase(java.util.Locale.ROOT)));
+            } catch (IllegalArgumentException e) {
+                return Optional.empty();
+            }
+        }
+    }
+
+    /** "¿Qué fijos me faltan?", "mandame el resumen de la semana". */
+    public record Ver(Lista lista) implements Resultado {
+    }
+
+    /** "Cancelá las cuotas de las zapatillas": cuál, como lo dijo (o null). */
+    public record CancelarCuotas(String cual) implements Resultado {
+    }
+
+    /** "Lo de Pablo dalo por perdido". */
+    public record Perdonar(String persona, String de) implements Resultado {
+    }
+
+    /** "Sacá Netflix de los fijos": cuál, como lo dijo (o null). */
+    public record BajaFijo(String cual) implements Resultado {
     }
 
     public Resultado validar(InterpretacionIa ia, Catalogo catalogo, LocalDateTime ahora) {
@@ -91,12 +166,82 @@ public class ValidadorInterpretacion {
             case OTRO -> new NoEsGasto();
             case PREGUNTA -> new Pregunta();
             case GASTO -> comoGasto(ia, catalogo, ahora);
-            case DUDOSO -> new Dudosa(comoGasto(ia, catalogo, ahora));
+            case DUDOSO -> new Dudosa(comoGasto(ia, catalogo, ahora), opciones(ia.opciones()));
             case DEVOLUCION -> new Devolucion(monto(ia.monto()).orElse(null), texto(ia.devolucionPersona()),
                     texto(ia.devolucionDe()), buscar(ia.cuenta(), catalogo.cuentas()).orElse(null),
                     buscar(ia.medioPago(), catalogo.mediosPago()).orElse(null),
                     fechas.resolver(ia.fecha(), ia.hora(), ahora));
-            case FIJO -> new AltaFijo(comoFijo(ia, catalogo, ahora));
+            case ALTA_FIJO -> new AltaFijo(comoFijo(ia, catalogo, ahora));
+            case INGRESO -> comoIngreso(ia, catalogo, ahora);
+            case CORREGIR -> comoCorreccion(ia, catalogo, ahora);
+            case BORRAR -> new Borrar();
+            case CALCULO_SUELDO -> new CalculoSueldo(Optional.ofNullable(texto(ia.horas())).orElse(""));
+            case CANCELAR_CUOTAS -> new CancelarCuotas(texto(ia.descripcion()));
+            case PERDONAR -> new Perdonar(texto(ia.devolucionPersona()), texto(ia.devolucionDe()));
+            case BAJA_FIJO -> new BajaFijo(texto(ia.descripcion()));
+            case VER -> Lista.de(ia.ver()).<Resultado>map(Ver::new).orElseGet(Pregunta::new);
+        };
+    }
+
+    /** Las que propuso la IA que sirven para preguntar (sin repetir, hasta 3); si son menos de 2, las de siempre. */
+    static List<Intencion> opciones(List<String> propuestas) {
+        if (propuestas == null) {
+            return OPCIONES_POR_DEFECTO;
+        }
+        List<Intencion> opciones = propuestas.stream().filter(p -> p != null && !p.isBlank()).map(Intencion::de)
+                .filter(i -> i != Intencion.OTRO && i != Intencion.DUDOSO).distinct().limit(MAXIMO_OPCIONES)
+                .toList();
+        return opciones.size() < 2 ? OPCIONES_POR_DEFECTO : opciones;
+    }
+
+    private Ingreso comoIngreso(InterpretacionIa ia, Catalogo catalogo, LocalDateTime ahora) {
+        ClaseIngreso clase;
+        try {
+            clase = ClaseIngreso.valueOf(Textos.normalizar(String.valueOf(ia.claseIngreso())).toUpperCase());
+        } catch (IllegalArgumentException e) {
+            clase = ClaseIngreso.EXTRA;
+        }
+        MedioPago medio = buscar(ia.medioPago(), catalogo.mediosPago()).orElse(null);
+        return new Ingreso(clase, monto(ia.monto()).orElse(null),
+                clase == ClaseIngreso.EXTRA ? texto(ia.descripcion()) : null,
+                buscar(ia.cuenta(), catalogo.cuentas()).orElse(null), medio != null && medio.isEfectivo(),
+                fechas.resolver(ia.fecha(), ia.hora(), ahora));
+    }
+
+    /**
+     * El campo que dijo la IA con su valor nuevo. Si no dijo el campo, el primer dato que vino (monto, medio,
+     * categoría, fecha, descripción). Un valor que no existe o no es válido deja el campo en null.
+     */
+    private Correccion comoCorreccion(InterpretacionIa ia, Catalogo catalogo, LocalDateTime ahora) {
+        Optional<BigDecimal> monto = monto(ia.monto());
+        Optional<MedioPago> medio = buscar(ia.medioPago(), catalogo.mediosPago());
+        Optional<Categoria> categoria = ia.categorias() == null || ia.categorias().isEmpty() ? Optional.empty()
+                : buscar(ia.categorias().get(0), catalogo.categorias());
+        String fecha = texto(ia.fecha());
+        String descripcion = texto(ia.descripcion());
+        Campo campo;
+        try {
+            campo = Campo.valueOf(Textos.normalizar(String.valueOf(ia.campo())).toUpperCase());
+        } catch (IllegalArgumentException e) {
+            campo = monto.isPresent() ? Campo.MONTO : medio.isPresent() ? Campo.MEDIO
+                    : categoria.isPresent() ? Campo.CATEGORIA : fecha != null ? Campo.FECHA
+                            : descripcion != null ? Campo.DESCRIPCION : null;
+        }
+        if (campo == null) {
+            return new Correccion(null, null, null, null, null, null);
+        }
+        return switch (campo) {
+            case MONTO -> monto.map(m -> new Correccion(Campo.MONTO, m, null, null, null, null))
+                    .orElseGet(() -> new Correccion(null, null, null, null, null, null));
+            case MEDIO -> medio.map(m -> new Correccion(Campo.MEDIO, null, null, null, null, m))
+                    .orElseGet(() -> new Correccion(null, null, null, null, null, null));
+            case CATEGORIA -> categoria.map(c -> new Correccion(Campo.CATEGORIA, null, null, null, c, null))
+                    .orElseGet(() -> new Correccion(null, null, null, null, null, null));
+            case FECHA -> fecha == null ? new Correccion(null, null, null, null, null, null)
+                    : new Correccion(Campo.FECHA, null, null, fechas.resolver(fecha, ia.hora(), ahora), null, null);
+            case DESCRIPCION -> descripcion == null ? new Correccion(null, null, null, null, null, null)
+                    : new Correccion(Campo.DESCRIPCION, null, descripcion(descripcion, catalogo.otros()), null,
+                            null, null);
         };
     }
 
@@ -116,7 +261,7 @@ public class ValidadorInterpretacion {
         boolean variable = Textos.normalizar(String.valueOf(texto(ia.fijoVariable()))).equals("si")
                 || PedidoFijo.esVariable(m.descripcion());
         return new PedidoFijo(m.descripcion(), m.monto(), m.categoria(), m.candidatas(), m.medioPago(), m.cuenta(),
-                m.tarjeta(), dia, bimestral, variable);
+                m.tarjeta(), dia, bimestral, variable, texto(ia.fijoAlias()));
     }
 
     private static String texto(String valor) {

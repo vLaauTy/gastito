@@ -42,6 +42,18 @@ public final class ParserHorasSueldo {
         if (!INTENCION.matcher(t).find() || !HABLA_DE_HORAS.matcher(t).find()) {
             return Optional.empty();
         }
+        return cantidades(t, deHoras);
+    }
+
+    /**
+     * Las horas de un texto que ya se sabe que es un cálculo de sueldo (lo reconoció la IA y lo normalizó: "10 al
+     * 50, 6 al 100, 30 nocturnas"), sin pedir que diga "este mes hice".
+     */
+    public static Optional<Map<Long, BigDecimal>> cantidades(String texto, List<ConceptoSueldo> deHoras) {
+        if (texto == null || texto.isBlank() || deHoras.isEmpty()) {
+            return Optional.empty();
+        }
+        String t = normalizar(texto);
         Map<Long, BigDecimal> horas = new HashMap<>();
         for (ConceptoSueldo c : deHoras) {
             Optional<BigDecimal> cantidad = buscar(t, normalizar(c.getNombre()));

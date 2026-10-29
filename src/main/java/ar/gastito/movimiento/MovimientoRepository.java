@@ -99,6 +99,15 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
             order by m.creadoEn desc, m.id desc""")
     List<Movimiento> ultimosConfirmados(Pageable pagina);
 
+    /** Lo último que cargó el usuario (no lo que generó Gastito), sin contar lo cancelado. */
+    @Query("""
+            select m from Movimiento m
+            where m.estado <> ar.gastito.movimiento.EstadoMovimiento.CANCELADO
+              and m.origen in (ar.gastito.movimiento.Origen.TEXTO, ar.gastito.movimiento.Origen.AUDIO,
+                               ar.gastito.movimiento.Origen.TICKET, ar.gastito.movimiento.Origen.DASHBOARD)
+            order by m.creadoEn desc, m.id desc""")
+    List<Movimiento> ultimosCargados(Pageable pagina);
+
     /** Cada descripción confirmada con la categoría que le dio el usuario (sin repetidos). */
     @Query("""
             select distinct new ar.gastito.movimiento.DescripcionConfirmada(m.descripcion, m.categoria.id)

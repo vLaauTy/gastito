@@ -7,11 +7,13 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.CategoriaRepository;
 import ar.gastito.catalogo.MedioPago;
 import ar.gastito.catalogo.MedioPagoRepository;
@@ -128,6 +130,41 @@ public class MovimientoService {
         MedioPago medio = medioPagoId == null ? null : medios.findById(medioPagoId)
                 .orElseThrow(() -> new NoSuchElementException("No existe el medio de pago " + medioPagoId));
         m.cambiarMedioPago(medio, tarjetas.findFirstByActivaTrueOrderById().orElse(null));
+        return m;
+    }
+
+    /** Lo último que cargó el usuario (texto, audio, ticket o dashboard), si hay algo. */
+    @Transactional(readOnly = true)
+    public Optional<Movimiento> ultimoCargado() {
+        return movimientos.ultimosCargados(PageRequest.of(0, 1)).stream().findFirst().map(m -> buscar(m.getId()));
+    }
+
+    /**
+     * Un cambio sobre algo ya cargado (pendiente o guardado): solo lo que no es null.
+     *
+     * @param categoriaId null para no cambiarla
+     * @param medioPagoId null para no cambiarlo
+     */
+    @Transactional
+    public Movimiento corregir(Long id, BigDecimal monto, String descripcion, LocalDateTime fechaHora,
+            Long categoriaId, Long medioPagoId) {
+        Movimiento m = movimientos.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("No existe el movimiento " + id));
+        Categoria categoria = categoriaId == null ? null : categorias.findById(categoriaId)
+                .orElseThrow(() -> new NoSuchElementException("No existe la categoría " + categoriaId));
+        MedioPago medio = medioPagoId == null ? null : medios.findById(medioPagoId)
+                .orElseThrow(() -> new NoSuchElementException("No existe el medio de pago " + medioPagoId));
+        m.corregir(monto, descripcion, fechaHora, categoria, medio,
+                tarjetas.findFirstByActivaTrueOrderById().orElse(null));
+        return m;
+    }
+
+    /** "Borrá lo último": queda cancelado (no cuenta, pero queda el registro). */
+    @Transactional
+    public Movimiento anular(Long id) {
+        Movimiento m = movimientos.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("No existe el movimiento " + id));
+        m.anular();
         return m;
     }
 

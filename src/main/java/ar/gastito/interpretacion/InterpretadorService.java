@@ -3,6 +3,7 @@ package ar.gastito.interpretacion;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -94,8 +95,28 @@ public class InterpretadorService {
     public record Pregunta(String texto, Long usoIaId) implements Resultado {
     }
 
-    /** Puede ser un gasto o una pregunta: se le pregunta al usuario. Si es un gasto, ya está interpretado. */
-    public record Dudoso(Interpretado comoGasto) implements Resultado {
+    /**
+     * No está claro qué quiere: se le pregunta con botones entre las opciones. Si es un gasto, ya está interpretado;
+     * para las otras intenciones se vuelve a validar la misma respuesta de la IA ({@link #reinterpretar}), sin otra
+     * llamada.
+     *
+     * @param ia la respuesta de la IA, o null si no intervino
+     */
+    public record Dudoso(Interpretado comoGasto, List<Intencion> opciones, InterpretacionIa ia, Long usoIaId)
+            implements Resultado {
+
+        public Dudoso(Interpretado comoGasto) {
+            this(comoGasto, ValidadorInterpretacion.OPCIONES_POR_DEFECTO, null, comoGasto.usoIaId());
+        }
+    }
+
+    /**
+     * Cualquier otro pedido (un ingreso, corregir o borrar lo último, una lista, el cálculo del sueldo…): lo que
+     * entendió el validador, para que lo resuelva el bot.
+     *
+     * @param usoIaId registro en uso_ia, o null si se reconoció sin IA
+     */
+    public record Orden(ValidadorInterpretacion.Resultado orden, Long usoIaId) implements Resultado {
     }
 
     /** Un mensaje escrito. */
@@ -109,7 +130,11 @@ public class InterpretadorService {
      * @throws ar.gastito.ia.IaNoDisponibleException si hacía falta la IA y no se pudo usar
      */
     public Resultado interpretar(String texto, PropositoIa proposito) {
-        // 0. Una pregunta obvia, sin monto: no hace falta la IA para saber que no es un gasto.
+        // 0. Un pedido de lista obvio ("¿qué fijos me faltan?") o una pregunta obvia, sin monto: sin IA.
+        Optional<ValidadorInterpretacion.Lista> lista = ClasificadorIntencion.pedidoDeLista(texto);
+        if (lista.isPresent()) {
+            return new Orden(new ValidadorInterpretacion.Ver(lista.get()), null);
+        }
         if (ClasificadorIntencion.esPreguntaObvia(texto)) {
             return new Pregunta(texto, null);
         }
@@ -148,14 +173,35 @@ public class InterpretadorService {
         ClienteIa.Respuesta<InterpretacionIa> respuesta =
                 ia.extraer(instrucciones, texto, InterpretacionIa.class, proposito);
 
-        return switch (validador.validar(respuesta.valor(), catalogo, ahora)) {
-            case ValidadorInterpretacion.Valida v -> conHistorial(v, catalogo, respuesta.usoIaId());
+        return resultado(validador.validar(respuesta.valor(), catalogo, ahora), respuesta.valor(), texto, catalogo,
+                respuesta.usoIaId());
+    }
+
+    /**
+     * El usuario eligió qué quería entre las opciones de un {@link Dudoso}: se valida la misma respuesta de la IA
+     * con esa intención (sin llamarla de nuevo).
+     */
+    public Resultado reinterpretar(Dudoso dudoso, Intencion elegida, String texto) {
+        if (dudoso.ia() == null) {
+            return elegida == Intencion.GASTO ? dudoso.comoGasto() : new Pregunta(texto, dudoso.usoIaId());
+        }
+        Catalogo catalogo = catalogos.cargar();
+        LocalDateTime ahora = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MINUTES);
+        InterpretacionIa ia = dudoso.ia().conIntencion(elegida);
+        return resultado(validador.validar(ia, catalogo, ahora), ia, texto, catalogo, dudoso.usoIaId());
+    }
+
+    private Resultado resultado(ValidadorInterpretacion.Resultado validado, InterpretacionIa ia, String texto,
+            Catalogo catalogo, Long usoIaId) {
+        return switch (validado) {
+            case ValidadorInterpretacion.Valida v -> conHistorial(v, catalogo, usoIaId);
             case ValidadorInterpretacion.NoEsGasto n -> new NoEsGasto();
-            case ValidadorInterpretacion.Pregunta p -> new Pregunta(texto, respuesta.usoIaId());
+            case ValidadorInterpretacion.Pregunta p -> new Pregunta(texto, usoIaId);
             case ValidadorInterpretacion.Dudosa d ->
-                    new Dudoso(conHistorial(d.comoGasto(), catalogo, respuesta.usoIaId()));
-            case ValidadorInterpretacion.Devolucion d -> new Devolucion(d, respuesta.usoIaId());
-            case ValidadorInterpretacion.AltaFijo a -> new AltaFijo(a.pedido(), respuesta.usoIaId());
+                    new Dudoso(conHistorial(d.comoGasto(), catalogo, usoIaId), d.opciones(), ia, usoIaId);
+            case ValidadorInterpretacion.Devolucion d -> new Devolucion(d, usoIaId);
+            case ValidadorInterpretacion.AltaFijo a -> new AltaFijo(a.pedido(), usoIaId);
+            default -> new Orden(validado, usoIaId);
         };
     }
 

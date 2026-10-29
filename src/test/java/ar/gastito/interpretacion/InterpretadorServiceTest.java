@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -276,5 +277,86 @@ class InterpretadorServiceTest {
         assertThat(r).isInstanceOf(InterpretadorService.Dudoso.class);
         assertThat(((InterpretadorService.Dudoso) r).comoGasto().movimiento().monto()).isEqualByComparingTo("3700");
         assertThat(((InterpretadorService.Dudoso) r).comoGasto().usoIaId()).isEqualTo(10L);
+    }
+
+    // --- Lenguaje natural para todo ---
+
+    private static InterpretacionIa json(String json) {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, InterpretacionIa.class);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @Test
+    void unAudioConErroresDeTranscripcionDaDeAltaElFijoEnLaMismaLlamada() {
+        // "arreglame" en vez de "agregame", el monto con palabras: lo resuelve la IA (simulada) en una sola llamada.
+        String escuchado = "arreglame un gasto fijo que es el seguro de la moto, que es aproximadamente treinta "
+                + "y dos lucas, que es todos los meses y lo pago con tarjeta de crédito";
+        when(ia.extraer(anyString(), eq(escuchado), eq(InterpretacionIa.class), eq(PropositoIa.AUDIO)))
+                .thenReturn(new ClienteIa.Respuesta<>(json("""
+                        {"intencion": "ALTA_FIJO", "monto": "32000", "descripcion": "Seguro moto",
+                         "categorias": ["Transporte / Moto"], "confianza": "media",
+                         "medioPago": "Tarjeta de crédito", "fijoAlias": "seguro de la moto"}"""), 4L));
+
+        InterpretadorService.AltaFijo a = (InterpretadorService.AltaFijo) interpretador.interpretar(escuchado,
+                PropositoIa.AUDIO);
+
+        assertThat(a.pedido().nombre()).isEqualTo("Seguro moto");
+        assertThat(a.pedido().monto()).isEqualByComparingTo("32000");
+        assertThat(a.pedido().tarjeta()).isSameAs(tarjeta);
+        assertThat(a.pedido().alias()).isEqualTo("seguro de la moto");
+        assertThat(a.usoIaId()).isEqualTo(4L);
+        verify(ia, times(1)).extraer(anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    void elPromptEsperaErroresDeWhisperYConoceTodasLasIntenciones() {
+        String prompt = new Prompts().cargar(InterpretadorService.PROMPT, java.util.Map.of("categorias", "",
+                "mediosPago", "", "cuentas", "", "ejemplos", "", "hoy", ""));
+        assertThat(prompt).contains("lucas", "mil quinientos", "arreglame");
+        for (Intencion i : Intencion.values()) {
+            assertThat(prompt).as("el prompt explica " + i).contains(i.name());
+        }
+    }
+
+    @Test
+    void lasOtrasIntencionesLleganComoOrden() {
+        iaResponde(json("{\"intencion\": \"CORREGIR\", \"campo\": \"MONTO\", \"monto\": \"3500\"}"), 6L);
+
+        InterpretadorService.Orden o = (InterpretadorService.Orden) interpretador.interpretar(
+                "el último era 3500, no 3700");
+
+        assertThat(o.orden()).isInstanceOf(ValidadorInterpretacion.Correccion.class);
+        assertThat(o.usoIaId()).isEqualTo(6L);
+    }
+
+    @Test
+    void unPedidoDeListaObvioNoLlamaALaIa() {
+        InterpretadorService.Orden o = (InterpretadorService.Orden) interpretador.interpretar(
+                "¿Qué fijos me faltan pagar?");
+
+        assertThat(o.orden()).isEqualTo(new ValidadorInterpretacion.Ver(ValidadorInterpretacion.Lista.FIJOS));
+        assertThat(o.usoIaId()).isNull();
+        verifyNoInteractions(ia);
+    }
+
+    @Test
+    void elegirUnaOpcionDeUnDudosoNoVuelveALlamarALaIa() {
+        iaResponde(json("""
+                {"intencion": "DUDOSO", "monto": "32000", "descripcion": "Seguro", "categorias": ["Otros"],
+                 "opciones": ["ALTA_FIJO", "GASTO"]}"""), 8L);
+
+        InterpretadorService.Dudoso d = (InterpretadorService.Dudoso) interpretador.interpretar("el seguro 32 mil");
+        assertThat(d.opciones()).containsExactly(Intencion.ALTA_FIJO, Intencion.GASTO);
+
+        InterpretadorService.AltaFijo a = (InterpretadorService.AltaFijo) interpretador.reinterpretar(d,
+                Intencion.ALTA_FIJO, "el seguro 32 mil");
+
+        assertThat(a.pedido().nombre()).isEqualTo("Seguro");
+        assertThat(a.pedido().monto()).isEqualByComparingTo("32000");
+        assertThat(a.usoIaId()).isEqualTo(8L);
+        verify(ia, times(1)).extraer(anyString(), anyString(), any(), any());
     }
 }

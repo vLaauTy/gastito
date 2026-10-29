@@ -80,4 +80,16 @@ class ParserHorasSueldoTest {
         assertThat(ParserHorasSueldo.posicionales("   ")).isEmpty();
         assertThat(ParserHorasSueldo.posicionales("-4")).isEmpty();
     }
+
+    @org.junit.jupiter.api.Test
+    void lasHorasQueNormalizoLaIaSeLeenSinPedirQueDigaEsteMes() {
+        assertThat(ParserHorasSueldo.cantidades("10 al 50, 6 al 100, 30 nocturnas", HORAS)).hasValueSatisfying(h -> {
+            assertThat(h.get(AL_50.getId())).isEqualByComparingTo("10");
+            assertThat(h.get(AL_100.getId())).isEqualByComparingTo("6");
+            assertThat(h.get(NOCTURNAS.getId())).isEqualByComparingTo("30");
+        });
+        assertThat(ParserHorasSueldo.parsear("10 al 50, 6 al 100", HORAS)).as("sin IA hace falta la intención")
+                .isEmpty();
+        assertThat(ParserHorasSueldo.cantidades("nada", HORAS)).isEmpty();
+    }
 }
