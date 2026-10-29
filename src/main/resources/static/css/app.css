@@ -124,6 +124,8 @@ td.mensaje { color: var(--muted); text-align: center; padding: 24px 8px; }
 .chip.audio, .chip.extra { background: var(--info-soft); color: var(--info); }
 .chip.aguinaldo { background: var(--warn-soft); color: var(--warn); }
 .chip.ticket { background: var(--ticket-soft); color: var(--ticket); }
+.chip.estimado { background: var(--warn-soft); color: var(--warn); margin-left: 6px; }
+td.amt.estimado { color: var(--warn); }
 button.desplegar { margin-left: 8px; vertical-align: middle; }
 
 /* Fila desplegada con los productos de un ticket */

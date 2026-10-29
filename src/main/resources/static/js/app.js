@@ -475,7 +475,8 @@
       h('td', {}, window.Iconos.etiquetaCategoria(m.categoria)),
       h('td', { class: m.sinEspecificar ? 'sin-especificar' : null }, window.Iconos.medio(m.medio)),
       h('td', {}, h('span', { class: `chip ${m.origen.toLowerCase()}` }, window.Iconos.iconoOrigen(m.origen), origenTexto(m.origen))),
-      h('td', { class: 'amt' }, pesos(m.monto)),
+      h('td', { class: 'amt' }, m.estimado ? `≈ ${pesos(m.monto)}` : pesos(m.monto),
+        m.estimado ? h('span', { class: 'chip estimado', title: 'Fijo tildado con el monto aproximado: corregilo en Fijos' }, 'estimado') : null),
     );
     if (boton) boton.addEventListener('click', () => desplegarTicket(boton, fila, m.id));
     return fila;
@@ -836,15 +837,23 @@
   function accionesChecklist(i) {
     if (i.estado === 'FALTA') {
       return h('div', { class: 'row-btns' },
+        h('button', { type: 'button', class: 'mini primary', title: `Lo tilda con ≈ ${pesos(i.aproximado)}; el real lo corregís después`, onclick: () => pagadoFijo(i) }, 'Pagado'),
         h('button', { type: 'button', class: 'mini', onclick: () => cargarFijo(i) }, 'Cargar monto'),
         h('button', { type: 'button', class: 'mini', onclick: () => esteMesNoFijo(i) }, 'Este mes no'));
     }
     return h('div', { class: 'row-btns' },
+      i.estado === 'CARGADO' ? h('button', { type: 'button', class: i.estimado ? 'mini primary' : 'mini', onclick: () => corregirMontoFijo(i) }, 'Corregir monto') : null,
       h('button', { type: 'button', class: 'mini', onclick: () => deshacerFijo(i) }, 'Deshacer'));
+  }
+
+  function montoChecklist(i) {
+    if (i.estado === 'CARGADO') return i.estimado ? `≈ ${pesos(i.monto)} · estimado` : pesos(i.monto);
+    return i.montoAnterior != null ? `ref. ${pesos(i.montoAnterior)}` : '—';
   }
 
   function vistaFijosChecklist(data) {
     texto('#f-cargado', pesos(data.cargado));
+    texto('#f-cargado-nota', Number(data.estimado) > 0 ? `≈ ${pesos(data.estimado)} con monto estimado` : '');
     texto('#f-faltan', data.faltan);
     const proximo = data.items.filter((i) => i.estado === 'FALTA').sort((a, b) => a.vencimiento.localeCompare(b.vencimiento))[0];
     texto('#f-proximo', proximo ? proximo.nombre : '—');
@@ -854,27 +863,92 @@
     tbody.replaceChildren(...data.items.map((i) => h('tr', {},
       h('td', {}, h('span', { class: 'nombre-con-icono' }, window.Iconos.iconoCategoria(window.Iconos.categoriaPorEmoji(i.emoji)), i.nombre)),
       h('td', {}, estadoChecklist(i)),
-      h('td', { class: 'amt' }, i.estado === 'CARGADO' ? pesos(i.monto) : i.montoAnterior != null ? `ref. ${pesos(i.montoAnterior)}` : '—'),
+      h('td', { class: i.estimado ? 'amt estimado' : 'amt' }, montoChecklist(i)),
       h('td', {}, i.estado === 'CARGADO' ? fechaCorta(i.fecha) : `vence el ${i.vencimiento.slice(-2)}`),
       h('td', {}, accionesChecklist(i)),
     )));
   }
 
-  async function cargarFijo(item) {
-    const respuesta = window.prompt(`¿Cuánto gastaste en ${item.nombre}?`);
-    if (!respuesta) return;
-    const monto = numeroArg(respuesta);
-    if (!Number.isFinite(monto) || monto <= 0) { mostrarAviso('No entendí el monto.'); return; }
+  /** "Pagado": el gasto queda con el monto aproximado, marcado como estimado. */
+  async function pagadoFijo(item) {
     try {
-      await api(`/api/fijos/${item.fijoId}/cargar`, {
+      await api(`/api/fijos/${item.fijoId}/pagado?mes=${estado.mes}`, { method: 'POST' });
+      window.Iconos.toast(`${item.nombre} pagado ≈ ${pesos(item.aproximado)}`);
+      cargar();
+    } catch (e) {
+      mostrarAviso(`No pude marcarlo pagado: ${e.message}`);
+    }
+  }
+
+  function cargarFijo(item) {
+    abrirDialogoMonto({
+      titulo: `Cargar ${item.nombre}`,
+      nota: item.montoAnterior != null ? `El anterior fue ${pesos(item.montoAnterior)}.` : '',
+      valor: '',
+      exito: `${item.nombre} cargado`,
+      enviar: (monto) => api(`/api/fijos/${item.fijoId}/cargar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ monto }),
-      });
-      window.Iconos.toast(`${item.nombre} cargado`);
+      }),
+    });
+  }
+
+  /** Cambia el monto del mismo gasto (deja de ser estimado); sirve también para uno que ya tenía el real. */
+  function corregirMontoFijo(item) {
+    abrirDialogoMonto({
+      titulo: `Corregir ${item.nombre}`,
+      nota: item.estimado ? `Quedó con el monto estimado (≈ ${pesos(item.monto)}). Poné el real.` : `Ahora: ${pesos(item.monto)}.`,
+      valor: item.estimado ? '' : String(item.monto).replace('.', ','),
+      exito: `${item.nombre} corregido`,
+      enviar: (monto) => api(`/api/fijos/cobros/${item.movimientoId}/monto`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ monto }),
+      }),
+    });
+  }
+
+  // --- Diálogo de monto (cargar o corregir un fijo) ---
+
+  let dialogoMonto = null;
+
+  function abrirDialogoMonto(opciones) {
+    dialogoMonto = opciones;
+    $('#form-monto').reset();
+    $('#form-monto-error').hidden = true;
+    $('#form-monto-titulo').textContent = opciones.titulo;
+    texto('#form-monto-nota', opciones.nota);
+    $('#mo-monto').value = opciones.valor;
+    $('#modal-monto').hidden = false;
+    $('#mo-monto').focus();
+  }
+
+  function cerrarDialogoMonto() { $('#modal-monto').hidden = true; dialogoMonto = null; }
+
+  async function guardarMonto(evento) {
+    evento.preventDefault();
+    if (!dialogoMonto) return;
+    const error = $('#form-monto-error');
+    const monto = numeroArg($('#mo-monto').value);
+    if (!Number.isFinite(monto) || monto <= 0) {
+      error.textContent = 'Escribí el monto, por ejemplo 87.500.';
+      error.hidden = false;
+      return;
+    }
+    const boton = $('#form-monto-guardar');
+    boton.disabled = true;
+    error.hidden = true;
+    try {
+      await dialogoMonto.enviar(monto);
+      window.Iconos.toast(dialogoMonto.exito);
+      cerrarDialogoMonto();
       cargar();
     } catch (e) {
-      mostrarAviso(`No pude cargar el gasto: ${e.message}`);
+      error.textContent = e.message;
+      error.hidden = false;
+    } finally {
+      boton.disabled = false;
     }
   }
 
@@ -1137,16 +1211,19 @@
       if (e.target.closest('[data-cerrar]') || e.target.id === 'modal') cerrarFormulario();
       if (e.target.closest('[data-abrir-fijo]')) { abrirFormularioFijo(null); return; }
       if (e.target.closest('[data-cerrar-fijo]') || e.target.id === 'modal-fijo') cerrarFormularioFijo();
+      if (e.target.closest('[data-cerrar-monto]') || e.target.id === 'modal-monto') cerrarDialogoMonto();
     });
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       if (!$('#modal').hidden) cerrarFormulario();
       if (!$('#modal-fijo').hidden) cerrarFormularioFijo();
+      if (!$('#modal-monto').hidden) cerrarDialogoMonto();
     });
     window.addEventListener('hashchange', () => { leerUrl(); mostrarVista(); cargar(); });
     $('#reintentar').addEventListener('click', () => cargar());
     $('#form-ingreso').addEventListener('submit', guardarIngreso);
     $('#form-fijo').addEventListener('submit', guardarFijo);
+    $('#form-monto').addEventListener('submit', guardarMonto);
 
     const resumenFiltro = debounce(() => recargarTabla(ultimosMovimientos), 300);
     $('#r-q').addEventListener('input', resumenFiltro);
