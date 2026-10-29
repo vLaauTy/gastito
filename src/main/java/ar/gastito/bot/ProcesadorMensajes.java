@@ -58,6 +58,7 @@ public class ProcesadorMensajes {
     private final ConversacionRecibos recibos;
     private final ComandosSueldo comandosSueldo;
 
+    private final GuardadoAutomatico guardado;
     private final EdicionDeCampos edicion;
     private final ComandosBot comandos;
     private final FlujoDeMensajes flujo;
@@ -73,7 +74,7 @@ public class ProcesadorMensajes {
             GastoFijoService gastosFijos,
             ConversacionVarios varios, ConversacionCuotas cuotas, ConversacionRecibos recibos,
             ComandosSueldo comandosSueldo, FormatoCostos formatoCostos, GastitoProperties properties,
-            DashboardProperties dashboard, Clock clock) {
+            DashboardProperties dashboard, BotProperties bot, Clock clock) {
         this.movimientos = movimientos;
         this.catalogos = catalogos;
         this.tarjetas = tarjetas;
@@ -88,14 +89,15 @@ public class ProcesadorMensajes {
         this.cuotas = cuotas;
         this.recibos = recibos;
         this.comandosSueldo = comandosSueldo;
-        this.edicion = new EdicionDeCampos(movimientos, juntadas, tarjetas, formato, fechas, clock);
+        this.guardado = new GuardadoAutomatico(bot, movimientos, catalogos, tarjetas, tickets);
+        this.edicion = new EdicionDeCampos(movimientos, juntadas, tarjetas, formato, fechas, clock, guardado);
         // Los atajos que no se entienden sin IA se interpretan como cualquier mensaje (flujo se asigna abajo).
         this.comandos = new ComandosBot(movimientos, formato, grafico, comandosIngreso, resumenes, formatoResumen,
                 juntadas, fijos, altaFijo, cuotas, comandosSueldo, disponible, formatoCostos, dashboard.url(),
                 this::interpretarTexto);
         this.flujo = new FlujoDeMensajes(interpretador, movimientos, usoIa, tarjetas, formato, comandosIngreso,
                 consultas, formatoConsulta, repetidos, juntadas, fijos, altaFijo, naturales, gastosFijos, varios,
-                cuotas, comandosSueldo, edicion, comandos);
+                cuotas, comandosSueldo, edicion, comandos, guardado);
         this.medios = new MediosRecibidos(transcripciones, tickets, recibos, altaFijo, comandosSueldo, edicion, flujo,
                 properties.audio().duracionMaxima());
     }
@@ -263,21 +265,23 @@ public class ProcesadorMensajes {
                 yield List.of(new Accion.Editar(mensajeId, tarjetas.cancelado(cancelado), Teclado.NINGUNO),
                         new Accion.Avisar("Cancelado"));
             }
-            case Tarjetas.VOLVER -> List.of(edicion.principal(chatId, mensajeId, edicion.pendiente(id)));
-            case Tarjetas.EDITAR -> List.of(new Accion.Editar(mensajeId, tarjetas.pendiente(edicion.pendiente(id)),
+            case Tarjetas.VOLVER -> List.of(edicion.principal(chatId, mensajeId, edicion.editable(id)));
+            case Tarjetas.EDITAR -> List.of(new Accion.Editar(mensajeId, tarjetas.actual(edicion.editable(id)),
                     tarjetas.edicion(id)));
+            case Tarjetas.DESHACER -> guardado.deshacer(mensajeId, id);
+            case Tarjetas.MEDIO_RAPIDO -> guardado.elegirMedio(mensajeId, id, requerido(elegido));
             case TarjetasRecibo.DESCARTAR -> recibos.descartar(mensajeId, id);
             case Tarjetas.PERIODO -> List.of(edicion.principal(chatId, mensajeId, comandosIngreso.alternarPeriodo(id)));
             case Tarjetas.OTRA_CATEGORIA -> List.of(new Accion.Editar(mensajeId,
-                    tarjetas.pendiente(edicion.pendiente(id)), tarjetas.categorias(id, catalogos.cargar().categorias())));
-            case Tarjetas.MEDIOS -> List.of(new Accion.Editar(mensajeId, tarjetas.pendiente(edicion.pendiente(id)),
+                    tarjetas.actual(edicion.editable(id)), tarjetas.categorias(id, catalogos.cargar().categorias())));
+            case Tarjetas.MEDIOS -> List.of(new Accion.Editar(mensajeId, tarjetas.actual(edicion.editable(id)),
                     tarjetas.medios(id, catalogos.cargar().mediosPago())));
             case Tarjetas.CATEGORIA -> List.of(edicion.principal(chatId, mensajeId,
-                    movimientos.elegirCategoria(id, requerido(elegido))));
+                    edicion.elegirCategoria(id, requerido(elegido))));
             case Tarjetas.MEDIO -> {
                 long medio = requerido(elegido);
                 yield List.of(edicion.principal(chatId, mensajeId,
-                        movimientos.cambiarMedioPago(id, medio == Tarjetas.SIN_MEDIO ? null : medio)));
+                        edicion.cambiarMedioPago(id, medio == Tarjetas.SIN_MEDIO ? null : medio)));
             }
             case Tarjetas.EDITAR_MONTO -> edicion.pedir(chatId, mensajeId, id, Campo.MONTO);
             case Tarjetas.EDITAR_FECHA -> edicion.pedir(chatId, mensajeId, id, Campo.FECHA);

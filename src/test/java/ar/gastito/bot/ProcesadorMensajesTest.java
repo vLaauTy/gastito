@@ -122,6 +122,7 @@ class ProcesadorMensajesTest {
                 repetidos, juntadas, fijos, altaFijo, naturales, disponible, gastosFijos, varios, cuotas, recibos,
                 comandosSueldo,
                 new FormatoCostos(costosIa, formato, RELOJ), properties, dashboard,
+                new BotProperties(false, new BigDecimal("100000")),
                 RELOJ);
         when(costosIa.panel(any())).thenReturn(panelDeCostos(0, "0"));
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));

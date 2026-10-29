@@ -15,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.CategoriaRepository;
+import ar.gastito.catalogo.Cuenta;
+import ar.gastito.catalogo.CuentaRepository;
 import ar.gastito.catalogo.MedioPago;
 import ar.gastito.catalogo.MedioPagoRepository;
 import ar.gastito.catalogo.TarjetaCreditoRepository;
@@ -29,14 +31,16 @@ public class MovimientoService {
     private final CategoriaRepository categorias;
     private final MedioPagoRepository medios;
     private final TarjetaCreditoRepository tarjetas;
+    private final CuentaRepository cuentas;
     private final Clock clock;
 
     public MovimientoService(MovimientoRepository movimientos, CategoriaRepository categorias,
-            MedioPagoRepository medios, TarjetaCreditoRepository tarjetas, Clock clock) {
+            MedioPagoRepository medios, TarjetaCreditoRepository tarjetas, CuentaRepository cuentas, Clock clock) {
         this.movimientos = movimientos;
         this.categorias = categorias;
         this.medios = medios;
         this.tarjetas = tarjetas;
+        this.cuentas = cuentas;
         this.clock = clock;
     }
 
@@ -156,6 +160,50 @@ public class MovimientoService {
                 .orElseThrow(() -> new NoSuchElementException("No existe el medio de pago " + medioPagoId));
         m.corregir(monto, descripcion, fechaHora, categoria, medio,
                 tarjetas.findFirstByActivaTrueOrderById().orElse(null));
+        return m;
+    }
+
+    /**
+     * Edición completa de un gasto, pendiente o guardado: reemplaza monto, descripción, fecha, categoría, medio de
+     * pago y cuenta.
+     *
+     * @param medioPagoId null es "sin especificar"
+     * @param cuentaId    null es sin cuenta
+     */
+    @Transactional
+    public Movimiento editar(Long id, BigDecimal monto, String descripcion, LocalDateTime fechaHora, Long categoriaId,
+            Long medioPagoId, Long cuentaId) {
+        Movimiento m = buscar(id);
+        Categoria categoria = categoriaId == null ? null : categorias.findById(categoriaId)
+                .orElseThrow(() -> new IllegalArgumentException("No existe la categoría " + categoriaId));
+        MedioPago medio = medioPagoId == null ? null : medios.findById(medioPagoId)
+                .orElseThrow(() -> new IllegalArgumentException("No existe el medio de pago " + medioPagoId));
+        Cuenta cuenta = cuentaId == null ? null : cuentas.findById(cuentaId)
+                .orElseThrow(() -> new IllegalArgumentException("No existe la cuenta " + cuentaId));
+        m.editar(monto, descripcion, fechaHora, categoria, medio, cuenta,
+                tarjetas.findFirstByActivaTrueOrderById().orElse(null));
+        return m;
+    }
+
+    /**
+     * Borra un gasto común de verdad (con sus productos de ticket): ↩️ Deshacer de uno que se guardó solo, o
+     * Eliminar en el dashboard. La foto del ticket no se toca. Una juntada o una cuota tienen su propio camino.
+     */
+    @Transactional
+    public Movimiento borrar(Long id) {
+        Movimiento m = buscar(id);
+        if (m.getTipo() != TipoMovimiento.GASTO) {
+            throw new MovimientoEspecialException("Solo se borran gastos");
+        }
+        if (m.isJuntada()) {
+            throw new MovimientoEspecialException("Es una juntada: se borra entera, con lo que te deben");
+        }
+        if (m.getPlanCuotasId() != null) {
+            throw new MovimientoEspecialException("Es una cuota: se cancela el plan desde esa cuota");
+        }
+        movimientos.desvincularUsoIa(id);
+        movimientos.delete(m);
+        movimientos.flush();
         return m;
     }
 

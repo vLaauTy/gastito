@@ -307,6 +307,56 @@ public class Movimiento {
     }
 
     /**
+     * Edición completa de un gasto, pendiente o ya guardado (el dashboard, o ✏️ Editar sobre uno que se guardó solo):
+     * reemplaza todos los datos editables. Con tarjeta de crédito, la cuenta queda vacía (es la que paga el resumen).
+     * El monto de una juntada o de una cuota depende de otros datos: no se cambia acá. En el cobro de un fijo, el
+     * monto nuevo deja de ser estimado.
+     *
+     * @param nuevoMedio  null es "sin especificar"
+     * @param nuevaCuenta null es sin cuenta
+     */
+    public void editar(BigDecimal nuevoMonto, String nuevaDescripcion, LocalDateTime nuevaFecha,
+            Categoria nuevaCategoria, MedioPago nuevoMedio, Cuenta nuevaCuenta, TarjetaCredito tarjetaCredito) {
+        if (estado == EstadoMovimiento.CANCELADO) {
+            throw new IllegalStateException("El movimiento " + id + " está cancelado");
+        }
+        if (tipo != TipoMovimiento.GASTO) {
+            throw new IllegalArgumentException("Solo se editan gastos");
+        }
+        if (nuevoMonto == null || nuevoMonto.signum() <= 0) {
+            throw new IllegalArgumentException("El monto tiene que ser mayor a cero");
+        }
+        if (nuevaCategoria == null) {
+            throw new IllegalArgumentException("Elegí una categoría");
+        }
+        if (nuevaFecha == null) {
+            throw new IllegalArgumentException("Falta la fecha");
+        }
+        boolean cambiaMonto = monto == null || monto.compareTo(nuevoMonto) != 0;
+        if (cambiaMonto && (isJuntada() || planCuotasId != null)) {
+            throw new MovimientoEspecialException(isJuntada()
+                    ? "El monto de una juntada es tu parte: se cambia desde la juntada, que la reparte de nuevo"
+                    : "El monto de una cuota sale del plan de cuotas: no se cambia suelto");
+        }
+        if (cambiaMonto && gastoFijoId != null) {
+            montoEstimado = false;
+        }
+        this.monto = nuevoMonto;
+        this.descripcion = nuevaDescripcion == null || nuevaDescripcion.isBlank() ? null : nuevaDescripcion.strip();
+        this.fechaHora = nuevaFecha;
+        this.categoria = nuevaCategoria;
+        this.candidatas.clear();
+        this.medioPago = nuevoMedio;
+        if (nuevoMedio != null && nuevoMedio.esTarjetaDeCredito()) {
+            this.tarjeta = tarjetaCredito;
+            this.cuenta = null;
+        } else {
+            this.tarjeta = null;
+            this.cuenta = nuevaCuenta;
+        }
+    }
+
+    /**
      * "Borrá lo último que cargué": queda CANCELADO (no cuenta, pero queda el registro). Una juntada o una cuota
      * tienen su propio camino (dar por perdida, cancelar el plan).
      */

@@ -16,13 +16,15 @@ import org.slf4j.LoggerFactory;
 import ar.gastito.bot.Tarjetas.Campo;
 import ar.gastito.interpretacion.Montos;
 import ar.gastito.interpretacion.ResolvedorFechas;
+import ar.gastito.movimiento.EstadoMovimiento;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoNoPendienteException;
 import ar.gastito.movimiento.MovimientoService;
 
 /**
  * La tarjeta de un gasto esperando que el usuario escriba (o diga) el valor de un campo: el monto que falta, o el
- * monto, la fecha o la descripción desde ✏️ Editar. Un texto se aplica directo; un audio se propone primero.
+ * monto, la fecha o la descripción desde ✏️ Editar. Un texto se aplica directo; un audio se propone primero. Un gasto
+ * que se guardó solo se edita igual, y su tarjeta vuelve a ser la de "✅ Guardado".
  */
 class EdicionDeCampos {
 
@@ -59,18 +61,20 @@ class EdicionDeCampos {
     private final FormatoMensajes formato;
     private final ResolvedorFechas fechas;
     private final Clock clock;
+    private final GuardadoAutomatico guardado;
 
     /** Por chat: el campo de qué tarjeta espera que el usuario escriba (o diga) el valor nuevo. */
     private final Map<Long, Espera> esperas = new ConcurrentHashMap<>();
 
     EdicionDeCampos(MovimientoService movimientos, ConversacionJuntadas juntadas, Tarjetas tarjetas,
-            FormatoMensajes formato, ResolvedorFechas fechas, Clock clock) {
+            FormatoMensajes formato, ResolvedorFechas fechas, Clock clock, GuardadoAutomatico guardado) {
         this.movimientos = movimientos;
         this.juntadas = juntadas;
         this.tarjetas = tarjetas;
         this.formato = formato;
         this.fechas = fechas;
         this.clock = clock;
+        this.guardado = guardado;
     }
 
     /** Una tarjeta nueva sin monto: queda esperando que lo escriba (todavía no se sabe en qué mensaje está). */
@@ -107,7 +111,7 @@ class EdicionDeCampos {
         if (espera.mensajeId() != null) {
             acciones.add(principal(chatId, espera.mensajeId(), m));
         } else {
-            acciones.add(Accion.Enviar.tarjeta(tarjetas.pendiente(m), tarjetas.principal(m), m.getId()));
+            acciones.add(Accion.Enviar.tarjeta(tarjetas.actual(m), teclado(m), m.getId()));
         }
         return Optional.of(acciones);
     }
@@ -120,7 +124,7 @@ class EdicionDeCampos {
         }
         Movimiento m;
         try {
-            m = pendiente(espera.movimientoId());
+            m = editable(espera.movimientoId());
         } catch (MovimientoNoPendienteException | NoSuchElementException e) {
             return Optional.empty();
         }
@@ -158,14 +162,71 @@ class EdicionDeCampos {
     }
 
     private Movimiento aplicar(long movimientoId, Valor valor) {
-        return switch (valor) {
-            // En una juntada, el monto de la tarjeta es el total pagado: se reparte de nuevo.
-            case Valor.Monto v -> juntadas.esJuntada(movimientoId)
-                    ? juntadas.cambiarTotal(movimientoId, v.monto())
-                    : movimientos.cambiarMonto(movimientoId, v.monto());
-            case Valor.Fecha v -> movimientos.cambiarFechaHora(movimientoId, v.fechaHora());
-            case Valor.Descripcion v -> movimientos.cambiarDescripcion(movimientoId, v.descripcion());
-        };
+        try {
+            return switch (valor) {
+                // En una juntada, el monto de la tarjeta es el total pagado: se reparte de nuevo.
+                case Valor.Monto v -> juntadas.esJuntada(movimientoId)
+                        ? juntadas.cambiarTotal(movimientoId, v.monto())
+                        : movimientos.cambiarMonto(movimientoId, v.monto());
+                case Valor.Fecha v -> movimientos.cambiarFechaHora(movimientoId, v.fechaHora());
+                case Valor.Descripcion v -> movimientos.cambiarDescripcion(movimientoId, v.descripcion());
+            };
+        } catch (MovimientoNoPendienteException e) {
+            Movimiento m = siGuardado(e);
+            return switch (valor) {
+                case Valor.Monto v -> editarGuardado(m, v.monto(), m.getDescripcion(), m.getFechaHora(),
+                        m.getCategoria().getId(), idMedio(m));
+                case Valor.Fecha v -> editarGuardado(m, m.getMonto(), m.getDescripcion(), v.fechaHora(),
+                        m.getCategoria().getId(), idMedio(m));
+                case Valor.Descripcion v -> editarGuardado(m, m.getMonto(), v.descripcion(), m.getFechaHora(),
+                        m.getCategoria().getId(), idMedio(m));
+            };
+        }
+    }
+
+    /** 🏷 Categoría desde la tarjeta, pendiente o guardada sola. */
+    Movimiento elegirCategoria(long id, long categoriaId) {
+        try {
+            return movimientos.elegirCategoria(id, categoriaId);
+        } catch (MovimientoNoPendienteException e) {
+            Movimiento m = siGuardado(e);
+            return editarGuardado(m, m.getMonto(), m.getDescripcion(), m.getFechaHora(), categoriaId, idMedio(m));
+        }
+    }
+
+    /** 💳 Medio de pago desde la tarjeta, pendiente o guardada sola. @param medioPagoId null es sin medio de pago */
+    Movimiento cambiarMedioPago(long id, Long medioPagoId) {
+        try {
+            return movimientos.cambiarMedioPago(id, medioPagoId);
+        } catch (MovimientoNoPendienteException e) {
+            Movimiento m = siGuardado(e);
+            return editarGuardado(m, m.getMonto(), m.getDescripcion(), m.getFechaHora(), m.getCategoria().getId(),
+                    medioPagoId);
+        }
+    }
+
+    /** El gasto ya no está pendiente: si se guardó, se edita igual; si se canceló, no. */
+    private static Movimiento siGuardado(MovimientoNoPendienteException e) {
+        if (e.getMovimiento().getEstado() != EstadoMovimiento.CONFIRMADO) {
+            throw e;
+        }
+        return e.getMovimiento();
+    }
+
+    /** Un gasto guardado se edita entero: con lo que ya tenía y el dato nuevo. */
+    private Movimiento editarGuardado(Movimiento m, BigDecimal monto, String descripcion, LocalDateTime fechaHora,
+            Long categoriaId, Long medioPagoId) {
+        return movimientos.editar(m.getId(), monto, descripcion, fechaHora, categoriaId, medioPagoId,
+                m.getCuenta() == null ? null : m.getCuenta().getId());
+    }
+
+    private static Long idMedio(Movimiento m) {
+        return m.getMedioPago() == null ? null : m.getMedioPago().getId();
+    }
+
+    /** Los botones de la tarjeta según cómo está: pendiente, o guardada sola. */
+    private Teclado teclado(Movimiento m) {
+        return m.getEstado() == EstadoMovimiento.CONFIRMADO ? guardado.teclado(m) : tarjetas.principal(m);
     }
 
     /** Vuelve la tarjeta que esperaba un valor a su estado normal. */
@@ -175,8 +236,8 @@ class EdicionDeCampos {
         }
         try {
             Movimiento m = movimientos.buscar(espera.movimientoId());
-            if (m.isPendiente()) {
-                return List.of(new Accion.Editar(espera.mensajeId(), tarjetas.pendiente(m), tarjetas.principal(m)));
+            if (m.getEstado() != EstadoMovimiento.CANCELADO) {
+                return List.of(new Accion.Editar(espera.mensajeId(), tarjetas.actual(m), teclado(m)));
             }
         } catch (NoSuchElementException e) {
             log.debug("La tarjeta a restaurar ya no existe: {}", espera.movimientoId());
@@ -187,14 +248,20 @@ class EdicionDeCampos {
     /** Aplica el valor que se entendió de un audio y la tarjeta vuelve a su estado normal. */
     List<Accion> aplicarPropuesta(long chatId, int mensajeId, long id, Espera espera) {
         if (espera == null || espera.propuesta() == null || espera.movimientoId() != id) {
-            return List.of(principal(chatId, mensajeId, pendiente(id)),
+            return List.of(principal(chatId, mensajeId, editable(id)),
                     new Accion.Avisar("Ese cambio ya no está pendiente"));
         }
         return List.of(principal(chatId, mensajeId, aplicar(id, espera.propuesta())), new Accion.Avisar("✅ Aplicado"));
     }
 
-    /** La tarjeta en su estado normal. Si todavía falta el monto, queda esperando que el usuario lo escriba. */
+    /**
+     * La tarjeta en su estado normal (la de "✅ Guardado" si se guardó sola). Si todavía falta el monto, queda
+     * esperando que el usuario lo escriba.
+     */
     Accion.Editar principal(long chatId, int mensajeId, Movimiento m) {
+        if (m.getEstado() == EstadoMovimiento.CONFIRMADO) {
+            return guardado.tarjeta(mensajeId, m);
+        }
         if (m.getMonto() == null) {
             esperas.put(chatId, new Espera(m.getId(), Campo.MONTO, mensajeId));
             return new Accion.Editar(mensajeId, tarjetas.pidiendoMontoFaltante(m), tarjetas.principal(m));
@@ -204,7 +271,7 @@ class EdicionDeCampos {
 
     /** ✏️ Editar → un campo: la tarjeta lo pide y queda esperando el valor. */
     List<Accion> pedir(long chatId, int mensajeId, long id, Campo campo) {
-        Movimiento m = pendiente(id);
+        Movimiento m = editable(id);
         esperas.put(chatId, new Espera(id, campo, mensajeId));
         return List.of(new Accion.Editar(mensajeId, tarjetas.pidiendo(m, campo), tarjetas.soloVolver(id)));
     }
@@ -212,6 +279,15 @@ class EdicionDeCampos {
     Movimiento pendiente(long id) {
         Movimiento m = movimientos.buscar(id);
         if (!m.isPendiente()) {
+            throw new MovimientoNoPendienteException(m);
+        }
+        return m;
+    }
+
+    /** Pendiente, o ya guardado (✏️ Editar sobre uno que se guardó solo). Uno cancelado ya no se edita. */
+    Movimiento editable(long id) {
+        Movimiento m = movimientos.buscar(id);
+        if (m.getEstado() == EstadoMovimiento.CANCELADO) {
             throw new MovimientoNoPendienteException(m);
         }
         return m;

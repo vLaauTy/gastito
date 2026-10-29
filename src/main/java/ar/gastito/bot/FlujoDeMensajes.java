@@ -75,13 +75,15 @@ class FlujoDeMensajes {
     private final ComandosSueldo comandosSueldo;
     private final EdicionDeCampos edicion;
     private final ComandosBot comandos;
+    private final GuardadoAutomatico guardado;
 
     FlujoDeMensajes(InterpretadorService interpretador, MovimientoService movimientos, RegistroUsoIa usoIa,
             Tarjetas tarjetas, FormatoMensajes formato, ComandosIngreso comandosIngreso, ConsultaService consultas,
             FormatoConsulta formatoConsulta, ConversacionRepetidos repetidos, ConversacionJuntadas juntadas,
             ConversacionFijos fijos, ConversacionAltaFijo altaFijo, PedidosNaturales naturales,
             GastoFijoService gastosFijos, ConversacionVarios varios, ConversacionCuotas cuotas,
-            ComandosSueldo comandosSueldo, EdicionDeCampos edicion, ComandosBot comandos) {
+            ComandosSueldo comandosSueldo, EdicionDeCampos edicion, ComandosBot comandos,
+            GuardadoAutomatico guardado) {
         this.interpretador = interpretador;
         this.movimientos = movimientos;
         this.usoIa = usoIa;
@@ -101,6 +103,7 @@ class FlujoDeMensajes {
         this.comandosSueldo = comandosSueldo;
         this.edicion = edicion;
         this.comandos = comandos;
+        this.guardado = guardado;
     }
 
     /** Lo que diga el mensaje (un gasto, un ingreso, un fijo, una pregunta, una corrección…), interpretado. */
@@ -108,9 +111,9 @@ class FlujoDeMensajes {
         boolean audio = origen == Origen.AUDIO;
         List<String> partes = DivisorDeGastos.separar(texto);
         if (partes.size() > 1) {
-            Optional<Accion> varios = intentarVarios(partes, origen, texto, audio);
+            Optional<List<Accion>> varios = intentarVarios(partes, origen, texto, audio);
             if (varios.isPresent()) {
-                return List.of(varios.get());
+                return varios.get();
             }
         }
         InterpretadorService.Resultado resultado;
@@ -228,8 +231,10 @@ class FlujoDeMensajes {
      * Varios gastos separados por {@link DivisorDeGastos}: se interpreta cada parte por separado (sin guardar
      * nada) y, solo si todas resultan un gasto con monto, se crean los pendientes y se vinculan a su fijo si
      * corresponde. Si alguna parte no es un gasto claro, se cae al camino de un solo gasto con el texto completo.
+     * Si todos se pueden guardar solos (ninguno dudoso ni repetido), se guardan y queda una tarjeta por gasto; si
+     * no, la tarjeta combinada para confirmarlos.
      */
-    private Optional<Accion> intentarVarios(List<String> partes, Origen origen, String textoCompleto,
+    private Optional<List<Accion>> intentarVarios(List<String> partes, Origen origen, String textoCompleto,
             boolean audio) {
         List<InterpretadorService.Interpretado> interpretados = new ArrayList<>();
         for (String parte : partes) {
@@ -253,7 +258,15 @@ class FlujoDeMensajes {
             }
             creados.add(m);
         }
-        return Optional.of(varios.tarjeta(creados, audio ? escuche(textoCompleto) : ""));
+        String prefijo = audio ? escuche(textoCompleto) : "";
+        if (creados.stream().allMatch(m -> guardado.corresponde(m) && repetidos.siEsRepetido(m).isEmpty())) {
+            List<Accion> guardados = new ArrayList<>();
+            for (Movimiento m : creados) {
+                guardados.add(guardado.guardar(m, guardados.isEmpty() ? prefijo : ""));
+            }
+            return Optional.of(guardados);
+        }
+        return Optional.of(List.of(varios.tarjeta(creados, prefijo)));
     }
 
     private Movimiento crearGasto(InterpretadorService.Interpretado i, Origen origen, String texto) {
@@ -271,10 +284,14 @@ class FlujoDeMensajes {
         return m;
     }
 
-    /** La tarjeta de un gasto recién creado con monto: la de siempre, o la de "¿ya lo tenías registrado?". */
+    /**
+     * La tarjeta de un gasto recién creado con monto: la de "¿ya lo tenías registrado?", "✅ Guardado" si es claro
+     * y se guardó solo, o la de siempre para confirmarlo.
+     */
     Accion.Enviar tarjetaNueva(Movimiento m) {
         return fijos.siActualizaUnEstimado(m)
                 .or(() -> repetidos.siEsRepetido(m))
+                .or(() -> guardado.corresponde(m) ? Optional.of(guardado.guardar(m, "")) : Optional.empty())
                 .orElseGet(() -> Accion.Enviar.tarjeta(tarjetas.pendiente(m)
                         + (m.getGastoFijoId() == null ? "" : fijos.avisoYaCargado(m)), tarjetas.principal(m),
                         m.getId()));

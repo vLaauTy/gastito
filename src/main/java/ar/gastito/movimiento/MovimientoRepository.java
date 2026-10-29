@@ -163,6 +163,11 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
     @Query(nativeQuery = true, value = "DELETE FROM movimiento WHERE plan_cuotas_id = :plan AND fecha_hora > :hasta")
     int borrarCuotasFuturas(@Param("plan") Long planCuotasId, @Param("hasta") LocalDateTime hasta);
 
+    /** Antes de borrar un movimiento: el uso de la IA que lo interpretó queda, sin el vínculo. */
+    @Modifying
+    @Query(nativeQuery = true, value = "UPDATE uso_ia SET movimiento_id = NULL WHERE movimiento_id = :id")
+    int desvincularUsoIa(@Param("id") Long movimientoId);
+
     // --- Ingresos ---
 
     @EntityGraph(attributePaths = {"cuenta", "medioPago"})

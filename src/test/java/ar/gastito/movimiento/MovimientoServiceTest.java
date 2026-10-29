@@ -299,6 +299,95 @@ class MovimientoServiceTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 
+    // --- Editar y borrar lo ya guardado ---
+
+    @Test
+    void editarCambiaTodoEnUnGastoGuardado() {
+        Movimiento m = confirmado(categoria("Kiosco"), "1500", AHORA);
+        MedioPago credito = medios.findAll().stream().filter(MedioPago::esTarjetaDeCredito).findFirst().orElseThrow();
+        Long galicia = entityManager.getEntityManager()
+                .createQuery("select c.id from Cuenta c where c.nombre = 'Galicia'", Long.class).getSingleResult();
+
+        Movimiento editado = service.editar(m.getId(), new BigDecimal("1800"), "  Alfajor  ", AHORA.minusDays(1),
+                categoria("Salidas").getId(), credito.getId(), galicia);
+
+        assertThat(editado.getEstado()).isEqualTo(EstadoMovimiento.CONFIRMADO);
+        assertThat(editado.getMonto()).isEqualByComparingTo("1800");
+        assertThat(editado.getDescripcion()).isEqualTo("Alfajor");
+        assertThat(editado.getCategoria().getNombre()).isEqualTo("Salidas");
+        // Con crédito, la cuenta queda vacía: es la que paga el resumen.
+        assertThat(editado.getTarjeta()).isNotNull();
+        assertThat(editado.getCuenta()).isNull();
+
+        Movimiento sinMedio = service.editar(m.getId(), new BigDecimal("1800"), null, AHORA,
+                categoria("Salidas").getId(), null, galicia);
+        assertThat(sinMedio.getMedioPago()).isNull();
+        assertThat(sinMedio.getTarjeta()).isNull();
+        assertThat(sinMedio.getCuenta().getNombre()).isEqualTo("Galicia");
+    }
+
+    @Test
+    void editarNoAceptaDatosInvalidos() {
+        Long id = confirmado(categoria("Kiosco"), "1500", AHORA).getId();
+        Long kiosco = categoria("Kiosco").getId();
+
+        assertThatThrownBy(() -> service.editar(id, BigDecimal.ZERO, null, AHORA, kiosco, null, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.editar(id, BigDecimal.TEN, null, AHORA, null, null, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.editar(id, BigDecimal.TEN, null, AHORA, 9999L, null, null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void elMontoDeUnaJuntadaNoSeEditaSuelto() {
+        Movimiento m = pendiente(categoria("Salidas"), "30000", AHORA);
+        m.prepararJuntada(new BigDecimal("5000"));
+        service.confirmar(m.getId());
+        Long salidas = categoria("Salidas").getId();
+
+        assertThatThrownBy(() -> service.editar(m.getId(), new BigDecimal("6000"), "test", AHORA, salidas, null,
+                null)).isInstanceOf(MovimientoEspecialException.class);
+        // Lo demás sí.
+        assertThat(service.editar(m.getId(), new BigDecimal("5000"), "Asado", AHORA, salidas, null, null)
+                .getDescripcion()).isEqualTo("Asado");
+    }
+
+    @Test
+    void borrarSacaElGastoConSusProductosYDejaElUsoDeLaIa() {
+        MovimientoInterpretado interpretado = MovimientoInterpretado.conCategoria(new BigDecimal("8050"), "Día",
+                categoria("Supermercado"), null, null, null, AHORA);
+        Movimiento m = service.crearPendienteDeTicket(interpretado, DatosTicket.de("Día", List.of(
+                new ItemTicket("Leche", null, null, new BigDecimal("8050")))), null);
+        service.confirmar(m.getId());
+        entityManager.getEntityManager().createNativeQuery("""
+                INSERT INTO uso_ia (fecha_hora, modelo, tokens_entrada, tokens_salida, proposito, costo_usd, movimiento_id)
+                VALUES (CURRENT_TIMESTAMP, 'claude-haiku-5-5', 10, 5, 'TICKET', 0.000001, :id)""")
+                .setParameter("id", m.getId()).executeUpdate();
+        entityManager.flush();
+        entityManager.clear();
+
+        service.borrar(m.getId());
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThatThrownBy(() -> service.buscar(m.getId())).isInstanceOf(java.util.NoSuchElementException.class);
+        assertThat(entityManager.getEntityManager()
+                .createNativeQuery("SELECT COUNT(*) FROM movimiento_item WHERE movimiento_id = " + m.getId())
+                .getSingleResult()).isEqualTo(0L);
+        assertThat(entityManager.getEntityManager()
+                .createNativeQuery("SELECT COUNT(*) FROM uso_ia WHERE movimiento_id IS NULL").getSingleResult())
+                .isEqualTo(1L);
+    }
+
+    @Test
+    void unaJuntadaNoSeBorraComoUnGastoComun() {
+        Movimiento juntada = pendiente(categoria("Salidas"), "30000", AHORA);
+        juntada.prepararJuntada(new BigDecimal("5000"));
+
+        assertThatThrownBy(() -> service.borrar(juntada.getId())).isInstanceOf(MovimientoEspecialException.class);
+    }
+
     private Movimiento pendiente(Categoria categoria, String monto, LocalDateTime fecha) {
         MovimientoInterpretado interpretado = MovimientoInterpretado.conCategoria(new BigDecimal(monto), "test",
                 categoria, null, null, null, fecha);

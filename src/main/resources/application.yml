@@ -40,6 +40,12 @@ gastito:
     token: ${TELEGRAM_BOT_TOKEN:}
     username: ${TELEGRAM_BOT_USERNAME:}
     allowed-user-id: ${TELEGRAM_ALLOWED_USER_ID:0}
+  bot:
+    # Un gasto claro (monto, categoría segura, sin repetidos, juntadas, cuotas ni fijos) se guarda solo y la tarjeta
+    # queda con ✏️ Editar y ↩️ Deshacer. En false, todo se confirma con el botón Guardar.
+    guardado-automatico: true
+    # Un gasto de más que esto se confirma igual, aunque esté claro.
+    monto-maximo-automatico: 100000
   ia:
     api-key: ${ANTHROPIC_API_KEY:}
     url: https://api.anthropic.com

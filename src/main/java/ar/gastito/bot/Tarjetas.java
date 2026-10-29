@@ -61,6 +61,9 @@ public class Tarjetas {
     /** Pagó menos de lo que debía: queda debiendo la diferencia, o se da por saldado. */
     static final String DEVOLUCION_QUEDA_DEBIENDO = "jq";
     static final String DEVOLUCION_SALDADO = "js";
+    /** Un gasto que se guardó solo: deshacerlo (se borra) o elegir el medio de pago con un toque. */
+    static final String DESHACER = "du";
+    static final String MEDIO_RAPIDO = "gm";
     /** Id de medio de pago que significa "sin medio de pago". */
     static final long SIN_MEDIO = 0;
 
@@ -143,9 +146,9 @@ public class Tarjetas {
         return pendiente(m) + "\n\n✏️ <b>¿Cuánto fue?</b> Escribime el monto.";
     }
 
-    /** Pendiente esperando que el usuario escriba el valor nuevo de un campo. */
+    /** Pendiente (o guardado solo) esperando que el usuario escriba el valor nuevo de un campo. */
     public String pidiendo(Movimiento m, Campo campo) {
-        return pendiente(m) + "\n\n" + campo.pedido;
+        return actual(m) + "\n\n" + campo.pedido;
     }
 
     /**
@@ -154,7 +157,7 @@ public class Tarjetas {
      * @param valor el valor ya formateado ("$3.700", "Ayer 21:30")
      */
     public String propuesta(Movimiento m, String escuchado, Campo campo, String valor) {
-        return pendiente(m) + "\n\n🎙 Escuché: \"" + html(escuchado) + "\" → <b>" + campo.etiqueta + ": "
+        return actual(m) + "\n\n🎙 Escuché: \"" + html(escuchado) + "\" → <b>" + campo.etiqueta + ": "
                 + html(valor) + "</b>";
     }
 
@@ -166,6 +169,45 @@ public class Tarjetas {
                         ? " cobraste <b>" + formato.pesos(totalMes) + "</b> en total."
                         : " llevás <b>" + formato.pesos(totalMes) + "</b> en "
                                 + html(m.getCategoria().getNombreConEmoji()) + ".");
+    }
+
+    /**
+     * Un gasto que se guardó solo, en dos renglones: "✅ Guardado · $3.700 · 🍬 Kiosco · 💵 Efectivo" y la
+     * descripción (de un ticket, con cuántos productos).
+     */
+    public String guardadoAutomatico(Movimiento m) {
+        Categoria c = m.getCategoria();
+        String linea = "✅ <b>Guardado</b> · <b>" + formato.pesos(m.getMonto()) + "</b> · "
+                + (c == null ? "🏷 Sin categoría" : html(c.getNombreConEmoji())) + " · " + medioCorto(m);
+        String detalle = m.getDescripcion() == null || m.getDescripcion().isBlank() ? "" : html(m.getDescripcion());
+        long productos = m.getItems().stream().filter(i -> !i.isDescuento()).count();
+        if (productos > 0) {
+            detalle += (detalle.isEmpty() ? "" : " · ") + productos + (productos == 1 ? " producto" : " productos");
+        }
+        return escuchado(m) + linea + (detalle.isEmpty() ? "" : "\n" + detalle);
+    }
+
+    /** "💵 Efectivo", "💳 Débito (Galicia)" o "💳 <i>Sin especificar</i>". */
+    private static String medioCorto(Movimiento m) {
+        if (m.getMedioPago() == null && m.getCuenta() == null) {
+            return "💳 <i>Sin especificar</i>";
+        }
+        boolean efectivo = m.getMedioPago() != null && m.getMedioPago().isEfectivo();
+        return (efectivo ? "💵 " : "💳 ") + html(FormatoMensajes.medio(m.getMedioPago(), m.getCuenta()));
+    }
+
+    /** ↩️ Deshacer: el gasto se borró. */
+    public String deshecho(Movimiento m) {
+        Categoria c = m.getCategoria();
+        return "↩️ <b>Deshecho</b> · <s>" + formato.pesos(m.getMonto()) + "</s>"
+                + (c == null ? "" : " · " + html(c.getNombreConEmoji()))
+                + (m.getDescripcion() == null ? "" : "\n" + html(m.getDescripcion()))
+                + "\nNo quedó guardado.";
+    }
+
+    /** La tarjeta de un gasto como está ahora: pendiente, o guardado solo (con los datos en el lugar). */
+    public String actual(Movimiento m) {
+        return m.getEstado() == EstadoMovimiento.CONFIRMADO ? guardadoAutomatico(m) : pendiente(m);
     }
 
     public String cancelado(Movimiento m) {
@@ -469,6 +511,38 @@ public class Tarjetas {
             t.fila(boton("👥 Nombres", JUNTADA_NOMBRES, id), boton("💲 La parte de alguien", JUNTADA_PARTE, id));
         }
         return t.build();
+    }
+
+    /**
+     * Un gasto que se guardó solo: ✏️ Editar y ↩️ Deshacer. Si no se sabe con qué se pagó, arriba una fila para
+     * elegirlo con un toque.
+     *
+     * @param medios los medios de pago del catálogo, para la fila rápida
+     */
+    public Teclado guardadoAutomatico(Movimiento m, List<MedioPago> medios) {
+        long id = m.getId();
+        Teclado.Constructor t = Teclado.constructor();
+        if (m.getMedioPago() == null && m.getCuenta() == null && !medios.isEmpty()) {
+            t.fila(medios.stream().map(mp -> boton(medioRapido(mp), MEDIO_RAPIDO, id, mp.getId()))
+                    .toArray(Teclado.Boton[]::new));
+        }
+        return t.fila(boton("✏️ Editar", EDITAR, id), boton("↩️ Deshacer", DESHACER, id)).build();
+    }
+
+    /** El nombre corto de un medio para la fila rápida: "💵 Efectivo", "💳 Débito", "💳 Crédito", "🏦 Transf.", "QR". */
+    static String medioRapido(MedioPago mp) {
+        String nombre = mp.getNombre();
+        String minusculas = nombre.toLowerCase(java.util.Locale.ROOT);
+        if (mp.isEfectivo()) {
+            return "💵 " + nombre;
+        }
+        if (mp.esTarjetaDeCredito()) {
+            return "💳 Crédito";
+        }
+        if (minusculas.startsWith("transf")) {
+            return "🏦 Transf.";
+        }
+        return minusculas.startsWith("déb") || minusculas.startsWith("deb") ? "💳 " + nombre : nombre;
     }
 
     // --- Juntadas ---

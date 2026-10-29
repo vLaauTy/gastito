@@ -45,7 +45,7 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
 
 1. **Seguridad del bot:** el bot ignora en silencio cualquier mensaje cuyo `from.id` no sea `TELEGRAM_ALLOWED_USER_ID`. Los bots de Telegram son públicos.
 2. **La IA interpreta, no calcula.** Totales, sumas y comparaciones se calculan con SQL o Java sobre la base. La IA solo extrae datos de lo que manda el usuario (monto, descripción, categoría, medio de pago) y redacta respuestas.
-3. **Confirmar antes de guardar.** Todo movimiento interpretado se muestra al usuario con botones (Guardar / Editar / Cancelar) antes de persistirse.
+3. **Los gastos claros se guardan solos y se pueden deshacer o editar; se pide confirmación solo cuando hay una duda real** (`bot.GuardadoAutomatico`). Se guarda solo un gasto simple de texto, audio o ticket con monto claro y categoría de confianza alta: tarjeta "✅ Guardado" con ✏️ Editar y ↩️ Deshacer (borra el movimiento, en cualquier momento), y si no se dijo el medio de pago, una fila para elegirlo con un toque. Se confirma con Guardar / Editar / Cancelar: categoría dudosa, compra repetida, juntada, cuotas, fijo, ingreso, varios con alguno dudoso, ticket que no cierra o que dice solo "TARJETA", y más de `gastito.bot.monto-maximo-automatico` ($100.000). Con `gastito.bot.guardado-automatico: false`, todo se confirma.
 4. **Plata siempre en `BigDecimal`**, moneda ARS por defecto. Nunca `double`.
 5. **Tipos de movimiento** (una sola tabla `movimiento` con un campo `tipo`):
    - `GASTO`: cuenta como gasto.
