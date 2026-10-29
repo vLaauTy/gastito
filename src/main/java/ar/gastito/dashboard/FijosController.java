@@ -28,6 +28,7 @@ import ar.gastito.catalogo.MedioPago;
 import ar.gastito.fijo.Frecuencia;
 import ar.gastito.fijo.GastoFijoService;
 import ar.gastito.fijo.PagoFijoService;
+import ar.gastito.fijo.ResumenFijos;
 import ar.gastito.fijo.VistaFijo;
 import ar.gastito.movimiento.Origen;
 
@@ -39,12 +40,15 @@ public class FijosController {
     private final GastoFijoService fijos;
     private final PagoFijoService pagos;
     private final CatalogoService catalogos;
+    private final ResumenFijos resumen;
     private final Clock clock;
 
-    public FijosController(GastoFijoService fijos, PagoFijoService pagos, CatalogoService catalogos, Clock clock) {
+    public FijosController(GastoFijoService fijos, PagoFijoService pagos, CatalogoService catalogos,
+            ResumenFijos resumen, Clock clock) {
         this.fijos = fijos;
         this.pagos = pagos;
         this.catalogos = catalogos;
+        this.resumen = resumen;
         this.clock = clock;
     }
 
@@ -55,9 +59,12 @@ public class FijosController {
             boolean proponerMonto, Long movimientoId, boolean estimado, BigDecimal aproximado) {
     }
 
-    /** @param estimado cuánto de lo cargado es monto estimado (tildado con "Pagado" y sin corregir) */
+    /**
+     * @param estimado cuánto de lo cargado es monto estimado (tildado con "Pagado" y sin corregir)
+     * @param resumen  el estimado del mes (pagado + falta), las cuotas y lo comprometido sobre los ingresos
+     */
     public record Checklist(String mes, List<ChecklistItem> items, BigDecimal cargado, BigDecimal estimado,
-            int faltan) {
+            int faltan, ResumenFijos.ResumenDelMes resumen) {
     }
 
     @GetMapping("/checklist")
@@ -74,7 +81,7 @@ public class FijosController {
                         i.fecha(), i.montoAnterior(), i.porcentaje(), i.vencimiento(), i.proponerMonto(),
                         i.movimientoId(), i.estimado(), i.aproximado()))
                 .toList();
-        return new Checklist(m.toString(), dto, cargado, estimado, faltan);
+        return new Checklist(m.toString(), dto, cargado, estimado, faltan, resumen.delMes(m, items));
     }
 
     public record CargaRequest(BigDecimal monto, LocalDate fecha) {

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import ar.gastito.fijo.GastoFijoService;
 import ar.gastito.fijo.PagoFijoService;
 import ar.gastito.fijo.RecordatorioFijoService;
+import ar.gastito.fijo.ResumenFijos;
 import ar.gastito.fijo.VistaFijo;
 import ar.gastito.interpretacion.Montos;
 import ar.gastito.movimiento.Movimiento;
@@ -40,15 +41,17 @@ public class ConversacionFijos {
     private final FormatoMensajes formato;
     private final PagoFijoService pagos;
     private final RecordatorioFijoService recordatorios;
+    private final ResumenFijos resumen;
     private final Clock clock;
 
     public ConversacionFijos(GastoFijoService fijos, MovimientoService movimientos, FormatoMensajes formato,
-            PagoFijoService pagos, RecordatorioFijoService recordatorios, Clock clock) {
+            PagoFijoService pagos, RecordatorioFijoService recordatorios, ResumenFijos resumen, Clock clock) {
         this.fijos = fijos;
         this.movimientos = movimientos;
         this.formato = formato;
         this.pagos = pagos;
         this.recordatorios = recordatorios;
+        this.resumen = resumen;
         this.clock = clock;
     }
 
@@ -202,9 +205,8 @@ public class ConversacionFijos {
             return "📌 No tenés gastos fijos. Para agregar uno, contámelo: <i>agregá un fijo, el seguro de la moto, "
                     + "32 mil por mes con la tarjeta</i>.";
         }
-        StringBuilder sb = new StringBuilder("📋 <b>Fijos de " + formato.mes(mes) + "</b>");
-        BigDecimal cargado = BigDecimal.ZERO;
-        int faltan = 0;
+        StringBuilder sb = new StringBuilder(textoDeResumen(mes, resumen.delMes(mes, items)))
+                .append("\n\n📋 <b>Fijos de ").append(formato.mes(mes)).append("</b>");
         for (GastoFijoService.ItemChecklist item : items) {
             sb.append('\n');
             switch (item.estado()) {
@@ -216,7 +218,6 @@ public class ConversacionFijos {
                                 .append(item.porcentaje().stripTrailingZeros().toPlainString().replace('.', ','))
                                 .append("%)");
                     }
-                    cargado = cargado.add(item.monto());
                 }
                 case ESTE_MES_NO -> sb.append("➖ ").append(html(item.nombre())).append(": este mes no");
                 case FALTA -> {
@@ -225,13 +226,31 @@ public class ConversacionFijos {
                     if (item.montoAnterior() != null) {
                         sb.append(" (ref. ").append(formato.pesos(item.montoAnterior())).append(")");
                     }
-                    faltan++;
                 }
             }
         }
-        sb.append("\n\nCargado: ").append(formato.pesos(cargado));
-        if (faltan > 0) {
-            sb.append(" · Falta: ").append(faltan);
+        return sb.toString();
+    }
+
+    /**
+     * "📌 Estimado de octubre: $120.000", el desglose pagado / falta y las cuotas con lo comprometido. Todos los
+     * números vienen calculados de {@link ResumenFijos}.
+     */
+    String textoDeResumen(YearMonth mes, ResumenFijos.ResumenDelMes r) {
+        StringBuilder sb = new StringBuilder("📌 <b>Estimado de " + formato.mes(mes) + ": "
+                + formato.pesos(r.estimado()) + "</b>\n✅ Pagado " + formato.pesos(r.pagado()));
+        if (r.faltan() > 0) {
+            sb.append(" · ⏳ Falta ≈ ").append(formato.pesos(r.falta()));
+        }
+        if (r.sinMonto() > 0) {
+            sb.append(" · ").append(r.sinMonto()).append(" sin monto");
+        }
+        sb.append("\n🗂 ").append(r.cantidadCuotas() == 0 ? "Sin cuotas este mes"
+                : "Cuotas del mes " + formato.pesos(r.cuotas()) + " (" + r.cantidadCuotas()
+                        + (r.cantidadCuotas() == 1 ? " cuota)" : " cuotas)"));
+        sb.append(" · Comprometido <b>").append(formato.pesos(r.comprometido())).append("</b>");
+        if (r.porcentajeIngresos() != null) {
+            sb.append(" (").append(r.porcentajeIngresos()).append("% de tus ingresos)");
         }
         return sb.toString();
     }

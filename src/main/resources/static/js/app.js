@@ -1037,7 +1037,23 @@
     return i.montoAnterior != null ? `ref. ${pesos(i.montoAnterior)}` : '—';
   }
 
+  /** El estimado del mes en fijos y lo comprometido con las cuotas: todo viene calculado de la API. */
+  function resumenFijos(r) {
+    texto('#f-estimado', pesos(r.estimado));
+    $('#f-desglose').replaceChildren(...[
+      h('span', { class: 'positivo' }, `Pagado ${pesos(r.pagado)}`),
+      r.faltan > 0 ? h('span', {}, `Falta ≈ ${pesos(r.falta)}`) : null,
+      r.sinMonto > 0 ? h('span', { class: 'sin-especificar' }, `${r.sinMonto} sin monto`) : null,
+    ].filter(Boolean));
+    const cuotas = r.cantidadCuotas > 0
+      ? `Cuotas del mes ${pesos(r.cuotas)} (${r.cantidadCuotas} ${r.cantidadCuotas === 1 ? 'cuota' : 'cuotas'})`
+      : 'Sin cuotas este mes';
+    $('#f-comprometido').replaceChildren(`${cuotas} · Comprometido `, h('b', {}, pesos(r.comprometido)),
+      r.porcentajeIngresos != null ? ` (${r.porcentajeIngresos}% de tus ingresos)` : '');
+  }
+
   function vistaFijosChecklist(data) {
+    resumenFijos(data.resumen);
     texto('#f-cargado', pesos(data.cargado));
     texto('#f-cargado-nota', Number(data.estimado) > 0 ? `≈ ${pesos(data.estimado)} con monto estimado` : '');
     texto('#f-faltan', data.faltan);

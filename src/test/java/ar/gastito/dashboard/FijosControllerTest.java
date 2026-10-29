@@ -38,6 +38,7 @@ import ar.gastito.catalogo.Categoria;
 import ar.gastito.fijo.Frecuencia;
 import ar.gastito.fijo.GastoFijoService;
 import ar.gastito.fijo.PagoFijoService;
+import ar.gastito.fijo.ResumenFijos;
 import ar.gastito.fijo.VistaFijo;
 import ar.gastito.movimiento.Origen;
 
@@ -72,6 +73,9 @@ class FijosControllerTest {
     @MockitoBean
     CatalogoService catalogos;
 
+    @MockitoBean
+    ResumenFijos resumen;
+
     @Test
     void elChecklistTraeElTotalCargadoYLoQueFalta() throws Exception {
         GastoFijoService.ItemChecklist cargado = new GastoFijoService.ItemChecklist(1L, "Seguro", "🛡️",
@@ -81,9 +85,16 @@ class FijosControllerTest {
                 GastoFijoService.EstadoChecklist.FALTA, null, null, new BigDecimal("28000.00"), null,
                 LocalDate.of(2026, 10, 27), false, null, false, new BigDecimal("28000.00"));
         when(fijos.checklist(OCTUBRE)).thenReturn(List.of(cargado, falta));
+        when(resumen.delMes(OCTUBRE, List.of(cargado, falta))).thenReturn(new ResumenFijos.ResumenDelMes(
+                new BigDecimal("60900.00"), new BigDecimal("32900.00"), new BigDecimal("28000.00"), 1, 1, 0,
+                new BigDecimal("10000.00"), 1, new BigDecimal("70900.00"), new BigDecimal("200000.00"), 35));
 
         mvc.perform(get("/api/fijos/checklist").param("mes", "2026-10"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resumen.estimado").value(60900.00))
+                .andExpect(jsonPath("$.resumen.falta").value(28000.00))
+                .andExpect(jsonPath("$.resumen.comprometido").value(70900.00))
+                .andExpect(jsonPath("$.resumen.porcentajeIngresos").value(35))
                 .andExpect(jsonPath("$.mes").value("2026-10"))
                 .andExpect(jsonPath("$.cargado").value(32900.00))
                 .andExpect(jsonPath("$.faltan").value(1))

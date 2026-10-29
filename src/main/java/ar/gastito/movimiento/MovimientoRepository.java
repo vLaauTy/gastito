@@ -163,6 +163,19 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
     @Query(nativeQuery = true, value = "DELETE FROM movimiento WHERE plan_cuotas_id = :plan AND fecha_hora > :hasta")
     int borrarCuotasFuturas(@Param("plan") Long planCuotasId, @Param("hasta") LocalDateTime hasta);
 
+    /** Las cuotas guardadas con fecha en el período (las futuras se generan confirmadas al guardar la compra). */
+    @Query("""
+            select coalesce(sum(m.monto), 0) from Movimiento m
+            where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO and m.planCuotasId is not null
+              and m.fechaHora >= :desde and m.fechaHora < :hasta""")
+    BigDecimal totalCuotas(@Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta);
+
+    @Query("""
+            select count(m) from Movimiento m
+            where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO and m.planCuotasId is not null
+              and m.fechaHora >= :desde and m.fechaHora < :hasta""")
+    long cantidadCuotas(@Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta);
+
     /** Cancelar un plan desde una cuota: se borran esa cuota y las que siguen (con sus productos, por cascada). */
     @Modifying
     @Query(nativeQuery = true,

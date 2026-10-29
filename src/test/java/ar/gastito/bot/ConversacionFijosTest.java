@@ -24,6 +24,7 @@ import ar.gastito.fijo.Frecuencia;
 import ar.gastito.fijo.GastoFijoService;
 import ar.gastito.fijo.PagoFijoService;
 import ar.gastito.fijo.RecordatorioFijoService;
+import ar.gastito.fijo.ResumenFijos;
 import ar.gastito.fijo.VistaFijo;
 import ar.gastito.interpretacion.CatalogoDePrueba;
 import ar.gastito.movimiento.Movimiento;
@@ -42,15 +43,36 @@ class ConversacionFijosTest {
     private final MovimientoService movimientos = mock(MovimientoService.class);
     private final PagoFijoService pagos = mock(PagoFijoService.class);
     private final RecordatorioFijoService recordatorios = mock(RecordatorioFijoService.class);
+    private final ResumenFijos resumen = mock(ResumenFijos.class);
     private final ConversacionFijos conversacion = new ConversacionFijos(servicio, movimientos,
-            new FormatoMensajes(RELOJ), pagos, recordatorios, RELOJ);
+            new FormatoMensajes(RELOJ), pagos, recordatorios, resumen, RELOJ);
+
+    private static ResumenFijos.ResumenDelMes resumen(String estimado, String pagado, String falta, int faltan,
+            int sinMonto, String cuotas, int cantidadCuotas, String comprometido, Integer porcentaje) {
+        return new ResumenFijos.ResumenDelMes(new BigDecimal(estimado), new BigDecimal(pagado), new BigDecimal(falta),
+                1, faltan, sinMonto, new BigDecimal(cuotas), cantidadCuotas, new BigDecimal(comprometido),
+                porcentaje == null ? null : new BigDecimal("200000"), porcentaje);
+    }
 
     @BeforeEach
     void setUp() {
+        when(resumen.delMes(any(), any())).thenReturn(resumen("60900", "32900", "28000", 1, 0, "10000", 1, "70900",
+                35));
         when(catalogos.cargar()).thenReturn(new Catalogo(List.of(SEGUROS, CatalogoDePrueba.KIOSCO,
                 CatalogoDePrueba.OTROS), List.of(CatalogoDePrueba.CREDITO, CatalogoDePrueba.DEBITO), List.of(),
                 Optional.empty()));
         when(servicio.primerCobro(anyInt())).thenReturn(PRIMER_COBRO);
+    }
+
+    @Test
+    void elResumenDiceCuantosNoTienenMontoYSinIngresosNoDaPorcentaje() {
+        String texto = conversacion.textoDeResumen(YearMonth.of(2026, 10),
+                resumen("32900", "32900", "0", 2, 2, "0", 0, "32900", null));
+
+        assertThat(texto).isEqualTo("""
+                📌 <b>Estimado de octubre 2026: $32.900</b>
+                ✅ Pagado $32.900 · ⏳ Falta ≈ $0 · 2 sin monto
+                🗂 Sin cuotas este mes · Comprometido <b>$32.900</b>""");
     }
 
     private static List<String> datos(Teclado t) {
@@ -74,12 +96,15 @@ class ConversacionFijosTest {
         Accion.Enviar lista = (Accion.Enviar) conversacion.lista().get(0);
 
         assertThat(lista.html()).isEqualTo("""
+                📌 <b>Estimado de octubre 2026: $60.900</b>
+                ✅ Pagado $32.900 · ⏳ Falta ≈ $28.000
+                🗂 Cuotas del mes $10.000 (1 cuota) · Comprometido <b>$70.900</b> (35% de tus ingresos)
+
                 📋 <b>Fijos de octubre 2026</b>
                 ✅ Seguro: $32.900 (+9,7%)
                 ⏳ Luz: vence el 27 (ref. $28.000)
-                ➖ Gimnasio: este mes no
-
-                Cargado: $32.900 · Falta: 1""");
+                ➖ Gimnasio: este mes no""");
+        verify(resumen).delMes(YearMonth.of(2026, 10), List.of(cargado, falta, esteMesNo));
         assertThat(datos(lista.teclado())).containsExactly("fe:8");
 
         when(servicio.checklist(YearMonth.of(2026, 10))).thenReturn(List.of(cargado));
@@ -270,6 +295,6 @@ class ConversacionFijosTest {
         when(servicio.checklist(YearMonth.of(2026, 10))).thenReturn(List.of(estimado));
         when(servicio.cobrosPendientes()).thenReturn(List.of());
 
-        assertThat(((Accion.Enviar) conversacion.lista().get(0)).html()).contains("✅ Luz: ≈ $85.000 · estimado\n");
+        assertThat(((Accion.Enviar) conversacion.lista().get(0)).html()).endsWith("✅ Luz: ≈ $85.000 · estimado");
     }
 }

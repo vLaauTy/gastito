@@ -406,3 +406,8 @@ tr[hidden] { display: none !important; }
   td.acciones .menu-acciones button { flex: 1; width: auto; justify-content: center; border-color: var(--button-border); background: var(--surface); }
   .toast-accion { min-height: 40px; }
 }
+
+/* --- Fijos: estimado del mes --- */
+.resumen-fijos .desglose { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; font-weight: 600; }
+.resumen-fijos .desglose .positivo { color: var(--ok); }
+.resumen-fijos .note b { color: var(--fg); }
