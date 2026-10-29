@@ -2,6 +2,8 @@ package ar.gastito.resumen;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
@@ -297,7 +299,22 @@ public class CalculoResumen {
             notas.add(juntadas + (juntadas == 1 ? " gasto es de una juntada" : " gastos son de juntadas")
                     + ": lo que te devuelvan todavía no se descuenta del total.");
         }
+        List<Movimiento> estimados = gastos.stream().filter(Movimiento::isMontoEstimado).toList();
+        if (!estimados.isEmpty()) {
+            String nombres = estimados.stream().map(m -> m.getDescripcion() == null ? "un fijo"
+                    : m.getDescripcion().toLowerCase(Locale.forLanguageTag("es-AR"))).distinct()
+                    .collect(Collectors.joining(", "));
+            notas.add("Quedaron con monto estimado: " + nombres + " (" + pesosArg(suma(estimados))
+                    + " del total es estimado). Si sabés el real, decímelo.");
+        }
         return notas;
+    }
+
+    /** "$170.000" o "$1.234,50", para las notas al pie (el resto de los números los formatea el bot). */
+    private static String pesosArg(BigDecimal monto) {
+        DecimalFormat formato = new DecimalFormat(monto.stripTrailingZeros().scale() > 0 ? "#,##0.00" : "#,##0",
+                DecimalFormatSymbols.getInstance(Locale.forLanguageTag("es-AR")));
+        return "$" + formato.format(monto);
     }
 
     private static DatosResumen.SinEspecificar sinEspecificar(List<Movimiento> gastos) {

@@ -249,6 +249,24 @@ class CalculoResumenTest {
     }
 
     @Test
+    void losFijosConMontoEstimadoSeCuentanYSeAclaraCuantoEsEstimado() {
+        Movimiento comun = Movimiento.pendiente(interpretado("Salidas", "9000", LUNES), Origen.TEXTO, "x",
+                LUNES.atStartOfDay());
+        Movimiento luz = Movimiento.pendiente(interpretado("Salidas", "85000", LUNES), Origen.DASHBOARD, null,
+                LUNES.atStartOfDay());
+        ReflectionTestUtils.setField(luz, "descripcion", "Luz");
+        ReflectionTestUtils.setField(luz, "montoEstimado", true);
+        Movimiento gas = Movimiento.pendiente(interpretado("Salidas", "40500.50", LUNES), Origen.DASHBOARD, null,
+                LUNES.atStartOfDay());
+        ReflectionTestUtils.setField(gas, "descripcion", "Gas");
+        ReflectionTestUtils.setField(gas, "montoEstimado", true);
+
+        assertThat(CalculoResumen.notas(List.of(comun, luz, gas))).containsExactly(
+                "Quedaron con monto estimado: luz, gas ($125.500,50 del total es estimado). Si sabés el real, "
+                        + "decímelo.");
+    }
+
+    @Test
     void sinJuntadasNoHayNotasAlPie() {
         assertThat(semana().notas()).isEmpty();
         assertThat(semana().pocosDatos()).isFalse();
