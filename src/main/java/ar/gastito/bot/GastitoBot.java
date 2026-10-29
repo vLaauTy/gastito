@@ -90,6 +90,7 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
         log.info("Bot de Telegram conectado y escuchando mensajes");
         ejecutar(SetMyCommands.builder().commands(List.of(
                 new BotCommand("hoy", "Gastos de hoy y el total"),
+                new BotCommand("disponible", "Cuánto te queda este mes"),
                 new BotCommand("mes", "Total del mes por categoría"),
                 new BotCommand("resumen", "Tu semana hasta hoy (/resumen mes: el mes)"),
                 new BotCommand("juntadas", "Quién te debe plata de las juntadas"),

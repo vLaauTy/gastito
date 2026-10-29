@@ -97,6 +97,7 @@ class ProcesadorMensajesTest {
     private final ConversacionFijos fijos = mock(ConversacionFijos.class);
     private final ConversacionAltaFijo altaFijo = mock(ConversacionAltaFijo.class);
     private final PedidosNaturales naturales = mock(PedidosNaturales.class);
+    private final ComandoDisponible disponible = mock(ComandoDisponible.class);
     private final ar.gastito.fijo.GastoFijoService gastosFijos = mock(ar.gastito.fijo.GastoFijoService.class);
     private final ConversacionVarios varios = mock(ConversacionVarios.class);
     private final ConversacionCuotas cuotas = mock(ConversacionCuotas.class);
@@ -118,7 +119,8 @@ class ProcesadorMensajesTest {
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
                 tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, resumenes,
                 new FormatoResumen(formato, new GraficoMes(formato), dashboard), consultas, new FormatoConsulta(formato),
-                repetidos, juntadas, fijos, altaFijo, naturales, gastosFijos, varios, cuotas, recibos, comandosSueldo,
+                repetidos, juntadas, fijos, altaFijo, naturales, disponible, gastosFijos, varios, cuotas, recibos,
+                comandosSueldo,
                 new FormatoCostos(costosIa, formato, RELOJ), properties, dashboard,
                 RELOJ);
         when(costosIa.panel(any())).thenReturn(panelDeCostos(0, "0"));
@@ -904,13 +906,28 @@ class ProcesadorMensajesTest {
     }
 
     @Test
-    void dashboardMandaElLinkDeLaConfiguracionYTieneBotonEnElMenu() {
+    void dashboardMandaElLinkDeLaConfiguracionYElBotonViejoSigueAndando() {
         assertThat(texto("/dashboard"))
                 .contains("<a href=\"http://localhost:8090\">http://localhost:8090</a>")
                 .contains("PC");
         assertThat(texto(MenuFijo.DASHBOARD)).isEqualTo(texto("/dashboard"));
-        assertThat(MenuFijo.teclado().getKeyboard()).anySatisfy(fila -> assertThat(fila).anySatisfy(
-                boton -> assertThat(boton.getText()).isEqualTo(MenuFijo.DASHBOARD)));
+    }
+
+    @Test
+    void elMenuFijoTieneResumenCuantoMeQuedaFijosYMeDeben() {
+        assertThat(MenuFijo.teclado().getKeyboard()).extracting(fila -> fila.stream()
+                .map(org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton::getText)
+                .toList())
+                .containsExactly(List.of(MenuFijo.RESUMEN, MenuFijo.DISPONIBLE), List.of(MenuFijo.FIJOS,
+                        MenuFijo.ME_DEBEN), List.of(MenuFijo.HOY, MenuFijo.MES, MenuFijo.AYUDA));
+        when(disponible.responder()).thenReturn("💰 Te queda $10");
+        when(fijos.lista()).thenReturn(List.of(Accion.Enviar.texto("📋 Fijos")));
+        when(juntadas.abiertas()).thenReturn(List.of(Accion.Enviar.texto("👥 Te deben")));
+
+        assertThat(texto(MenuFijo.DISPONIBLE)).isEqualTo("💰 Te queda $10");
+        assertThat(texto(MenuFijo.FIJOS)).isEqualTo("📋 Fijos");
+        assertThat(texto(MenuFijo.ME_DEBEN)).isEqualTo("👥 Te deben");
+        verifyNoInteractions(interpretador);
     }
 
     @Test

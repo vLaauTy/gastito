@@ -114,7 +114,7 @@ public class ProcesadorMensajes {
             El domingo a las 21 te mando cómo fue tu semana y el día 1 a las 9, cómo fue el mes. Si la PC estaba apagada, te llega apenas la prendés.
 
             <b>Atajos</b> (si preferís comandos)
-            /hoy · /mes · /resumen · /juntadas · /fijos · /cuotas · /calculo · /costos · /dashboard""";
+            /hoy · /mes · /disponible · /resumen · /juntadas · /fijos · /cuotas · /calculo · /costos · /dashboard""";
 
     private final InterpretadorService interpretador;
     private final MovimientoService movimientos;
@@ -133,6 +133,7 @@ public class ProcesadorMensajes {
     private final ConversacionFijos fijos;
     private final ConversacionAltaFijo altaFijo;
     private final PedidosNaturales naturales;
+    private final ComandoDisponible disponible;
     private final GastoFijoService gastosFijos;
     private final ConversacionVarios varios;
     private final ConversacionCuotas cuotas;
@@ -202,13 +203,15 @@ public class ProcesadorMensajes {
             TranscripcionService transcripciones, TicketService tickets, ResumenService resumenes,
             FormatoResumen formatoResumen, ConsultaService consultas, FormatoConsulta formatoConsulta,
             ConversacionRepetidos repetidos, ConversacionJuntadas juntadas, ConversacionFijos fijos,
-            ConversacionAltaFijo altaFijo, PedidosNaturales naturales, GastoFijoService gastosFijos,
+            ConversacionAltaFijo altaFijo, PedidosNaturales naturales, ComandoDisponible disponible,
+            GastoFijoService gastosFijos,
             ConversacionVarios varios, ConversacionCuotas cuotas, ConversacionRecibos recibos,
             ComandosSueldo comandosSueldo, FormatoCostos formatoCostos, GastitoProperties properties,
             DashboardProperties dashboard, Clock clock) {
         this.fijos = fijos;
         this.altaFijo = altaFijo;
         this.naturales = naturales;
+        this.disponible = disponible;
         this.gastosFijos = gastosFijos;
         this.varios = varios;
         this.cuotas = cuotas;
@@ -1058,6 +1061,7 @@ public class ProcesadorMensajes {
             case "/hoy" -> hoy();
             case "/mes" -> mes();
             case "/costos" -> costos();
+            case "/disponible" -> disponible.responder();
             case "/dashboard" -> """
                     🖥 <b>Dashboard</b>: <a href="%1$s">%1$s</a>
                     Se abre desde el navegador de la PC donde corre Gastito.""".formatted(html(urlDashboard));
