@@ -384,7 +384,8 @@ button.menu-fila:hover, button.menu-fila[aria-expanded="true"] { border-color: v
 .menu-acciones.abierto { display: flex; }
 .menu-acciones button { justify-content: flex-start; border-color: transparent; background: none; }
 .menu-acciones button:hover { background: var(--input-bg); }
-.menu-acciones button.peligro { color: var(--warn); }
+.menu-acciones button.peligro { background: none; border-color: transparent; color: var(--warn); }
+.menu-acciones button.peligro:hover { background: var(--warn-soft); }
 button.peligro { background: var(--warn); color: #fff; border-color: var(--warn); }
 tr[hidden] { display: none !important; }
 .toast-accion { pointer-events: auto; min-height: 32px; margin-left: 8px; padding: 0 10px; border: 1px solid currentColor; border-radius: 8px; background: transparent; color: inherit; font-size: 13px; }

@@ -116,7 +116,7 @@
 
   /**
    * @param accion opcional: { texto, alTocar, ms } — un botón en el aviso (por ejemplo "Deshacer"), que queda
-   *               ms milisegundos en pantalla. Tocarlo cierra el aviso.
+   *               ms milisegundos en pantalla. Tocarlo cierra el aviso. Solo { ms }: un aviso más largo, sin botón.
    */
   function toast(mensaje, tipo = 'ok', accion = null) {
     let caja = document.getElementById('toasts');
@@ -130,7 +130,7 @@
     const el = span(`toast ${tipo}`, svg(tipo === 'ok' ? 'circle-check' : 'circle-alert'), span('', mensaje));
     const dura = accion && accion.ms ? accion.ms : 3600;
     const cerrar = () => { el.classList.add('sale'); setTimeout(() => el.remove(), 400); };
-    if (accion) {
+    if (accion && accion.texto) {
       const boton = document.createElement('button');
       boton.type = 'button';
       boton.className = 'toast-accion';

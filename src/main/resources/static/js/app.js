@@ -652,7 +652,9 @@
     try {
       await api(pendiente.ruta, { method: 'DELETE' });
     } catch (error) {
-      mostrarAviso(`No pude eliminar el gasto: ${error.message}`);
+      // La explicación del servidor (una juntada con pagos, por ejemplo), en un aviso que dura lo que lleva
+      // leerlo; la recarga de abajo devuelve la fila.
+      window.Iconos.toast(`No se eliminó: ${error.message}.`, 'error', { ms: 9000 });
     }
     cargar();
   }
