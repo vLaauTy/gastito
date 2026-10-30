@@ -111,6 +111,10 @@ public class ValidadorTicket {
     public record NoEsTicket() implements Resultado {
     }
 
+    /** La foto es la hoja de la escala de sueldo del sindicato: la lee Gastito con el flujo de escalas. */
+    public record EsEscala() implements Resultado {
+    }
+
     /** La foto es un recibo de sueldo: la lee Gastito con el flujo de recibos. */
     public record EsRecibo() implements Resultado {
     }
@@ -138,6 +142,9 @@ public class ValidadorTicket {
             return new Ilegible(Motivo.BORROSA);
         }
         String problema = ia.problema() == null ? "" : ia.problema().strip().toLowerCase(Locale.ROOT);
+        if (problema.contains("escala")) {
+            return new EsEscala();
+        }
         if (problema.contains("recibo")) {
             return new EsRecibo();
         }

@@ -140,6 +140,11 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
                     long chat = chatId;
                     ejecutar(chatId, null, escribiendoMientras(chatId,
                             () -> procesador.procesarPdf(chat, mensaje.getMessageId(), pdf)));
+                } else if (esExcel(mensaje)) {
+                    ExcelRecibido excel = excel(mensaje);
+                    long chat = chatId;
+                    ejecutar(chatId, null, escribiendoMientras(chatId,
+                            () -> procesador.procesarExcel(chat, mensaje.getMessageId(), excel)));
                 } else if (mensaje.hasPhoto() || esImagen(mensaje)) {
                     FotoRecibida foto = foto(mensaje);
                     long chat = chatId;
@@ -147,7 +152,8 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
                             () -> procesador.procesarFoto(chat, mensaje.getMessageId(), foto)));
                 } else {
                     ejecutar(chatId, null, List.of(Accion.Enviar.texto(
-                            "Por ahora entiendo mensajes de texto, audios, fotos de tickets y recibos de sueldo en PDF.")));
+                            "Por ahora entiendo mensajes de texto, audios, fotos de tickets, recibos de sueldo en PDF "
+                                    + "y la escala de sueldo (foto o Excel).")));
                 }
             }
         } catch (RuntimeException e) {
@@ -182,6 +188,24 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
     private static boolean esImagen(Message mensaje) {
         return mensaje.hasDocument() && mensaje.getDocument().getMimeType() != null
                 && mensaje.getDocument().getMimeType().toLowerCase().startsWith("image/");
+    }
+
+    /** Un Excel (la escala de sueldo): por el tipo o, si Telegram no lo informa bien, por la extensión. */
+    static boolean esExcel(String mimeType, String nombre) {
+        String tipo = mimeType == null ? "" : mimeType.toLowerCase();
+        String archivo = nombre == null ? "" : nombre.toLowerCase();
+        return tipo.equals("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                || tipo.equals("application/vnd.ms-excel") || archivo.endsWith(".xlsx") || archivo.endsWith(".xls");
+    }
+
+    private static boolean esExcel(Message mensaje) {
+        return mensaje.hasDocument()
+                && esExcel(mensaje.getDocument().getMimeType(), mensaje.getDocument().getFileName());
+    }
+
+    private ExcelRecibido excel(Message mensaje) {
+        String fileId = mensaje.getDocument().getFileId();
+        return new ExcelRecibido(mensaje.getDocument().getFileSize(), mensaje.getCaption(), () -> descargar(fileId));
     }
 
     /** Un archivo PDF (un recibo de sueldo). */

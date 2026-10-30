@@ -66,6 +66,10 @@ public class TicketService {
     public record NoEsTicket() implements Resultado {
     }
 
+    /** La foto es la hoja de la escala de sueldo: hay que leerla con el flujo de escalas. */
+    public record EsEscala() implements Resultado {
+    }
+
     /** La foto es un recibo de sueldo: hay que leerla con ReciboService. */
     public record EsRecibo() implements Resultado {
     }
@@ -102,6 +106,7 @@ public class TicketService {
             case ValidadorTicket.Valido v -> new Leido(guardar(v, imagen, pista, respuesta.usoIaId(), catalogo));
             case ValidadorTicket.NoEsTicket n -> new NoEsTicket();
             case ValidadorTicket.EsRecibo r -> new EsRecibo();
+            case ValidadorTicket.EsEscala e -> new EsEscala();
             case ValidadorTicket.Ilegible i -> new Ilegible(i.motivo());
         };
     }

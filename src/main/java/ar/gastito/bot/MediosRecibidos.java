@@ -27,6 +27,7 @@ class MediosRecibidos {
     private final TranscripcionService transcripciones;
     private final TicketService tickets;
     private final ConversacionRecibos recibos;
+    private final ConversacionEscalas escalas;
     private final ConversacionAltaFijo altaFijo;
     private final ComandosSueldo comandosSueldo;
     private final EdicionDeCampos edicion;
@@ -34,11 +35,12 @@ class MediosRecibidos {
     private final Duration duracionMaximaAudio;
 
     MediosRecibidos(TranscripcionService transcripciones, TicketService tickets, ConversacionRecibos recibos,
-            ConversacionAltaFijo altaFijo, ComandosSueldo comandosSueldo, EdicionDeCampos edicion,
-            FlujoDeMensajes flujo, Duration duracionMaximaAudio) {
+            ConversacionEscalas escalas, ConversacionAltaFijo altaFijo, ComandosSueldo comandosSueldo,
+            EdicionDeCampos edicion, FlujoDeMensajes flujo, Duration duracionMaximaAudio) {
         this.transcripciones = transcripciones;
         this.tickets = tickets;
         this.recibos = recibos;
+        this.escalas = escalas;
         this.altaFijo = altaFijo;
         this.comandosSueldo = comandosSueldo;
         this.edicion = edicion;
@@ -120,15 +122,29 @@ class MediosRecibidos {
         };
     }
 
-    // --- Fotos de tickets y recibos ---
+    // --- Fotos de tickets, recibos y escalas ---
 
     /**
      * Se lee el ticket y queda la tarjeta de siempre, con los productos. Una foto no es el valor de un campo: si
-     * la tarjeta esperaba uno, vuelve a su estado normal.
+     * la tarjeta esperaba uno, vuelve a su estado normal. Si el texto dice que es la escala o un recibo, se lee
+     * directo como eso ("escala de sueldo" es la escala, aunque diga sueldo).
      */
     List<Accion> foto(long chatId, FotoRecibida foto) {
         List<Accion> acciones = restaurarEspera(chatId);
-        acciones.add(ConversacionRecibos.mencionaRecibo(foto.texto()) ? recibos.leerFoto(foto) : nuevoTicket(foto));
+        if (ConversacionEscalas.mencionaEscala(foto.texto())) {
+            acciones.add(foto.bytes() != null && tickets.superaElTamanio(foto.bytes())
+                    ? Accion.Enviar.texto(demasiadoGrande()) : escalas.leerFoto(foto));
+        } else {
+            acciones.add(ConversacionRecibos.mencionaRecibo(foto.texto()) ? recibos.leerFoto(foto)
+                    : nuevoTicket(foto));
+        }
+        return acciones;
+    }
+
+    /** Un Excel es la escala de sueldo (la hoja del sindicato o la plantilla). */
+    List<Accion> excel(long chatId, ExcelRecibido excel) {
+        List<Accion> acciones = restaurarEspera(chatId);
+        acciones.add(escalas.leerExcel(excel));
         return acciones;
     }
 
@@ -176,6 +192,7 @@ class MediosRecibidos {
         return switch (resultado) {
             case TicketService.Leido l -> flujo.tarjetaNueva(l.movimiento());
             case TicketService.EsRecibo r -> recibos.leerFoto(bytes, foto.texto());
+            case TicketService.EsEscala e -> escalas.leerFoto(bytes, foto.texto());
             case TicketService.NoEsTicket n -> Accion.Enviar.texto("""
                     Esa foto no parece un ticket 🤔
                     Mandame la foto de un ticket o una factura de compra, o escribime el gasto ("super 8050").""");

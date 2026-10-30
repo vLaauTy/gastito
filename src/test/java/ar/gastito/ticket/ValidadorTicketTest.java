@@ -88,6 +88,12 @@ class ValidadorTicketTest {
     }
 
     @Test
+    void laHojaDeLaEscalaSeReconoceParaLeerlaConElFlujoDeEscalas() {
+        assertThat(validador.validar(ticket().problema("escala_sueldo").build(), CatalogoDePrueba.crear(), AHORA))
+                .isInstanceOf(ValidadorTicket.EsEscala.class);
+    }
+
+    @Test
     void unaFotoQueNoEsTicketOBorrosaNoEsGasto() {
         assertThat(validador.validar(ticket().problema("no_es_ticket").build(), CatalogoDePrueba.crear(), AHORA))
                 .isInstanceOf(ValidadorTicket.NoEsTicket.class);

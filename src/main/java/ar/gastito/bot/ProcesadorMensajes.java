@@ -56,6 +56,7 @@ public class ProcesadorMensajes {
     private final ConversacionVarios varios;
     private final ConversacionCuotas cuotas;
     private final ConversacionRecibos recibos;
+    private final ConversacionEscalas escalas;
     private final ComandosSueldo comandosSueldo;
 
     private final GuardadoAutomatico guardado;
@@ -73,6 +74,7 @@ public class ProcesadorMensajes {
             ConversacionAltaFijo altaFijo, PedidosNaturales naturales, ComandoDisponible disponible,
             GastoFijoService gastosFijos,
             ConversacionVarios varios, ConversacionCuotas cuotas, ConversacionRecibos recibos,
+            ConversacionEscalas escalas,
             ComandosSueldo comandosSueldo, FormatoCostos formatoCostos, GastitoProperties properties,
             DashboardProperties dashboard, BotProperties bot, Clock clock) {
         this.movimientos = movimientos;
@@ -88,6 +90,7 @@ public class ProcesadorMensajes {
         this.varios = varios;
         this.cuotas = cuotas;
         this.recibos = recibos;
+        this.escalas = escalas;
         this.comandosSueldo = comandosSueldo;
         this.guardado = new GuardadoAutomatico(bot, movimientos, catalogos, tarjetas, tickets);
         this.edicion = new EdicionDeCampos(movimientos, juntadas, tarjetas, formato, fechas, clock, guardado);
@@ -98,8 +101,8 @@ public class ProcesadorMensajes {
         this.flujo = new FlujoDeMensajes(interpretador, movimientos, usoIa, tarjetas, formato, comandosIngreso,
                 consultas, formatoConsulta, repetidos, juntadas, fijos, altaFijo, naturales, gastosFijos, varios,
                 cuotas, comandosSueldo, edicion, comandos, guardado);
-        this.medios = new MediosRecibidos(transcripciones, tickets, recibos, altaFijo, comandosSueldo, edicion, flujo,
-                properties.audio().duracionMaxima());
+        this.medios = new MediosRecibidos(transcripciones, tickets, recibos, escalas, altaFijo, comandosSueldo, edicion,
+                flujo, properties.audio().duracionMaxima());
     }
 
     /** Un texto como cualquier mensaje, para los atajos que no se entienden sin IA. */
@@ -188,6 +191,11 @@ public class ProcesadorMensajes {
         return medios.pdf(chatId, pdf);
     }
 
+    /** Un Excel es la escala de sueldo: queda el resumen por mes, para guardar. */
+    public List<Accion> procesarExcel(long chatId, int mensajeId, ExcelRecibido excel) {
+        return medios.excel(chatId, excel);
+    }
+
     /** Whisper suele cerrar con un punto ("Kiosco 1500."), que no es parte del dato. */
     static String limpiarTranscripcion(String texto) {
         return MediosRecibidos.limpiarTranscripcion(texto);
@@ -205,6 +213,9 @@ public class ProcesadorMensajes {
         FormatoResumen.Anteriores anteriores = FormatoResumen.leerAnteriores(datos);
         if (anteriores != null) {
             return comandos.verAnteriores(mensajeId, anteriores);
+        }
+        if (ConversacionEscalas.esBoton(datos)) {
+            return escalas.boton(mensajeId, datos);
         }
         if (ComandosSueldo.esBoton(datos)) {
             return comandosSueldo.boton(mensajeId, datos);

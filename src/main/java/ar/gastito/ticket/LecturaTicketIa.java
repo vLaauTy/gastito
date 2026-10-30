@@ -14,7 +14,8 @@ public record LecturaTicketIa(
         @JsonPropertyDescription("Vacío si la foto es un ticket o factura de compra y se lee bien. Si no: "
                 + "no_es_ticket (la foto es otra cosa), borrosa (no se pueden leer los productos o los importes) "
                 + "o cortada (falta una parte del ticket, por ejemplo el total). recibo_sueldo si la foto es un recibo de "
-                + "sueldo (no una compra).")
+                + "sueldo (no una compra). escala_sueldo si es una tabla de valores salariales por mes (la hoja del "
+                + "sindicato).")
         String problema,
 
         @JsonPropertyDescription("Nombre del comercio como lo conoce la gente, con mayúsculas normales. "

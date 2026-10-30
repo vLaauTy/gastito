@@ -102,6 +102,7 @@ class ProcesadorMensajesTest {
     private final ConversacionVarios varios = mock(ConversacionVarios.class);
     private final ConversacionCuotas cuotas = mock(ConversacionCuotas.class);
     private final ConversacionRecibos recibos = mock(ConversacionRecibos.class);
+    private final ConversacionEscalas escalas = mock(ConversacionEscalas.class);
     private final ComandosSueldo comandosSueldo = mock(ComandosSueldo.class);
     private final ar.gastito.ia.CostosIaService costosIa = mock(ar.gastito.ia.CostosIaService.class);
     private ProcesadorMensajes procesador;
@@ -120,6 +121,7 @@ class ProcesadorMensajesTest {
                 tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, resumenes,
                 new FormatoResumen(formato, new GraficoMes(formato), dashboard), consultas, new FormatoConsulta(formato),
                 repetidos, juntadas, fijos, altaFijo, naturales, disponible, gastosFijos, varios, cuotas, recibos,
+                escalas,
                 comandosSueldo,
                 new FormatoCostos(costosIa, formato, RELOJ), properties, dashboard,
                 new BotProperties(false, new BigDecimal("100000")),
@@ -1484,6 +1486,40 @@ class ProcesadorMensajesTest {
         when(recibos.leerFoto(FOTO, null)).thenReturn(tarjeta);
 
         assertThat(procesador.procesarFoto(CHAT, MENSAJE_USUARIO, foto(null))).containsExactly(tarjeta);
+    }
+
+    // --- Escala de sueldo ---
+
+    @Test
+    void unaFotoQueDiceEscalaSeLeeComoLaHojaAunqueDigaSueldo() {
+        Accion tarjeta = Accion.Enviar.texto("escala leída");
+        when(escalas.leerFoto(any(FotoRecibida.class))).thenReturn(tarjeta);
+
+        assertThat(procesador.procesarFoto(CHAT, MENSAJE_USUARIO, foto("la escala de sueldo nueva")))
+                .containsExactly(tarjeta);
+        verify(tickets, never()).leer(any(), any());
+        verify(recibos, never()).leerFoto(any(FotoRecibida.class));
+    }
+
+    @Test
+    void unaFotoSinTextoQueResultaSerLaHojaDeLaEscalaSeLeeComoEscala() {
+        Accion tarjeta = Accion.Enviar.texto("escala leída");
+        when(tickets.leer(FOTO, null)).thenReturn(new TicketService.EsEscala());
+        when(escalas.leerFoto(FOTO, null)).thenReturn(tarjeta);
+
+        assertThat(procesador.procesarFoto(CHAT, MENSAJE_USUARIO, foto(null))).containsExactly(tarjeta);
+    }
+
+    @Test
+    void unExcelEsLaEscalaYSusBotonesVanALaConversacionDeEscalas() {
+        ExcelRecibido excel = new ExcelRecibido(5L, null, () -> FOTO);
+        Accion tarjeta = Accion.Enviar.texto("escala leída");
+        when(escalas.leerExcel(excel)).thenReturn(tarjeta);
+        when(escalas.boton(TARJETA, "esc:g:1")).thenReturn(List.of(new Accion.Avisar("✅ Guardado")));
+
+        assertThat(procesador.procesarExcel(CHAT, MENSAJE_USUARIO, excel)).containsExactly(tarjeta);
+        assertThat(procesador.procesarBoton(CHAT, TARJETA, "esc:g:1"))
+                .containsExactly(new Accion.Avisar("✅ Guardado"));
     }
 
     @Test

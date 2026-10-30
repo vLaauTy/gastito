@@ -94,7 +94,8 @@ class GuardadoAutomaticoTest {
                 new FormatoConsulta(formato), repetidos, mock(ConversacionJuntadas.class),
                 mock(ConversacionFijos.class), mock(ConversacionAltaFijo.class), mock(PedidosNaturales.class),
                 mock(ComandoDisponible.class), mock(ar.gastito.fijo.GastoFijoService.class), varios,
-                mock(ConversacionCuotas.class), mock(ConversacionRecibos.class), mock(ComandosSueldo.class),
+                mock(ConversacionCuotas.class), mock(ConversacionRecibos.class), mock(ConversacionEscalas.class),
+                mock(ComandosSueldo.class),
                 new FormatoCostos(mock(ar.gastito.ia.CostosIaService.class), formato, RELOJ), properties, dashboard,
                 new BotProperties(true, TOPE), RELOJ);
         when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(), Optional.empty()));

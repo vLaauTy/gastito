@@ -34,7 +34,7 @@ Cómo son los tickets argentinos:
 - Las líneas que resumen lo que ya se descontó ("Ahorro ClubDía", "Usted ahorró", "Total ahorro") son informativas: no son un renglón ni van en descuentos, porque restarlas de nuevo contaría dos veces lo mismo.
 
 Cómo completar cada dato:
-- problema: vacío si es un ticket o factura de compra y se leen los productos y el total. "recibo_sueldo" si la foto es un recibo de sueldo (no una compra): no leas nada más. "no_es_ticket" si la foto es otra cosa (una persona, un paisaje, una captura de pantalla que no es un comprobante). "borrosa" si no se pueden leer los productos o los importes. "cortada" si falta una parte del ticket, por ejemplo el total.
+- problema: vacío si es un ticket o factura de compra y se leen los productos y el total. "recibo_sueldo" si la foto es un recibo de sueldo (no una compra): no leas nada más. "escala_sueldo" si es una tabla de valores salariales con una columna por mes (la hoja del sindicato, "Recomposición salarial"): no leas nada más. "no_es_ticket" si la foto es otra cosa (una persona, un paisaje, una captura de pantalla que no es un comprobante). "borrosa" si no se pueden leer los productos o los importes. "cortada" si falta una parte del ticket, por ejemplo el total.
 - comercio: el nombre de fantasía con mayúsculas normales ("Día", "Farmacity", "Kiosco El Paso"). Si dice "a cuenta y orden de X", es X. Si solo está la razón social de una empresa, usala sin "S.A." ni "S.R.L."; el nombre de una persona (el franquiciado) nunca es el comercio.
 - sucursal: el número o nombre de la sucursal si está impreso ("5601"). Si no, vacío.
 - items: cada producto y cada descuento, en el orden impreso.
