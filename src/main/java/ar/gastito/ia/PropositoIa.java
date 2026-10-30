@@ -7,5 +7,7 @@ public enum PropositoIa {
     TICKET,
     RECIBO,
     RESUMEN,
-    CONSULTA
+    CONSULTA,
+    /** Leer la hoja de la escala de sueldo del sindicato (foto). */
+    ESCALA
 }

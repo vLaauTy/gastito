@@ -778,7 +778,7 @@
   // --- Costos de la IA ---
 
   const PROPOSITOS = {
-    TEXTO: 'Texto', AUDIO: 'Audio', TICKET: 'Ticket', RECIBO: 'Recibo', RESUMEN: 'Resumen', CONSULTA: 'Consulta',
+    TEXTO: 'Texto', AUDIO: 'Audio', TICKET: 'Ticket', RECIBO: 'Recibo', RESUMEN: 'Resumen', CONSULTA: 'Consulta', ESCALA: 'Escala de sueldo',
   };
 
   /** Todo llega calculado en dólares; acá solo se formatea. */

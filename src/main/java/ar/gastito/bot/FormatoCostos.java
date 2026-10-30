@@ -90,6 +90,7 @@ public class FormatoCostos {
             case RECIBO -> "Recibo";
             case RESUMEN -> "Resumen";
             case CONSULTA -> "Consulta";
+            case ESCALA -> "Escala de sueldo";
         };
     }
 

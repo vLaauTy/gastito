@@ -24,6 +24,7 @@
         <wiremock.version>3.13.2</wiremock.version>
         <chartjs.version>4.5.1</chartjs.version>
         <pdfbox.version>3.0.8</pdfbox.version>
+        <poi.version>5.5.1</poi.version>
     </properties>
 
     <dependencies>
@@ -88,6 +89,13 @@
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
             <version>${pdfbox.version}</version>
+        </dependency>
+
+        <!-- Escalas de sueldo en Excel (la hoja del sindicato): se leen sin IA -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
         </dependency>
 
         <!-- IA -->

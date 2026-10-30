@@ -12,6 +12,11 @@ spring:
       ddl-auto: validate
   flyway:
     locations: classpath:db/migration
+  servlet:
+    multipart:
+      # La escala de sueldo en Excel se sube desde el dashboard.
+      max-file-size: 5MB
+      max-request-size: 6MB
   web:
     resources:
       cache:
@@ -84,6 +89,8 @@ gastito:
     tolerancia-porcentaje: 0.05
     # Un sueldo cobrado hasta este día del mes es del mes anterior (se cobra alrededor del 5); después, del mismo mes.
     dia-limite-periodo-anterior: 15
+    # Tope de la respuesta de la IA al leer la foto de la hoja de la escala del sindicato (una columna por mes).
+    max-tokens-escala: 3000
   ticket:
     # Las fotos quedan en data/tickets/AAAA/MM/<id>.jpg (data/ está en el .gitignore).
     carpeta-datos: data

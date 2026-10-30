@@ -94,7 +94,7 @@ class CostosIaServiceTest {
         assertThat(p.actual().costoUsd()).isEqualByComparingTo("0");
         assertThat(p.proyeccion().costoUsd()).isEqualByComparingTo("0");
         assertThat(p.masCaras()).isEmpty();
-        assertThat(p.porProposito()).hasSize(6).allSatisfy(x -> assertThat(x.llamadas()).isZero());
+        assertThat(p.porProposito()).hasSize(PropositoIa.values().length).allSatisfy(x -> assertThat(x.llamadas()).isZero());
         assertThat(p.historial()).hasSize(6).allSatisfy(m -> assertThat(m.porcentajeDelMaximo()).isEqualByComparingTo("0"));
     }
 
@@ -108,7 +108,7 @@ class CostosIaServiceTest {
 
         assertThat(porProposito).extracting(CostosIaService.PorProposito::proposito).containsExactly(
                 PropositoIa.TEXTO, PropositoIa.AUDIO, PropositoIa.TICKET, PropositoIa.RECIBO, PropositoIa.RESUMEN,
-                PropositoIa.CONSULTA);
+                PropositoIa.CONSULTA, PropositoIa.ESCALA);
         CostosIaService.PorProposito ticket = porProposito.get(2);
         assertThat(ticket.llamadas()).isEqualTo(2);
         assertThat(ticket.tokensEntrada()).isEqualTo(5700);

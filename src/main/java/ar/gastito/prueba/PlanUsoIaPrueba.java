@@ -51,6 +51,11 @@ final class PlanUsoIaPrueba {
                 llamadas.add(llamada(dia, LocalTime.of(11, azar.nextInt(60)), PropositoIa.RECIBO, 2600, 3600, 700,
                         1100));
             }
+            // La foto de la hoja de la escala del sindicato, cuando sale la paritaria.
+            if (dia.getDayOfMonth() == 6) {
+                llamadas.add(llamada(dia, LocalTime.of(10, azar.nextInt(60)), PropositoIa.ESCALA, 1800, 2600, 900,
+                        1400));
+            }
             if (dia.getDayOfWeek() == DayOfWeek.SUNDAY) {
                 llamadas.add(llamada(dia, LocalTime.of(21, 0), PropositoIa.RESUMEN, 2500, 4200, 400, 700));
             }

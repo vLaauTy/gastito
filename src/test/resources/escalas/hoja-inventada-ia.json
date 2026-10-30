@@ -1,0 +1,43 @@
+{
+  "_comentario": "Lo que devolvería Haiku al leer una foto inventada de la hoja (no es la hoja real). En noviembre el básico tiene el separador cambiado, como pasa en la hoja.",
+  "tipoDocumento": "ESCALA",
+  "problema": "",
+  "columnas": [
+    {
+      "mes": "oct-26",
+      "filas": [
+        { "nombre": "BASICO", "valor": "$ 500.000,00" },
+        { "nombre": "PRESENTISMO", "valor": "$ 100.000,00" },
+        { "nombre": "A.I.S.", "valor": "$ 50.000,00" },
+        { "nombre": "ASIG. EXT. NO REMUNERATIVA", "valor": "$ 80.000,00" },
+        { "nombre": "ASIG. EXT. NO REMUNERATIVA 6%", "valor": "$ 75.200,00" },
+        { "nombre": "VIATICOS", "valor": "$ 200.000,00" },
+        { "nombre": "HORAS NORMALES", "valor": "$ 3.250,00" },
+        { "nombre": "HORAS AL 50 %", "valor": "$ 4.875,10" },
+        { "nombre": "HORAS AL 100%", "valor": "$ 6.500,20" },
+        { "nombre": "VALORES NETOS", "valor": "$ 795.200,00" },
+        { "nombre": "ART. 13", "valor": "$ 12.345,67" },
+        { "nombre": "ART. 28", "valor": "$ 23.456,78" },
+        { "nombre": "ART. 13 Y 28", "valor": "$ 34.567,89" }
+      ]
+    },
+    {
+      "mes": "nov-26",
+      "filas": [
+        { "nombre": "BASICO", "valor": "$ 545,000,00" },
+        { "nombre": "PRESENTISMO", "valor": "$ 101.500,00" },
+        { "nombre": "A.I.S.", "valor": "$ 52.000,00" },
+        { "nombre": "ASIG. EXT. NO REMUNERATIVA", "valor": "$ 81.000,00" },
+        { "nombre": "ASIG. EXT. NO REMUNERATIVA 6%", "valor": "$ 76.000,00" },
+        { "nombre": "VIATICOS", "valor": "$ 205.000,00" },
+        { "nombre": "HORAS NORMALES", "valor": "$ 3.542,50" },
+        { "nombre": "HORAS AL 50 %", "valor": "$ 5.313,79" },
+        { "nombre": "HORAS AL 100%", "valor": "$ 7.085,03" },
+        { "nombre": "VALORES NETOS", "valor": "$ 839.800,00" },
+        { "nombre": "ART. 13", "valor": "$ 13.000,00" },
+        { "nombre": "ART. 28", "valor": "$ 24.000,00" },
+        { "nombre": "ART. 13 Y 28", "valor": "$ 35.000,00" }
+      ]
+    }
+  ]
+}
