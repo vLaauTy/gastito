@@ -502,8 +502,10 @@ genérica: los conceptos y los montos cambian con las paritarias y no están en 
   mes arriba, o la plantilla de dos columnas). Cada columna es el mes trabajado. Las filas se reconocen por sus
   **nombres de fila** (tabla `alias_escala`, editables en el dashboard; sin mayúsculas, acentos, espacios ni puntos);
   las que no tienen alias (Art. 13 y 28, la asignación sin "6%") se ignoran, y lo que la hoja no trae (adicional CCT,
-  descuentos) se mantiene de la escala anterior. Antes de guardar muestra cada mes con su cambio, lo que se mantiene y
-  el control con **Valores netos** = remunerativos × (1 − descuentos %) + no remunerativos (aviso si difiere más de
+  descuentos) se mantiene de la escala anterior; sin escala anterior, mis descuentos por defecto 11 + 3 + 3 + 2,5 %
+  (19,5 %, `gastito.sueldo.descuentos-por-defecto`). Antes de guardar muestra cada mes con su cambio, lo que se mantiene y
+  el control con **Valores netos** = remunerativos × (1 − 20 %, el descuento fijo de la hoja y no el mío:
+  `porcentaje-control-hoja`) + no remunerativos (aviso si difiere más de
   $5); si un mes ya tiene escala, qué cambia y que se reemplaza. *Descargar plantilla* baja el Excel con la escala
   vigente.
 - **Cálculo** (Java, `BigDecimal`, centavos en cada concepto): bruto = fijos + horas; cada descuento = bruto ×
