@@ -79,6 +79,25 @@ class CalculadoraSueldoTest {
     }
 
     @Test
+    void siLaEscalaTraeElValorDeLaHoraSeUsaEseValor() {
+        // La hoja del sindicato publica la hora al 50% y al 100%, que difieren unos centavos de 1,5 y 2 veces la normal.
+        EscalaSueldo base = escala("2026-01-01", "3000", "500000");
+        Map<Long, BigDecimal> valores = new java.util.HashMap<>(base.getValores());
+        valores.put(AL_50.getId(), bd("4500.07"));
+        valores.put(AL_100.getId(), bd("6000.11"));
+        EscalaSueldo conHoras = new EscalaSueldo(base.getVigenteDesde(), base.getValorHora(), valores);
+
+        CalculadoraSueldo.Resultado r = CalculadoraSueldo.calcular(CONCEPTOS, conHoras, HORAS, Map.of());
+
+        assertThat(importe(r, AL_50)).isEqualByComparingTo("45000.70");
+        assertThat(importe(r, AL_100)).isEqualByComparingTo("36000.66");
+        // Las nocturnas no tienen valor propio: siguen siendo la hora normal × 8/60.
+        assertThat(importe(r, NOCTURNAS)).isEqualByComparingTo("12000");
+        assertThat(r.lineas().stream().filter(l -> AL_50.getId().equals(l.conceptoId())).findFirst().orElseThrow()
+                .valor()).isEqualByComparingTo("4500.07");
+    }
+
+    @Test
     void sinHorasSoloSumanLosFijos() {
         CalculadoraSueldo.Resultado r = CalculadoraSueldo.calcular(CONCEPTOS, escala("2026-01-01", "3000", "500000"),
                 Map.of(), Map.of());

@@ -4,7 +4,7 @@ package ar.gastito.sueldo;
 public enum TipoConceptoSueldo {
     /** Monto fijo del mes (básico, presentismo, adicionales). Suma al bruto. */
     REMUNERATIVO_FIJO("Remunerativo fijo"),
-    /** Horas × valor de la hora normal × factor. Suma al bruto. */
+    /** Horas × valor de la hora normal × factor (o × el valor de esa hora, si la escala lo trae). Suma al bruto. */
     HORAS("Horas"),
     /** Monto fijo sin descuentos (viático, sumas extraordinarias). Se suma al neto. */
     NO_REMUNERATIVO("No remunerativo"),

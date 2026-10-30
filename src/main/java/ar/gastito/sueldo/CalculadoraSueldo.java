@@ -10,7 +10,8 @@ import java.util.Map;
 /**
  * La cuenta del sueldo, sin base de datos. Todo en BigDecimal y redondeado a centavos en cada concepto:
  * <ul>
- * <li>Bruto remunerativo = fijos remunerativos + horas (horas × valor de la hora normal × factor).</li>
+ * <li>Bruto remunerativo = fijos remunerativos + horas (horas × valor de la hora normal × factor, o × el valor de
+ * esa hora si la escala lo trae).</li>
  * <li>Cada descuento = bruto × porcentaje.</li>
  * <li>Neto de haberes = bruto − descuentos. Neto total = neto de haberes + no remunerativos (que no tienen
  * descuentos).</li>
@@ -84,16 +85,27 @@ public final class CalculadoraSueldo {
         BigDecimal pisado = ajustes == null ? null : ajustes.get(c.getId());
         if (c.getTipo() == TipoConceptoSueldo.HORAS) {
             BigDecimal cantidad = horas == null ? BigDecimal.ZERO : horas.getOrDefault(c.getId(), BigDecimal.ZERO);
+            BigDecimal valorHora = valorHoraExplicito(c, escala);
             // Se multiplica por el numerador antes de dividir: 30 h nocturnas (8/60) dan exacto, sin 0,1333….
-            BigDecimal calculado = centavos(cantidad.multiply(escala.getValorHora())
-                    .multiply(BigDecimal.valueOf(c.getFactorNum()))
-                    .divide(BigDecimal.valueOf(c.getFactorDen()), 10, RoundingMode.HALF_UP));
-            return new Linea(c.getId(), c.getNombre(), c.getTipo(), cantidad, null,
+            BigDecimal calculado = valorHora != null ? centavos(cantidad.multiply(valorHora))
+                    : centavos(cantidad.multiply(escala.getValorHora())
+                            .multiply(BigDecimal.valueOf(c.getFactorNum()))
+                            .divide(BigDecimal.valueOf(c.getFactorDen()), 10, RoundingMode.HALF_UP));
+            return new Linea(c.getId(), c.getNombre(), c.getTipo(), cantidad, valorHora,
                     pisado != null ? centavos(pisado) : calculado, pisado != null);
         }
         BigDecimal monto = escala.valorDe(c.getId());
         return new Linea(c.getId(), c.getNombre(), c.getTipo(), null, monto,
                 pisado != null ? centavos(pisado) : centavos(monto), pisado != null);
+    }
+
+    /**
+     * El valor de esa hora si la escala lo trae (la hoja del sindicato publica la hora al 50% y al 100%, que no
+     * siempre es justo la normal × 1,5 o × 2); null si no, y se usa la hora normal × el factor.
+     */
+    static BigDecimal valorHoraExplicito(ConceptoSueldo c, EscalaSueldo escala) {
+        BigDecimal valor = escala.getValores().get(c.getId());
+        return valor != null && valor.signum() > 0 ? valor : null;
     }
 
     private static int posicion(List<ConceptoSueldo> ordenados, Long conceptoId) {
