@@ -47,7 +47,7 @@ class LectorFotoEscalaTest {
         when(ia.extraerDeImagen(anyString(), any(), anyString(), anyLong(), eq(LecturaEscalaIa.class), any()))
                 .thenReturn(new ClienteIa.Respuesta<>(respuestaInventada(), 1L));
         LectorFotoEscala lector = new LectorFotoEscala(ia, prompts, imagenes,
-                new SueldoProperties(BigDecimal.ONE, BigDecimal.ONE, new BigDecimal("0.05"), 15, 3000),
+                EscalaDePrueba.PROPIEDADES,
                 Clock.systemDefaultZone());
 
         LectorFotoEscala.Resultado r = lector.leer(new byte[] {9}, "la escala nueva");

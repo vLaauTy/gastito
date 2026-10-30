@@ -22,6 +22,7 @@ import ar.gastito.sueldo.ConceptoSueldo;
 import ar.gastito.sueldo.ConceptoSueldoRepository;
 import ar.gastito.sueldo.EscalaSueldo;
 import ar.gastito.sueldo.EscalaSueldoRepository;
+import ar.gastito.sueldo.SueldoProperties;
 
 /**
  * La plantilla para descargar: el formato de la hoja del sindicato (nombre de fila en la columna A, una columna por
@@ -33,12 +34,14 @@ public class PlantillaEscala {
     private final ConceptoSueldoRepository conceptos;
     private final EscalaSueldoRepository escalas;
     private final AliasEscalaRepository aliases;
+    private final SueldoProperties properties;
 
     public PlantillaEscala(ConceptoSueldoRepository conceptos, EscalaSueldoRepository escalas,
-            AliasEscalaRepository aliases) {
+            AliasEscalaRepository aliases, SueldoProperties properties) {
         this.conceptos = conceptos;
         this.escalas = escalas;
         this.aliases = aliases;
+        this.properties = properties;
     }
 
     /** @param mes el mes de la columna; los valores son los de la escala que rige ese mes (vacíos si no hay) */
@@ -82,8 +85,8 @@ public class PlantillaEscala {
                 }
                 fila = escribir(hoja, fila, alias, valor, plata);
             }
-            BigDecimal netos = escala.map(e -> ImportacionEscala.control(todos, enLaPlantilla, e.getValores(),
-                    BigDecimal.ZERO).calculado()).orElse(null);
+            BigDecimal netos = escala.map(e -> ImportacionEscala.control(todos, enLaPlantilla,
+                    properties.porcentajeControlHoja(), BigDecimal.ZERO).calculado()).orElse(null);
             escribir(hoja, fila, primerAlias(todosLosAlias, DestinoAlias.VALORES_NETOS, null), netos, plata);
             hoja.setColumnWidth(0, 40 * 256);
             hoja.setColumnWidth(1, 18 * 256);

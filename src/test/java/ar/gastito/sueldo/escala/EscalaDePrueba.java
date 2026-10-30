@@ -20,6 +20,7 @@ import ar.gastito.sueldo.ConceptoSueldo;
 import ar.gastito.sueldo.ConceptoSueldoRepository;
 import ar.gastito.sueldo.EscalaSueldo;
 import ar.gastito.sueldo.EscalaSueldoRepository;
+import ar.gastito.sueldo.SueldoProperties;
 import ar.gastito.sueldo.SueldoService;
 import ar.gastito.sueldo.TipoConceptoSueldo;
 
@@ -45,6 +46,11 @@ final class EscalaDePrueba {
 
     static final List<ConceptoSueldo> CONCEPTOS = List.of(BASICO, PRESENTISMO, CCT, AIS, AL_50, AL_100, NOCTURNAS,
             VIATICO, EXTRAORDINARIA, JUBILACION, OBRA_SOCIAL, LEY, SINDICATO);
+
+    /** Mis descuentos por defecto (11 + 3 + 3 + 2,5 %) y el 20 % fijo de la hoja para el control. */
+    static final SueldoProperties PROPIEDADES = new SueldoProperties(BigDecimal.ONE, BigDecimal.ONE,
+            new BigDecimal("0.05"), 15, 3000, List.of(new BigDecimal("11"), new BigDecimal("3"), new BigDecimal("3"),
+                    new BigDecimal("2.5")), new BigDecimal("20"));
 
     static final List<AliasEscala> ALIAS = List.of(
             new AliasEscala("BASICO", DestinoAlias.CONCEPTO, BASICO.getId()),
@@ -113,7 +119,7 @@ final class EscalaDePrueba {
             SueldoService sueldo) {
 
         ImportacionEscala importacion() {
-            return new ImportacionEscala(conceptos, escalas, alias, sueldo);
+            return new ImportacionEscala(conceptos, escalas, alias, sueldo, PROPIEDADES);
         }
     }
 

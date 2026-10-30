@@ -91,6 +91,12 @@ gastito:
     dia-limite-periodo-anterior: 15
     # Tope de la respuesta de la IA al leer la foto de la hoja de la escala del sindicato (una columna por mes).
     max-tokens-escala: 3000
+    # Mis descuentos (%), en el orden de los conceptos de descuento: jubilación, obra social, ley 19.032 y sindicato.
+    # Los usa una escala que no tiene una anterior de donde sacarlos (por ejemplo, la primera que se importa).
+    descuentos-por-defecto: 11, 3, 3, 2.5
+    # La hoja del sindicato calcula "Valores netos" con un descuento fijo del 20 %, que no es el mío: se usa solo para
+    # controlar que la hoja se leyó bien.
+    porcentaje-control-hoja: 20
   ticket:
     # Las fotos quedan en data/tickets/AAAA/MM/<id>.jpg (data/ está en el .gitignore).
     carpeta-datos: data

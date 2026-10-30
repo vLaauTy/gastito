@@ -11,7 +11,8 @@ class PlantillaEscalaTest {
     @Test
     void laPlantillaTieneElFormatoDeLaHojaYSeVuelveALeerIgual() {
         EscalaDePrueba.Repos repos = EscalaDePrueba.repos();
-        PlantillaEscala plantilla = new PlantillaEscala(repos.conceptos(), repos.escalas(), repos.alias());
+        PlantillaEscala plantilla = new PlantillaEscala(repos.conceptos(), repos.escalas(), repos.alias(),
+                EscalaDePrueba.PROPIEDADES);
 
         HojaEscala hoja = new LectorExcelEscala().leer(plantilla.generar(YearMonth.of(2026, 10)));
 

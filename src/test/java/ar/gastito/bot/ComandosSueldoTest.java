@@ -80,6 +80,8 @@ class ComandosSueldoTest {
 
         assertThat(tarjeta.html()).contains("Sueldo de octubre 2026", "10 h horas al 50%", "30 h horas nocturnas",
                 "Bruto ", "$843.000", "−$168.600", "$674.400", "$440.000", "$1.114.400", "Escala vigente desde 1/7/2026");
+        // La plata de cada descuento, con su porcentaje.
+        assertThat(tarjeta.html()).containsPattern("Descuentos:\n<pre>Jubilación 20 % +−\\$168\\.600</pre>");
         assertThat(tarjeta.teclado().botones()).extracting(Teclado.Boton::datos)
                 .containsExactly("cg:202610:10_6_30", "ce:202610:10_6_30", "cc:202610:10_6_30");
         // Es una cuenta en vivo: nada se guarda hasta tocar Guardar.

@@ -30,7 +30,9 @@ class ControlReciboTest {
     static final ConceptoSueldo LEY = concepto(12, "Ley 19.032", TipoConceptoSueldo.DESCUENTO_PORCENTAJE, null, null);
 
     final ControlRecibo control = new ControlRecibo(
-            new SueldoProperties(new BigDecimal("1"), new BigDecimal("1"), new BigDecimal("0.05"), 15, 3000));
+            new SueldoProperties(new BigDecimal("1"), new BigDecimal("1"), new BigDecimal("0.05"), 15, 3000,
+                    List.of(new BigDecimal("11"), new BigDecimal("3"), new BigDecimal("3"), new BigDecimal("2.5")),
+                    new BigDecimal("20")));
 
     /** 10 horas al 50% a $3.000: básico 500.000 + presentismo 100.000 + horas 45.000 = bruto 645.000. */
     final CalculoSueldo calculo = calculo();

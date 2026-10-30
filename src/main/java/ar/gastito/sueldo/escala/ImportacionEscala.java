@@ -23,6 +23,7 @@ import ar.gastito.sueldo.ConceptoSueldo;
 import ar.gastito.sueldo.ConceptoSueldoRepository;
 import ar.gastito.sueldo.EscalaSueldo;
 import ar.gastito.sueldo.EscalaSueldoRepository;
+import ar.gastito.sueldo.SueldoProperties;
 import ar.gastito.sueldo.SueldoService;
 import ar.gastito.sueldo.TipoConceptoSueldo;
 
@@ -42,13 +43,15 @@ public class ImportacionEscala {
     private final EscalaSueldoRepository escalas;
     private final AliasEscalaRepository aliases;
     private final SueldoService sueldo;
+    private final SueldoProperties properties;
 
     public ImportacionEscala(ConceptoSueldoRepository conceptos, EscalaSueldoRepository escalas,
-            AliasEscalaRepository aliases, SueldoService sueldo) {
+            AliasEscalaRepository aliases, SueldoService sueldo, SueldoProperties properties) {
         this.conceptos = conceptos;
         this.escalas = escalas;
         this.aliases = aliases;
         this.sueldo = sueldo;
+        this.properties = properties;
     }
 
     /** Qué es cada valor, para mostrarlo: la hora normal, un monto, el valor de una hora o un porcentaje. */
@@ -70,17 +73,20 @@ public class ImportacionEscala {
     }
 
     /**
-     * Valores netos = remunerativos de la hoja × (1 − descuentos %) + no remunerativos de la hoja.
+     * Valores netos = remunerativos de la hoja × (1 − el descuento fijo de la hoja, 20 %) + no remunerativos de la hoja.
      *
-     * @param hoja      lo que dice la fila "Valores netos"
-     * @param calculado lo mismo con los porcentajes de descuento de la escala
+     * @param hoja       lo que dice la fila "Valores netos"
+     * @param calculado  lo mismo calculado en Java con lo que se leyó
+     * @param porcentaje el descuento fijo de la hoja que se usó
      */
-    public record Control(BigDecimal hoja, BigDecimal calculado, BigDecimal diferencia, boolean ok) {
+    public record Control(BigDecimal hoja, BigDecimal calculado, BigDecimal diferencia, boolean ok,
+            BigDecimal porcentaje) {
     }
 
     /**
      * @param leidos            lo que trae la hoja, en el orden de los conceptos (la hora normal primero)
-     * @param mantenidos        lo que no trae la hoja y queda de la escala anterior
+     * @param mantenidos        lo que no trae la hoja y queda de la escala anterior (o mis descuentos por defecto, sin
+     *                          "antes")
      * @param control           null si la hoja no tiene "Valores netos"
      * @param reemplazaEscalaId la escala que ya hay para ese mes, que se reemplaza al guardar; null si no hay
      */
@@ -107,7 +113,8 @@ public class ImportacionEscala {
     private record Destino(DestinoAlias destino, Long conceptoId) {
     }
 
-    private record Base(BigDecimal valorHora, Map<Long, BigDecimal> valores) {
+    /** @param porDefecto los descuentos que vienen de mis valores por defecto (en la columna anterior de la hoja) */
+    private record Base(BigDecimal valorHora, Map<Long, BigDecimal> valores, Set<Long> porDefecto) {
     }
 
     // --- Propuesta ---
@@ -164,10 +171,10 @@ public class ImportacionEscala {
                 continue;
             }
             Optional<EscalaSueldo> existente = escalas.findByVigenteDesde(columna.mes().atDay(1));
-            Base base = existente.map(e -> new Base(e.getValorHora(), e.getValores()))
+            Base base = existente.map(e -> new Base(e.getValorHora(), e.getValores(), Set.of()))
                     .or(() -> Optional.ofNullable(meses.isEmpty() ? null : baseDe(meses.getLast())))
                     .or(() -> escalas.findFirstByVigenteDesdeLessThanEqualOrderByVigenteDesdeDesc(
-                            columna.mes().atDay(1)).map(e -> new Base(e.getValorHora(), e.getValores())))
+                            columna.mes().atDay(1)).map(e -> new Base(e.getValorHora(), e.getValores(), Set.of())))
                     .orElse(null);
             BigDecimal valorHora = horaNormal != null ? horaNormal : base == null ? null : base.valorHora();
             if (valorHora == null) {
@@ -184,7 +191,9 @@ public class ImportacionEscala {
     }
 
     private static Base baseDe(MesPropuesto m) {
-        return new Base(m.valorHora(), m.valores());
+        return new Base(m.valorHora(), m.valores(), m.mantenidos().stream()
+                .filter(v -> v.clase() == Clase.PORCENTAJE && v.antes() == null).map(Valor::conceptoId)
+                .collect(java.util.stream.Collectors.toSet()));
     }
 
     private MesPropuesto mes(YearMonth mes, List<ConceptoSueldo> todos, Map<Long, ConceptoSueldo> porId, Base base,
@@ -196,6 +205,16 @@ public class ImportacionEscala {
         valores.keySet().removeIf(id -> porId.containsKey(id) && porId.get(id).getTipo() == TipoConceptoSueldo.HORAS
                 && !leidos.containsKey(id));
         valores.putAll(leidos);
+        // Sin escala anterior de donde sacarlos, los descuentos son los míos por defecto (11 + 3 + 3 + 2,5 %).
+        List<ConceptoSueldo> descuentos = todos.stream()
+                .filter(c -> c.isActivo() && c.getTipo() == TipoConceptoSueldo.DESCUENTO_PORCENTAJE).toList();
+        List<BigDecimal> porDefecto = properties.descuentosPorDefecto();
+        Set<Long> deFabrica = new HashSet<>(base == null ? Set.of() : base.porDefecto());
+        for (int i = 0; i < descuentos.size() && i < porDefecto.size(); i++) {
+            if (valores.putIfAbsent(descuentos.get(i).getId(), porDefecto.get(i)) == null) {
+                deFabrica.add(descuentos.get(i).getId());
+            }
+        }
 
         List<Valor> deLaHoja = new ArrayList<>();
         List<Valor> mantenidos = new ArrayList<>();
@@ -210,36 +229,40 @@ public class ImportacionEscala {
                 deLaHoja.add(valor(c.getId(), c.getNombre(), clase(c), antes.get(c.getId()), leidos.get(c.getId())));
             } else if (c.isActivo() && c.getTipo() != TipoConceptoSueldo.HORAS && valores.get(c.getId()) != null
                     && valores.get(c.getId()).signum() > 0) {
-                mantenidos.add(valor(c.getId(), c.getNombre(), clase(c), valores.get(c.getId()),
-                        valores.get(c.getId())));
+                // Uno por defecto no tiene "antes": no venía de ninguna escala.
+                mantenidos.add(valor(c.getId(), c.getNombre(), clase(c),
+                        deFabrica.contains(c.getId()) ? null : valores.get(c.getId()), valores.get(c.getId())));
             }
         }
         return new MesPropuesto(mes, valorHora, Map.copyOf(valores), List.copyOf(deLaHoja), List.copyOf(mantenidos),
-                netos == null ? null : control(todos, leidos, valores, netos), reemplaza);
+                netos == null ? null : control(todos, leidos, properties.porcentajeControlHoja(), netos), reemplaza);
     }
 
-    /** Valores netos con los porcentajes de descuento de la escala, solo con lo que trae la hoja. */
-    static Control control(List<ConceptoSueldo> todos, Map<Long, BigDecimal> leidos, Map<Long, BigDecimal> valores,
+    /**
+     * Valores netos como los calcula la hoja: lo remunerativo que trae × (1 − el descuento fijo de la hoja) + lo no
+     * remunerativo que trae. El descuento es el de la hoja (20 %), no el mío: el control dice si la hoja se leyó bien.
+     */
+    static Control control(List<ConceptoSueldo> todos, Map<Long, BigDecimal> leidos, BigDecimal porcentaje,
             BigDecimal netos) {
         BigDecimal remunerativo = BigDecimal.ZERO;
         BigDecimal noRemunerativo = BigDecimal.ZERO;
-        BigDecimal descuentos = BigDecimal.ZERO;
         for (ConceptoSueldo c : todos) {
             BigDecimal leido = leidos.get(c.getId());
-            switch (c.getTipo()) {
-                case REMUNERATIVO_FIJO -> remunerativo = leido == null ? remunerativo : remunerativo.add(leido);
-                case NO_REMUNERATIVO -> noRemunerativo = leido == null ? noRemunerativo : noRemunerativo.add(leido);
-                case DESCUENTO_PORCENTAJE -> descuentos = c.isActivo()
-                        ? descuentos.add(valores.getOrDefault(c.getId(), BigDecimal.ZERO)) : descuentos;
-                case HORAS -> {
-                }
+            if (leido == null) {
+                continue;
+            }
+            if (c.getTipo() == TipoConceptoSueldo.REMUNERATIVO_FIJO) {
+                remunerativo = remunerativo.add(leido);
+            } else if (c.getTipo() == TipoConceptoSueldo.NO_REMUNERATIVO) {
+                noRemunerativo = noRemunerativo.add(leido);
             }
         }
         BigDecimal calculado = remunerativo
-                .multiply(BigDecimal.ONE.subtract(descuentos.divide(CIEN, 10, RoundingMode.HALF_UP)))
+                .multiply(BigDecimal.ONE.subtract(porcentaje.divide(CIEN, 10, RoundingMode.HALF_UP)))
                 .add(noRemunerativo).setScale(2, RoundingMode.HALF_UP);
         BigDecimal diferencia = netos.subtract(calculado);
-        return new Control(netos, calculado, diferencia, diferencia.abs().compareTo(TOLERANCIA_CONTROL) <= 0);
+        return new Control(netos, calculado, diferencia, diferencia.abs().compareTo(TOLERANCIA_CONTROL) <= 0,
+                porcentaje);
     }
 
     private static Valor valor(Long conceptoId, String nombre, Clase clase, BigDecimal antes, BigDecimal ahora) {

@@ -148,17 +148,75 @@ class ImportacionEscalaTest {
     }
 
     @Test
-    void elControlFallaSiLosDescuentosNoCierranConLaHoja() {
+    void elControlUsaEl20PorcientoFijoDeLaHojaYNoMisDescuentos() {
+        // Mis descuentos son otros (22 %), pero la hoja calcula con el 20 %: el control igual cierra.
         Map<Long, BigDecimal> otros = new HashMap<>(EscalaDePrueba.agosto().getValores());
-        otros.put(JUBILACION.getId(), bd("13")); // 22 % en total: con la hoja del 20 % no cierra
+        otros.put(JUBILACION.getId(), bd("13"));
         when(repos.escalas().findFirstByVigenteDesdeLessThanEqualOrderByVigenteDesdeDesc(any()))
                 .thenReturn(Optional.of(new EscalaSueldo(LocalDate.of(2026, 8, 1), bd("3000"), otros)));
 
         ImportacionEscala.Control control = importacion.proponer(EscalaDePrueba.hoja()).meses().getFirst().control();
 
+        assertThat(control.ok()).isTrue();
+        assertThat(control.porcentaje()).isEqualByComparingTo("20");
+    }
+
+    @Test
+    void elControlFallaSiUnValorDeLaHojaSeLeyoMal() {
+        // El básico leído con un dígito de más: (5.000.000 + 150.000) × 0,80 + 275.200 no da los 795.200 de la hoja.
+        List<String> octubre = new java.util.ArrayList<>(OCTUBRE);
+        octubre.set(0, "$ 5.000.000,00");
+        HojaEscala hoja = new HojaEscala(List.of(EscalaDePrueba.columna(OCT, octubre)));
+
+        ImportacionEscala.Control control = importacion.proponer(hoja).meses().getFirst().control();
+
         assertThat(control.ok()).isFalse();
         assertThat(control.hoja()).isEqualByComparingTo("795200");
-        assertThat(control.calculado()).isEqualByComparingTo("782200");
+        assertThat(control.calculado()).isEqualByComparingTo("4395200");
+    }
+
+    @Test
+    void sinEscalaAnteriorLosDescuentosSonLosMiosPorDefecto() {
+        when(repos.escalas().findFirstByVigenteDesdeLessThanEqualOrderByVigenteDesdeDesc(any()))
+                .thenReturn(Optional.empty());
+
+        MesPropuesto oct = importacion.proponer(EscalaDePrueba.hoja()).meses().getFirst();
+
+        assertThat(oct.mantenidos()).filteredOn(v -> v.clase() == ImportacionEscala.Clase.PORCENTAJE)
+                .extracting(Valor::ahora).usingElementComparator(BigDecimal::compareTo)
+                .containsExactly(bd("11"), bd("3"), bd("3"), bd("2.5"));
+        // No vienen de ninguna escala: sin "antes".
+        assertThat(oct.mantenidos()).filteredOn(v -> v.clase() == ImportacionEscala.Clase.PORCENTAJE)
+                .allSatisfy(v -> assertThat(v.antes()).isNull());
+        assertThat(oct.valores()).doesNotContainKey(CCT.getId());
+    }
+
+    @Test
+    void noviembreSinHorasExtraDaElNetoACobrar() {
+        // Mi escala anterior: el CCT (que la hoja no trae) y mis descuentos 11 + 3 + 3 + 2,5 % (19,5 %).
+        Map<Long, BigDecimal> mios = new HashMap<>(EscalaDePrueba.agosto().getValores());
+        mios.put(EscalaDePrueba.SINDICATO.getId(), bd("2.5"));
+        when(repos.escalas().findFirstByVigenteDesdeLessThanEqualOrderByVigenteDesdeDesc(any()))
+                .thenReturn(Optional.of(new EscalaSueldo(LocalDate.of(2026, 10, 1), bd("3300"), mios)));
+        HojaEscala nov = new HojaEscala(List.of(new HojaEscala.Columna(NOV, List.of(
+                HojaEscala.Fila.de("BASICO", "$ 608.101,00"), HojaEscala.Fila.de("PRESENTISMO", "$ 107.516,00"),
+                HojaEscala.Fila.de("A.I.S.", "$ 62.094,00"), HojaEscala.Fila.de("ASIG. EXT. NO REMUNERATIVA 6%",
+                        "$ 107.365,46"), HojaEscala.Fila.de("VIATICOS", "$ 300.000,00"),
+                HojaEscala.Fila.de("HORAS NORMALES", "$ 3.660,00"),
+                // (608.101 + 107.516 + 62.094) × 0,80 + 107.365,46 + 300.000
+                HojaEscala.Fila.de("VALORES NETOS", "$ 1.029.534,26")))));
+
+        MesPropuesto m = importacion.proponer(nov).meses().getFirst();
+        CalculadoraSueldo.Resultado r = CalculadoraSueldo.calcular(CONCEPTOS,
+                new EscalaSueldo(NOV.atDay(1), m.valorHora(), m.valores()), Map.of(), Map.of());
+
+        assertThat(m.control().ok()).isTrue();
+        assertThat(r.bruto()).isEqualByComparingTo("876696.00");
+        assertThat(r.descuentos()).isEqualByComparingTo("170955.72");
+        assertThat(r.netoTotal()).isEqualByComparingTo("1113105.74");
+        // Cada descuento con su plata: 11 % = 96.436,56 y 2,5 % = 21.917,40.
+        assertThat(importe(r, JUBILACION.getId())).isEqualByComparingTo("96436.56");
+        assertThat(importe(r, EscalaDePrueba.SINDICATO.getId())).isEqualByComparingTo("21917.40");
     }
 
     @Test

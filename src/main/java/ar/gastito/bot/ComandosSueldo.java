@@ -117,7 +117,9 @@ public class ComandosSueldo {
             }
             String nombre = l.getCantidad() != null ? l.getNombre() + " (" + horas(l.getCantidad()) + ")"
                     : l.getNombre();
-            String signo = l.getTipo() == TipoConceptoSueldo.DESCUENTO_PORCENTAJE ? "−" : "";
+            boolean descuento = l.getTipo() == TipoConceptoSueldo.DESCUENTO_PORCENTAJE;
+            String signo = descuento ? "−" : "";
+            nombre = descuento ? conPorcentaje(nombre, l.getValor()) : nombre;
             lineas.add(renglon(nombre + (l.isAjustado() ? " *" : ""), signo + formato.pesos(l.getImporte())));
         }
         return Accion.Enviar.conMenu("🧮 <b>Sueldo de " + html(formato.mes(mes)) + "</b> (guardado)\n<pre>"
@@ -177,6 +179,13 @@ public class ComandosSueldo {
             texto.append("⏱ ").append(html(String.join(" · ", horas))).append('\n');
         }
         texto.append(totales(r.bruto(), r.descuentos(), r.netoHaberes(), r.noRemunerativo(), r.netoTotal()));
+        // La plata de cada descuento, no solo el total: así se compara renglón por renglón con el recibo.
+        List<String> descuentos = r.lineas().stream()
+                .filter(l -> l.tipo() == TipoConceptoSueldo.DESCUENTO_PORCENTAJE && l.importe().signum() != 0)
+                .map(l -> renglon(conPorcentaje(l.nombre(), l.valor()), "−" + formato.pesos(l.importe()))).toList();
+        if (!descuentos.isEmpty()) {
+            texto.append("\nDescuentos:\n<pre>").append(html(String.join("\n", descuentos))).append("</pre>");
+        }
         texto.append("\n<i>Escala vigente desde ").append(v.escalaDesde().getDayOfMonth()).append('/')
                 .append(v.escalaDesde().getMonthValue()).append('/').append(v.escalaDesde().getYear())
                 .append("</i>");
@@ -201,6 +210,12 @@ public class ComandosSueldo {
         return "Los tipos de hora que tengo: " + sueldo.conceptosDeHoras().stream()
                 .map(ConceptoSueldo::getNombre).map(n -> n.toLowerCase(java.util.Locale.ROOT))
                 .collect(Collectors.joining(", ")) + ".";
+    }
+
+    /** "Jubilación 11 %", "Sindicato 2,5 %": el porcentaje al lado de la plata que descuenta. */
+    private static String conPorcentaje(String nombre, BigDecimal porcentaje) {
+        return porcentaje == null ? nombre
+                : nombre + " " + porcentaje.stripTrailingZeros().toPlainString().replace('.', ',') + " %";
     }
 
     private static String horas(BigDecimal cantidad) {

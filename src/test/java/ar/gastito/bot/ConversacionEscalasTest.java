@@ -26,6 +26,7 @@ import ar.gastito.sueldo.ConceptoSueldo;
 import ar.gastito.sueldo.ConceptoSueldoRepository;
 import ar.gastito.sueldo.EscalaSueldo;
 import ar.gastito.sueldo.EscalaSueldoRepository;
+import ar.gastito.sueldo.SueldoProperties;
 import ar.gastito.sueldo.SueldoService;
 import ar.gastito.sueldo.TipoConceptoSueldo;
 import ar.gastito.sueldo.escala.AliasEscala;
@@ -42,6 +43,9 @@ class ConversacionEscalasTest {
 
     private static final YearMonth OCT = YearMonth.of(2026, 10);
     private static final YearMonth NOV = YearMonth.of(2026, 11);
+    private static final SueldoProperties PROPIEDADES = new SueldoProperties(BigDecimal.ONE, BigDecimal.ONE,
+            new BigDecimal("0.05"), 15, 3000, List.of(new BigDecimal("11"), new BigDecimal("3"), new BigDecimal("3"),
+                    new BigDecimal("2.5")), new BigDecimal("20"));
 
     private static ConceptoSueldo concepto(long id, String nombre, TipoConceptoSueldo tipo) {
         return ConceptoSueldo.conId(id, new ConceptoSueldo(nombre, tipo, tipo == TipoConceptoSueldo.HORAS ? 3 : null,
@@ -73,7 +77,7 @@ class ConversacionEscalasTest {
     private final LectorExcelEscala excels = mock(LectorExcelEscala.class);
     private final ImportacionesPendientes pendientes = new ImportacionesPendientes(RELOJ);
     private final ConversacionEscalas conversacion = new ConversacionEscalas(fotos, excels,
-            new ImportacionEscala(conceptos, escalas, alias, sueldo), pendientes, new FormatoMensajes(RELOJ), RELOJ);
+            new ImportacionEscala(conceptos, escalas, alias, sueldo, PROPIEDADES), pendientes, new FormatoMensajes(RELOJ), RELOJ);
 
     private static EscalaSueldo agosto(String jubilacion) {
         return new EscalaSueldo(LocalDate.of(2026, 8, 1), new BigDecimal("3000"), Map.of(1L, new BigDecimal("460000"),
@@ -147,12 +151,29 @@ class ConversacionEscalasTest {
     }
 
     @Test
-    void siLosDescuentosNoCierranConLaHojaSeAvisa() {
+    void siLaHojaNoCierraConSu20PorcientoSeAvisa() throws Exception {
+        HojaEscala.Columna octubre = hoja().columnas().getFirst();
+        List<HojaEscala.Fila> filas = new java.util.ArrayList<>(octubre.filas());
+        filas.set(0, HojaEscala.Fila.de("BASICO", "$ 512.500,00")); // mal leído: 410.000 + 200.000 ≠ 600.000
+        when(excels.leer(any())).thenReturn(new HojaEscala(List.of(new HojaEscala.Columna(OCT, filas))));
+
+        assertThat(leer().html()).contains("⚠️ La hoja no cierra: con el 20 % que descuenta la hoja da $610.000 y "
+                + "«Valores netos» dice $600.000. Revisá que se haya leído bien");
+    }
+
+    @Test
+    void misDescuentosNoCambianElControlDeLaHoja() {
         when(escalas.findFirstByVigenteDesdeLessThanEqualOrderByVigenteDesdeDesc(any()))
                 .thenReturn(Optional.of(agosto("13")));
 
-        assertThat(leer().html()).contains("⚠️ Con tus descuentos da $590.000 y la hoja dice $600.000: revisá los "
-                + "porcentajes");
+        assertThat(leer().html()).doesNotContain("no cierra").contains("✅ control");
+    }
+
+    @Test
+    void sinEscalaAnteriorSeAvisaQueLosDescuentosSonLosDeSiempre() {
+        when(escalas.findFirstByVigenteDesdeLessThanEqualOrderByVigenteDesdeDesc(any())).thenReturn(Optional.empty());
+
+        assertThat(leer().html()).contains("Se mantienen: descuentos 11 + 3 + 3 + 2,5 % (por defecto)");
     }
 
     @Test

@@ -81,7 +81,7 @@ class EscalasHojaControllerTest {
         return new ImportacionEscala.Propuesta(List.of(new ImportacionEscala.MesPropuesto(OCT,
                 new BigDecimal("3250.00"), Map.of(1L, new BigDecimal("500000.00")), List.of(basico), List.of(),
                 new ImportacionEscala.Control(new BigDecimal("795200.00"), new BigDecimal("795200.00"),
-                        BigDecimal.ZERO, true), null)), List.of("ART. 13"));
+                        BigDecimal.ZERO, true, new BigDecimal("20")), null)), List.of("ART. 13"));
     }
 
     @Test

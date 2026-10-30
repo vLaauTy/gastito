@@ -27,6 +27,8 @@
 
   const porcentaje = (n) => `${Math.abs(Number(n)).toLocaleString('es-AR', { maximumFractionDigits: 1 })}%`;
   const signo = (n) => (Number(n) > 0 ? '+' : Number(n) < 0 ? '−' : '');
+  /** "11 %", "2,5 %": el porcentaje de un descuento, al lado de la plata que descuenta. */
+  const porcentajeDescuento = (n) => `${Number(n).toLocaleString('es-AR', { maximumFractionDigits: 2 })} %`;
   const horasTexto = (n) => `${Number(n).toLocaleString('es-AR', { maximumFractionDigits: 2 })} h`;
   const diaDeEscala = (iso) => { const [a, m] = iso.split('-'); return `${mayuscula(nombreMes(`${a}-${m}`))} ${a}`; };
   const claseMonto = (n) => (n == null ? 'sin-especificar' : null);
@@ -118,7 +120,8 @@
     return h('div', { class: 'recibo' },
       h('div', { class: 'sub' }, `Cálculo de ${mesYAnio(c.mes)}${c.escalaDesde ? ` · escala desde ${diaDeEscala(c.escalaDesde)}` : ''}`),
       h('ul', {}, lineas.map((l) => h('li', {},
-        h('span', {}, l.nombre + (l.cantidad != null ? ` (${horasTexto(l.cantidad)})` : '') + (l.ajustado ? ' *' : '')),
+        h('span', {}, l.nombre + (l.cantidad != null ? ` (${horasTexto(l.cantidad)})` : '')
+          + (l.tipo === 'DESCUENTO_PORCENTAJE' && l.valor != null ? ` ${porcentajeDescuento(l.valor)}` : '') + (l.ajustado ? ' *' : '')),
         h('span', { class: 'money' }, (l.tipo === 'DESCUENTO_PORCENTAJE' ? '−' : '') + pesos(l.importe))))),
       totales(c),
       lineas.some((l) => l.ajustado) ? h('p', { class: 'note' }, '* ajustado a mano ese mes') : null);

@@ -70,7 +70,7 @@
       });
       const control = m.control == null ? h('p', { class: 'note' }, 'La hoja no tiene «Valores netos» para controlar.')
         : m.control.ok ? h('p', { class: 'mejora con-icono' }, Iconos.svg('circle-check'), `Control: los valores netos dan ${pesos(m.control.calculado)}, igual que la hoja`)
-          : h('p', { class: 'aviso-recibo' }, `Con tus descuentos da ${pesos(m.control.calculado)} y la hoja dice ${pesos(m.control.hoja)}: revisá los porcentajes`);
+          : h('p', { class: 'aviso-recibo' }, `La hoja no cierra: con el ${porcentaje(m.control.porcentaje)} que descuenta la hoja da ${pesos(m.control.calculado)} y «Valores netos» dice ${pesos(m.control.hoja)}. Revisá el Excel.`);
       const cambian = m.leidos.filter((v) => v.antes != null && Number(v.antes) !== Number(v.ahora));
       return h('div', {},
         h('h3', {}, h('label', {}, marca, ` ${m.etiqueta}`), m.reemplaza ? ' · ya tiene escala: se reemplaza' : ''),
@@ -78,7 +78,7 @@
         m.reemplaza ? h('p', { class: 'note' }, cambian.length
           ? `Cambia: ${cambian.map((v) => `${v.nombre} ${valor(v.clase, v.antes)} → ${valor(v.clase, v.ahora)}`).join(' · ')}`
           : 'La hoja no cambia nada de la escala que ya está.') : null,
-        m.mantenidos.length ? h('p', { class: 'note' }, `Se mantienen: ${m.mantenidos.map((v) => `${v.nombre} ${valor(v.clase, v.ahora)}`).join(', ')}`) : null,
+        m.mantenidos.length ? h('p', { class: 'note' }, `Se mantienen: ${m.mantenidos.map((v) => `${v.nombre} ${valor(v.clase, v.ahora)}${v.clase === 'PORCENTAJE' && v.antes == null ? ' (por defecto)' : ''}`).join(', ')}`) : null,
         control);
     });
     const guardar = h('button', { type: 'button', class: 'primary' }, 'Guardar los meses marcados');

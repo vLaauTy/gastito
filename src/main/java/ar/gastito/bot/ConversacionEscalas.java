@@ -279,8 +279,9 @@ public class ConversacionEscalas {
         if (m.control().ok()) {
             return "✅ control";
         }
-        return "⚠️ Con tus descuentos da " + formato.pesos(m.control().calculado()) + " y la hoja dice "
-                + formato.pesos(m.control().hoja()) + ": revisá los porcentajes";
+        return "⚠️ La hoja no cierra: con el " + porcentaje(m.control().porcentaje()) + " % que descuenta la hoja da "
+                + formato.pesos(m.control().calculado()) + " y «Valores netos» dice " + formato.pesos(m.control().hoja())
+                + ". Revisá que se haya leído bien";
     }
 
     private String leido(Valor v) {
@@ -304,7 +305,8 @@ public class ConversacionEscalas {
         List<String> porcentajes = valores.stream().filter(v -> v.clase() == Clase.PORCENTAJE)
                 .map(v -> porcentaje(v.ahora())).toList();
         if (!porcentajes.isEmpty()) {
-            partes.add("descuentos " + String.join(" + ", porcentajes) + " %");
+            boolean porDefecto = valores.stream().anyMatch(v -> v.clase() == Clase.PORCENTAJE && v.antes() == null);
+            partes.add("descuentos " + String.join(" + ", porcentajes) + " %" + (porDefecto ? " (por defecto)" : ""));
         }
         return String.join(", ", partes);
     }
