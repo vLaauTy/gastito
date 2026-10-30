@@ -269,7 +269,10 @@
     dibujarConceptos();
   }
 
-  const conceptosConValor = () => datos.conceptos.filter((c) => c.activo && c.tipo !== 'HORAS');
+  /** Las horas también: si la escala trae el valor de esa hora (la hoja publica la del 50% y la del 100%), se usa ese. */
+  const conceptosConValor = () => datos.conceptos.filter((c) => c.activo);
+  const etiquetaDeValor = (c) => (c.tipo === 'DESCUENTO_PORCENTAJE' ? `${c.nombre} (%)`
+    : c.tipo === 'HORAS' ? `${c.nombre}: valor de la hora (vacío = hora normal × ${String(c.factor).replace('.', ',')})` : c.nombre);
 
   function dibujarEscalas() {
     const contenedor = $('#calc-escalas');
@@ -290,7 +293,7 @@
       h('label', { class: 'calc-campo' }, h('span', {}, 'Valor de la hora normal'),
         h('input', { type: 'text', inputmode: 'decimal', 'data-campo': 'hora', value: e ? String(e.valorHora).replace('.', ',') : '', autocomplete: 'off' })),
       ...conceptosConValor().map((c) => h('label', { class: 'calc-campo' },
-        h('span', {}, c.tipo === 'DESCUENTO_PORCENTAJE' ? `${c.nombre} (%)` : c.nombre),
+        h('span', {}, etiquetaDeValor(c)),
         h('input', { type: 'text', inputmode: 'decimal', 'data-valor': c.id, autocomplete: 'off',
           value: e && e.valores[c.id] != null ? String(e.valores[c.id]).replace('.', ',') : '' }))),
       h('p', { class: 'error', role: 'alert', hidden: true, id: 'escala-error' }),
@@ -399,4 +402,6 @@
   }
 
   window.Gastito.alCargarIngresos = [alCargarIngresos];
+  /** Para escala-hoja.js: después de importar escalas, se vuelven a pedir la calculadora y las escalas. */
+  window.Gastito.recargarCalculadora = () => calculadora(estado.mes);
 })();
