@@ -489,12 +489,23 @@ semana después te dan el **recibo**, que sirve para controlar, no para registra
 genérica: los conceptos y los montos cambian con las paritarias y no están en el código.
 
 - **Conceptos** (tabla `concepto_sueldo`, se editan en el dashboard): `REMUNERATIVO_FIJO` (básico, presentismo,
-  adicionales), `HORAS` (horas × valor de la hora normal × factor; el factor es una fracción: 3/2, 2/1, 8/60),
+  adicionales), `HORAS` (horas × valor de la hora normal × factor; el factor es una fracción: 3/2, 2/1, 8/60; si la escala
+  trae el valor de esa hora, como la del 50 % y la del 100 % de la hoja del sindicato, se usa ese),
   `NO_REMUNERATIVO` (no lleva descuentos) y `DESCUENTO_PORCENTAJE` (sobre el bruto remunerativo).
 - **Escalas con vigencia**: los montos fijos, el valor de la hora y los porcentajes de cada paritaria, con la fecha
   "desde" (siempre desde el día 1 de un mes). Cada mes usa la escala vigente y el historial se conserva. Cuando
   cambia la paritaria: dashboard → Ingresos → Calculadora → **Escalas y conceptos** → *Nueva escala (copia la
   última)*. La migración deja los conceptos pero **no los montos**: la primera escala la cargás vos.
+- **Escalas desde la hoja del sindicato** (`ar.gastito.sueldo.escala`): mandale al bot la **foto** de la hoja
+  ("Recomposición salarial", con la palabra *escala*; Haiku la lee una sola vez, propósito `ESCALA`) o el **Excel**
+  (por el bot o en *Escalas y conceptos* → *Cargar desde la hoja del sindicato*, sin IA; una columna por mes con el
+  mes arriba, o la plantilla de dos columnas). Cada columna es el mes trabajado. Las filas se reconocen por sus
+  **nombres de fila** (tabla `alias_escala`, editables en el dashboard; sin mayúsculas, acentos, espacios ni puntos);
+  las que no tienen alias (Art. 13 y 28, la asignación sin "6%") se ignoran, y lo que la hoja no trae (adicional CCT,
+  descuentos) se mantiene de la escala anterior. Antes de guardar muestra cada mes con su cambio, lo que se mantiene y
+  el control con **Valores netos** = remunerativos × (1 − descuentos %) + no remunerativos (aviso si difiere más de
+  $5); si un mes ya tiene escala, qué cambia y que se reemplaza. *Descargar plantilla* baja el Excel con la escala
+  vigente.
 - **Cálculo** (Java, `BigDecimal`, centavos en cada concepto): bruto = fijos + horas; cada descuento = bruto ×
   porcentaje; neto de haberes = bruto − descuentos; **neto total = neto de haberes + no remunerativos**. Un ajuste
   puntual de un concepto pisa su importe ese mes. El cálculo guardado de cada mes (`calculo_sueldo`) no cambia si
