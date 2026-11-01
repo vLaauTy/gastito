@@ -90,10 +90,12 @@ public class CicloTarjetaService {
      * @param porPagar   los resúmenes cerrados que todavía no se debitaron, del más viejo al más nuevo
      * @param proximo    el resumen abierto: en el que entran las compras de hoy
      * @param siguientes los resúmenes que siguen al próximo con cuotas ya comprometidas
+     * @param comprometidoSiguientes lo que suman esas cuotas
      * @param pagados    los últimos debitados, del más nuevo al más viejo
      */
     public record Panel(String tarjeta, String cuentaDebito, List<VistaResumenTarjeta> porPagar,
-            VistaResumenTarjeta proximo, List<VistaResumenTarjeta> siguientes, List<VistaResumenTarjeta> pagados) {
+            VistaResumenTarjeta proximo, List<VistaResumenTarjeta> siguientes, BigDecimal comprometidoSiguientes,
+            List<VistaResumenTarjeta> pagados) {
     }
 
     /** Cuántos resúmenes pagados se muestran. */
@@ -120,7 +122,9 @@ public class CicloTarjetaService {
                     .sorted(Comparator.comparing(ResumenTarjeta::getPeriodo).reversed())
                     .limit(PAGADOS_A_MOSTRAR).map(vista).toList();
             return new Panel(c.tarjeta().getNombre(), cuentaDebito(c.tarjeta()),
-                    c.porPagar().stream().map(vista).toList(), vista.apply(abierto), siguientes, pagados);
+                    c.porPagar().stream().map(vista).toList(), vista.apply(abierto), siguientes,
+                    siguientes.stream().map(VistaResumenTarjeta::cuotas).reduce(BigDecimal.ZERO, BigDecimal::add),
+                    pagados);
         });
     }
 
@@ -208,6 +212,7 @@ public class CicloTarjetaService {
     public record TotalCargado(VistaResumenTarjeta resumen, BigDecimal total, BigDecimal cargado,
             BigDecimal diferencia) {
 
+        @com.fasterxml.jackson.annotation.JsonProperty
         public boolean coincide() {
             return diferencia.signum() == 0;
         }
@@ -220,11 +225,14 @@ public class CicloTarjetaService {
         ResumenTarjeta r = resumenId != null ? buscar(c, resumenId) : porPagar(c);
         r.cargarTotal(total);
         VistaResumenTarjeta v = vista(c, r.fechas(), r, cuotasPorResumen(c));
-        BigDecimal diferencia = total.subtract(v.cargado());
-        if (diferencia.abs().compareTo(properties.toleranciaDiferencia()) <= 0) {
-            diferencia = BigDecimal.ZERO.setScale(2);
-        }
-        return new TotalCargado(v, total, v.cargado(), diferencia);
+        return new TotalCargado(v, total, v.cargado(), v.diferencia());
+    }
+
+    /** Total del resumen − lo cargado; cero dentro de la tolerancia. */
+    private BigDecimal diferencia(BigDecimal total, BigDecimal cargado) {
+        BigDecimal diferencia = total.subtract(cargado).setScale(2, RoundingMode.HALF_UP);
+        return diferencia.abs().compareTo(properties.toleranciaDiferencia()) <= 0 ? BigDecimal.ZERO.setScale(2)
+                : diferencia;
     }
 
     public record Pago(Movimiento movimiento, VistaResumenTarjeta resumen) {
@@ -419,7 +427,7 @@ public class CicloTarjetaService {
         return new VistaResumenTarjeta(guardado == null ? null : guardado.getId(), fechas.periodo(), desde,
                 fechas.cierre(), fechas.vencimiento(), fechas.estimadas(),
                 guardado == null ? EstadoResumenTarjeta.ABIERTO : guardado.getEstado(), compras, enCuotas, cargado,
-                totalReal, totalReal == null ? null : totalReal.subtract(cargado), c.tarjeta().getNombre(),
+                totalReal, totalReal == null ? null : diferencia(totalReal, cargado), c.tarjeta().getNombre(),
                 cuentaDebito(c.tarjeta()), detalle);
     }
 

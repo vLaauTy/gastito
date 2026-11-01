@@ -18,7 +18,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @param cuotas     las cuotas que caen en este resumen
  * @param cargado    compras + cuotas
  * @param totalReal  lo que dice el resumen del banco, o null si no se cargó
- * @param diferencia totalReal − cargado (positiva: falta cargar), o null sin total real
+ * @param diferencia totalReal − cargado (positiva: falta cargar; cero dentro de la tolerancia), o null sin total real
  */
 public record VistaResumenTarjeta(Long id, YearMonth periodo, LocalDate desde, LocalDate cierre, LocalDate vencimiento,
         boolean estimadas, EstadoResumenTarjeta estado, BigDecimal compras, BigDecimal cuotas, BigDecimal cargado,

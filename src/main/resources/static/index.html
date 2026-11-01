@@ -13,6 +13,7 @@
 <script src="/js/app.js" defer></script>
 <script src="/js/sueldo.js" defer></script>
 <script src="/js/escala-hoja.js" defer></script>
+<script src="/js/tarjeta.js" defer></script>
 <script src="/js/movil.js" defer></script>
 </head>
 <body>
@@ -25,6 +26,7 @@
       <a href="#ingresos" data-view="ingresos"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#wallet"/></svg><span>Ingresos</span></a>
       <a href="#fijos" data-view="fijos"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#calendar-check"/></svg><span>Fijos</span></a>
       <div class="mas-panel">
+        <a href="#tarjeta" data-view="tarjeta" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#credit-card"/></svg><span>Tarjeta</span></a>
         <a href="#costos-ia" data-view="costos-ia" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#bot"/></svg><span>Costos IA</span></a>
         <a href="#juntadas" data-view="juntadas" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#users"/></svg><span>Juntadas</span></a>
         <a href="#cuotas" data-view="cuotas" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#layers"/></svg><span>Cuotas</span></a>
@@ -125,6 +127,10 @@
         </section>
 
         <aside>
+          <section class="card" aria-label="Tarjeta de crédito">
+            <div class="head"><h2>Tarjeta</h2><a href="#tarjeta" data-view="tarjeta" class="ver-todos">Ver detalle</a></div>
+            <div id="r-tarjeta"></div>
+          </section>
           <section class="card" aria-label="Ingresos del mes">
             <div class="head"><h2>Ingresos de <span data-mes-largo></span></h2><button type="button" data-abrir-ingreso>Cargar</button></div>
             <div id="r-ingresos-lista"></div>
@@ -294,6 +300,33 @@
         </div>
       </section>
     </div>
+    <!-- ===== Tarjeta ===== -->
+    <div class="view" id="v-tarjeta" hidden>
+      <header>
+        <div><h1>Tarjeta</h1><div class="sub" id="t-sub"></div></div>
+      </header>
+      <section class="cards" aria-label="Resúmenes de la tarjeta">
+        <div class="card"><div class="label">Resumen cerrado por pagar</div><div class="big" id="t-cerrado">…</div><div class="note" id="t-cerrado-nota"></div></div>
+        <div class="card"><div class="label">Próximo resumen</div><div class="big" id="t-proximo">…</div><div class="note" id="t-proximo-nota"></div></div>
+        <div class="card"><div class="label">Cuotas comprometidas después</div><div class="big" id="t-comprometido">…</div><div class="note" id="t-comprometido-nota"></div></div>
+      </section>
+      <section class="card" aria-label="Fechas del resumen">
+        <h2>Fechas del resumen</h2>
+        <p class="note" id="t-fechas-nota"></p>
+        <form id="t-form-fechas" class="form-linea" novalidate>
+          <label>Cierre <input type="date" name="cierre" required></label>
+          <label>Vencimiento <input type="date" name="vencimiento" required></label>
+          <button type="submit" class="primary">Guardar fechas</button>
+        </form>
+        <p class="error" id="t-fechas-error" role="alert" hidden></p>
+      </section>
+      <div id="t-resumenes" class="lista"></div>
+      <section class="card" aria-label="Cuotas en los resúmenes siguientes">
+        <h2>Cuotas en los resúmenes siguientes</h2>
+        <div id="t-siguientes" class="lista"></div>
+      </section>
+    </div>
+
     <!-- ===== Juntadas ===== -->
     <div class="view" id="v-juntadas" hidden>
       <header>

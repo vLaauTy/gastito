@@ -411,3 +411,8 @@ tr[hidden] { display: none !important; }
 .resumen-fijos .desglose { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; font-weight: 600; }
 .resumen-fijos .desglose .positivo { color: var(--ok); }
 .resumen-fijos .note b { color: var(--fg); }
+
+/* Tarjeta: formularios de una línea (fechas del resumen, total) */
+.form-linea { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 8px; }
+.form-linea label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+#t-resumenes > .card p { margin: 6px 0; }

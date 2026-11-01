@@ -56,7 +56,7 @@ class ConversacionTarjetaTest {
 
     private void conPanel() {
         when(ciclo.panel()).thenReturn(Optional.of(new CicloTarjetaService.Panel("MasterCard Gold", "Galicia",
-                List.of(cerrado(null)), proximo(), List.of(), List.of())));
+                List.of(cerrado(null)), proximo(), List.of(), BigDecimal.ZERO, List.of())));
     }
 
     /** El texto del último mensaje enviado o editado. */

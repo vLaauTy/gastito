@@ -157,7 +157,7 @@
 
   // --- Navegación ---
 
-  const VISTAS = ['resumen', 'movimientos', 'ingresos', 'fijos', 'costos-ia', 'categorias', 'juntadas', 'cuotas'];
+  const VISTAS = ['resumen', 'movimientos', 'ingresos', 'fijos', 'tarjeta', 'costos-ia', 'categorias', 'juntadas', 'cuotas'];
 
   function leerUrl() {
     const vista = location.hash.slice(1);
@@ -215,6 +215,7 @@
           api('/api/resumenes/ultimo').then(loQueNotoLaIa),
           Promise.all([api(conMes('/api/fijos/checklist')), api('/api/juntadas')]).then(([fijos, juntadas]) => pendientesDelResumen(fijos, juntadas)),
           ultimosMovimientos(),
+          ...(window.Gastito.alCargarResumen || []).map((f) => f()),
         );
       } else if (estado.vista === 'movimientos') {
         texto('#m-sub', `${mesYAnio(resumen.mes)} · ${plural(resumen.cantidadGastos, 'gasto', 'gastos')} · ${pesos(resumen.gastado)}`);
@@ -235,6 +236,8 @@
         tareas.push(api('/api/juntadas').then(vistaJuntadas));
       } else if (estado.vista === 'cuotas') {
         tareas.push(api('/api/cuotas').then(vistaCuotas));
+      } else if (estado.vista === 'tarjeta') {
+        tareas.push(...(window.Gastito.alCargarTarjeta || []).map((f) => f()));
       } else {
         tareas.push(
           api(conMes('/api/fijos/checklist')).then(vistaFijosChecklist),
@@ -1470,7 +1473,7 @@
     await cargar();
   }
 
-  // Lo que sueldo.js necesita de acá (los formatos, la API y los avisos), sin repetirlo.
+  // Lo que sueldo.js y tarjeta.js necesitan de acá (los formatos, la API y los avisos), sin repetirlo.
   window.Gastito = Object.assign(window.Gastito || {}, { h, api, pesos, mostrarAviso, nombreMes, mesYAnio, mayuscula, numeroArg, fechaCorta, estado, toast: (m, t) => window.Iconos.toast(m, t) });
 
   iniciar();
