@@ -34,7 +34,9 @@ public enum Intencion {
     /** "Lo de Pablo dalo por perdido": dar por perdida la parte de alguien en una juntada. */
     PERDONAR,
     /** "¿Qué fijos me faltan?", "mandame el resumen de la semana": ver una lista o un resumen. */
-    VER;
+    VER,
+    /** "La tarjeta cierra el 26/11 y vence el 11/12", "el resumen es de 250 mil", "se debitó la tarjeta". */
+    TARJETA;
 
     /** Lo que devolvió la IA; si no es ninguno de estos, OTRO. "FIJO" es el nombre viejo de ALTA_FIJO. */
     public static Intencion de(String texto) {

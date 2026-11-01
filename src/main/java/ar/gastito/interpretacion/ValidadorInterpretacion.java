@@ -2,6 +2,7 @@ package ar.gastito.interpretacion;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -130,7 +131,7 @@ public class ValidadorInterpretacion {
 
     /** Las listas y resúmenes que también tienen un comando. */
     public enum Lista {
-        FIJOS, DEUDAS, CUOTAS, COSTOS_IA, RESUMEN_SEMANA, RESUMEN_MES, HOY, MES, CALCULO, DASHBOARD, AYUDA;
+        FIJOS, DEUDAS, CUOTAS, COSTOS_IA, RESUMEN_SEMANA, RESUMEN_MES, HOY, MES, CALCULO, DASHBOARD, AYUDA, TARJETA;
 
         static Optional<Lista> de(String texto) {
             if (texto == null || texto.isBlank()) {
@@ -160,6 +161,23 @@ public class ValidadorInterpretacion {
     public record BajaFijo(String cual) implements Resultado {
     }
 
+    /**
+     * "La tarjeta cierra el 26/11 y vence el 11/12": las fechas de un resumen. Si falta una, se pregunta.
+     *
+     * @param cierre      null si no lo dijo
+     * @param vencimiento null si no lo dijo
+     */
+    public record FechasTarjeta(LocalDate cierre, LocalDate vencimiento) implements Resultado {
+    }
+
+    /** "El resumen de la tarjeta es de 250.000": lo que dice el resumen del banco. */
+    public record TotalTarjeta(BigDecimal total) implements Resultado {
+    }
+
+    /** "Se debitó la tarjeta, 250.000": se pagó el resumen. Sin monto, null. */
+    public record PagoTarjeta(BigDecimal monto) implements Resultado {
+    }
+
     public Resultado validar(InterpretacionIa ia, Catalogo catalogo, LocalDateTime ahora) {
         Intencion intencion = ia == null ? Intencion.OTRO : Intencion.de(ia.intencion());
         return switch (intencion) {
@@ -180,6 +198,7 @@ public class ValidadorInterpretacion {
             case PERDONAR -> new Perdonar(texto(ia.devolucionPersona()), texto(ia.devolucionDe()));
             case BAJA_FIJO -> new BajaFijo(texto(ia.descripcion()));
             case VER -> Lista.de(ia.ver()).<Resultado>map(Ver::new).orElseGet(Pregunta::new);
+            case TARJETA -> comoTarjeta(ia, ahora.toLocalDate());
         };
     }
 
@@ -339,6 +358,26 @@ public class ValidadorInterpretacion {
             case "alta" -> Confianza.ALTA;
             case "media" -> Confianza.MEDIA;
             default -> Confianza.BAJA;
+        };
+    }
+
+    /**
+     * Datos del resumen de la tarjeta: las fechas, el total o el débito. Si no se entiende qué dato es, se muestra
+     * cómo viene la tarjeta.
+     */
+    private static Resultado comoTarjeta(InterpretacionIa ia, LocalDate hoy) {
+        String dato = ia.tarjetaDato() == null ? "" : ia.tarjetaDato().strip().toUpperCase(java.util.Locale.ROOT);
+        Optional<BigDecimal> monto = monto(ia.monto());
+        return switch (dato) {
+            case "FECHAS" -> {
+                Optional<LocalDate> cierre = ParserTarjeta.cierre(ia.tarjetaCierre(), hoy);
+                Optional<LocalDate> vencimiento = ParserTarjeta.vencimiento(ia.tarjetaVencimiento(), cierre.orElse(hoy));
+                yield cierre.isEmpty() && vencimiento.isEmpty() ? new Ver(Lista.TARJETA)
+                        : new FechasTarjeta(cierre.orElse(null), vencimiento.orElse(null));
+            }
+            case "TOTAL" -> monto.<Resultado>map(TotalTarjeta::new).orElseGet(() -> new Ver(Lista.TARJETA));
+            case "PAGO" -> new PagoTarjeta(monto.orElse(null));
+            default -> new Ver(Lista.TARJETA);
         };
     }
 

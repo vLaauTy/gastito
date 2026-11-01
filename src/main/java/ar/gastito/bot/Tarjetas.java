@@ -4,6 +4,7 @@ import static ar.gastito.bot.FormatoMensajes.html;
 
 import java.math.BigDecimal;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +24,8 @@ import ar.gastito.movimiento.MovimientoItem;
 import ar.gastito.movimiento.Origen;
 import ar.gastito.movimiento.TipoMovimiento;
 import ar.gastito.sueldo.SueldoService;
+import ar.gastito.tarjeta.CalendarioTarjeta;
+import ar.gastito.tarjeta.CicloTarjetaService;
 import ar.gastito.ticket.ControlesTicket;
 
 /**
@@ -126,6 +129,29 @@ public class Tarjetas {
         this.comparacionDeSueldo = fuente;
     }
 
+    /** En qué resumen de la tarjeta entra un gasto con crédito; sin el ciclo configurado, en ninguno. */
+    private Function<Movimiento, Optional<CalendarioTarjeta.Fechas>> resumenDeTarjeta = m -> Optional.empty();
+
+    @Autowired(required = false)
+    void usarCicloTarjeta(CicloTarjetaService servicio) {
+        usarCicloTarjeta(servicio::resumenDe);
+    }
+
+    void usarCicloTarjeta(Function<Movimiento, Optional<CalendarioTarjeta.Fechas>> fuente) {
+        this.resumenDeTarjeta = fuente;
+    }
+
+    /** "🗓 Entra en el resumen que vence ≈ 11/12", si es un gasto con la tarjeta de crédito. */
+    private Optional<String> lineaResumenTarjeta(Movimiento m) {
+        if (m.getTipo() != TipoMovimiento.GASTO || m.getTarjeta() == null) {
+            return Optional.empty();
+        }
+        return resumenDeTarjeta.apply(m).map(f -> "🗓 Entra en el resumen que vence " + (f.estimadas() ? "≈ " : "")
+                + DIA_MES.format(f.vencimiento()));
+    }
+
+    private static final DateTimeFormatter DIA_MES = DateTimeFormatter.ofPattern("dd/MM");
+
     private Optional<VistaJuntada> juntada(Movimiento m) {
         return m.isJuntada() && m.getId() != null && m.getTipo() == TipoMovimiento.GASTO ? juntadas.apply(m.getId())
                 : Optional.empty();
@@ -184,7 +210,8 @@ public class Tarjetas {
         if (productos > 0) {
             detalle += (detalle.isEmpty() ? "" : " · ") + productos + (productos == 1 ? " producto" : " productos");
         }
-        return escuchado(m) + linea + (detalle.isEmpty() ? "" : "\n" + detalle);
+        return escuchado(m) + linea + (detalle.isEmpty() ? "" : "\n" + detalle)
+                + lineaResumenTarjeta(m).map(r -> "\n" + r).orElse("");
     }
 
     /** "💵 Efectivo", "💳 Débito (Galicia)" o "💳 <i>Sin especificar</i>". */
@@ -326,6 +353,7 @@ public class Tarjetas {
                 : (c.getEmoji() == null ? "🏷" : c.getEmoji()) + " " + html(c.getNombre()));
         lineas.add("💳 " + html(FormatoMensajes.medio(m.getMedioPago(), m.getCuenta())));
         lineas.add("📅 " + formato.fecha(m.getFechaHora()));
+        lineaResumenTarjeta(m).ifPresent(lineas::add);
         juntada.ifPresent(j -> lineas.add("\n" + personas(j)));
         return String.join("\n", lineas);
     }

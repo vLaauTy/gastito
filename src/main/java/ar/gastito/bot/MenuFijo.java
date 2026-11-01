@@ -12,6 +12,7 @@ public final class MenuFijo {
     static final String DISPONIBLE = "💰 ¿Cuánto me queda?";
     static final String FIJOS = "📌 Fijos";
     static final String ME_DEBEN = "👥 Me deben";
+    static final String TARJETA = "💳 Tarjeta";
     static final String HOY = "📊 Hoy";
     static final String MES = "📅 Mes";
     static final String AYUDA = "❓ Ayuda";
@@ -24,6 +25,7 @@ public final class MenuFijo {
             DISPONIBLE, "/disponible",
             FIJOS, "/fijos",
             ME_DEBEN, "/juntadas",
+            TARJETA, "/tarjeta",
             HOY, "/hoy",
             MES, "/mes",
             AYUDA, "/ayuda",
@@ -41,7 +43,7 @@ public final class MenuFijo {
     static ReplyKeyboardMarkup teclado() {
         return ReplyKeyboardMarkup.builder()
                 .keyboardRow(new KeyboardRow(RESUMEN, DISPONIBLE))
-                .keyboardRow(new KeyboardRow(FIJOS, ME_DEBEN))
+                .keyboardRow(new KeyboardRow(FIJOS, TARJETA, ME_DEBEN))
                 .keyboardRow(new KeyboardRow(HOY, MES, AYUDA))
                 .resizeKeyboard(true)
                 .isPersistent(true)

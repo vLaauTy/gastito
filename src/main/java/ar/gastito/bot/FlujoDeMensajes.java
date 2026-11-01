@@ -72,6 +72,7 @@ class FlujoDeMensajes {
     private final GastoFijoService gastosFijos;
     private final ConversacionVarios varios;
     private final ConversacionCuotas cuotas;
+    private final ConversacionTarjeta tarjeta;
     private final ComandosSueldo comandosSueldo;
     private final EdicionDeCampos edicion;
     private final ComandosBot comandos;
@@ -82,7 +83,7 @@ class FlujoDeMensajes {
             FormatoConsulta formatoConsulta, ConversacionRepetidos repetidos, ConversacionJuntadas juntadas,
             ConversacionFijos fijos, ConversacionAltaFijo altaFijo, PedidosNaturales naturales,
             GastoFijoService gastosFijos, ConversacionVarios varios, ConversacionCuotas cuotas,
-            ComandosSueldo comandosSueldo, EdicionDeCampos edicion, ComandosBot comandos,
+            ConversacionTarjeta tarjeta, ComandosSueldo comandosSueldo, EdicionDeCampos edicion, ComandosBot comandos,
             GuardadoAutomatico guardado) {
         this.interpretador = interpretador;
         this.movimientos = movimientos;
@@ -100,6 +101,7 @@ class FlujoDeMensajes {
         this.gastosFijos = gastosFijos;
         this.varios = varios;
         this.cuotas = cuotas;
+        this.tarjeta = tarjeta;
         this.comandosSueldo = comandosSueldo;
         this.edicion = edicion;
         this.comandos = comandos;
@@ -194,6 +196,7 @@ class FlujoDeMensajes {
                 case CALCULO_SUELDO -> "🧮 Calcular el sueldo";
                 case CANCELAR_CUOTAS -> "🗂 Cancelar unas cuotas";
                 case PERDONAR -> "🚫 Dar por perdida una deuda";
+                case TARJETA -> "💳 Datos de la tarjeta";
                 default -> "📋 Ver una lista";
             }, ES_OTRA + ":" + id + ":" + opcion.ordinal());
         };
@@ -223,6 +226,9 @@ class FlujoDeMensajes {
                     .<List<Accion>>map(List::of).orElseGet(juntadas::abiertas);
             case ValidadorInterpretacion.BajaFijo b -> naturales.bajaDeFijo(b.cual(), prefijo)
                     .<List<Accion>>map(List::of).orElseGet(fijos::lista);
+            case ValidadorInterpretacion.FechasTarjeta f -> tarjeta.fechas(chatId, f, prefijo);
+            case ValidadorInterpretacion.TotalTarjeta t -> tarjeta.total(t.total(), null, prefijo);
+            case ValidadorInterpretacion.PagoTarjeta p -> tarjeta.pago(p.monto(), prefijo);
             default -> List.of(Accion.Enviar.texto(prefijo + "🤔 No entendí qué querés hacer. ¿Me lo contás de otra forma?"));
         };
     }

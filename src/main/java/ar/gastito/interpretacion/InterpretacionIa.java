@@ -47,7 +47,22 @@ public record InterpretacionIa(
         String ver,
         String horas,
         @JsonPropertyDescription("DUDOSO: 2 o 3 intenciones")
-        List<String> opciones) {
+        List<String> opciones,
+        @JsonPropertyDescription("TARJETA: FECHAS, TOTAL o PAGO")
+        String tarjetaDato,
+        String tarjetaCierre,
+        String tarjetaVencimiento) {
+
+    /** Sin los datos del resumen de la tarjeta. */
+    public InterpretacionIa(String intencion, String monto, String descripcion, List<String> categorias,
+            String confianza, String medioPago, String cuenta, String fecha, String hora, String juntadaPersonas,
+            List<String> juntadaNombres, String devolucionPersona, String devolucionDe, String fijoDia,
+            String fijoFrecuencia, String fijoVariable, String cuotasCantidad, String cuotasValorCuota,
+            String fijoAlias, String claseIngreso, String campo, String ver, String horas, List<String> opciones) {
+        this(intencion, monto, descripcion, categorias, confianza, medioPago, cuenta, fecha, hora, juntadaPersonas,
+                juntadaNombres, devolucionPersona, devolucionDe, fijoDia, fijoFrecuencia, fijoVariable, cuotasCantidad,
+                cuotasValorCuota, fijoAlias, claseIngreso, campo, ver, horas, opciones, "", "", "");
+    }
 
     /** Sin los datos de juntadas, devoluciones ni gastos fijos. */
     public InterpretacionIa(String intencion, String monto, String descripcion, List<String> categorias,
@@ -78,6 +93,7 @@ public record InterpretacionIa(
     public InterpretacionIa conIntencion(Intencion elegida) {
         return new InterpretacionIa(elegida.name(), monto, descripcion, categorias, confianza, medioPago, cuenta,
                 fecha, hora, juntadaPersonas, juntadaNombres, devolucionPersona, devolucionDe, fijoDia, fijoFrecuencia,
-                fijoVariable, cuotasCantidad, cuotasValorCuota, fijoAlias, claseIngreso, campo, ver, horas, opciones);
+                fijoVariable, cuotasCantidad, cuotasValorCuota, fijoAlias, claseIngreso, campo, ver, horas, opciones,
+                tarjetaDato, tarjetaCierre, tarjetaVencimiento);
     }
 }

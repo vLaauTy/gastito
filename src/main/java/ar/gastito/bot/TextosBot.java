@@ -41,6 +41,11 @@ final class TextosBot {
             • "borrá lo último que cargué"
             • "cancelá las cuotas de las zapatillas", "lo de Pablo dalo por perdido"
 
+            <b>💳 Tarjeta de crédito</b>
+            • "¿cuánto llevo de tarjeta?", "¿cuánto vence el 11?" (o el botón 💳 Tarjeta)
+            • "la tarjeta cierra el 26/11 y vence el 11/12": hasta que me lo digas, las estimo (≈)
+            • "el resumen de la tarjeta es de 250.000", "se debitó la tarjeta"
+
             <b>🧮 Sueldo</b>
             • "este mes hice 10 horas al 50, 6 al 100 y 30 nocturnas": calculo el sueldo del mes
             • "¿cuánto me da el sueldo calculado?"
@@ -56,7 +61,7 @@ final class TextosBot {
             El domingo a las 21 te mando cómo fue tu semana y el día 1 a las 9, cómo fue el mes. Si la PC estaba apagada, te llega apenas la prendés.
 
             <b>Atajos</b> (si preferís comandos)
-            /hoy · /mes · /disponible · /resumen · /juntadas · /fijos · /cuotas · /calculo · /costos · /dashboard""";
+            /hoy · /mes · /disponible · /resumen · /tarjeta · /juntadas · /fijos · /cuotas · /calculo · /costos · /dashboard""";
 
     private TextosBot() {
     }

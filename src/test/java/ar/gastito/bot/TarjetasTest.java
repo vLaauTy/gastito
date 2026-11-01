@@ -44,6 +44,20 @@ class TarjetasTest {
     }
 
     @Test
+    void unaCompraConLaTarjetaDiceEnQueResumenEntra() {
+        Movimiento m = Movimiento.pendiente(new MovimientoInterpretado(new BigDecimal("2500"), "Remera", KIOSCO,
+                List.of(), null, null, org.mockito.Mockito.mock(ar.gastito.catalogo.TarjetaCredito.class),
+                DatosDePrueba.AHORA), ar.gastito.movimiento.Origen.TEXTO, "remera 2500 con tarjeta",
+                DatosDePrueba.AHORA);
+        tarjetas.usarCicloTarjeta(g -> java.util.Optional.of(new ar.gastito.tarjeta.CalendarioTarjeta.Fechas(
+                java.time.YearMonth.of(2026, 11), java.time.LocalDate.of(2026, 11, 30),
+                java.time.LocalDate.of(2026, 12, 14), false)));
+
+        assertThat(tarjetas.pendiente(m)).endsWith("📅 Hoy 16:42\n🗓 Entra en el resumen que vence ≈ 14/12");
+        assertThat(tarjetas.pendiente(conCategoria("3700", KIOSCO))).doesNotContain("resumen");
+    }
+
+    @Test
     void tarjetaConUnDatoPorLinea() {
         assertThat(tarjetas.pendiente(conCategoria("3700", KIOSCO))).isEqualTo("""
                 🧾 <b>Nuevo gasto</b>

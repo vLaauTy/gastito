@@ -25,7 +25,8 @@ intencion:
 - CALCULO_SUELDO: las horas del mes para calcular el sueldo ("este mes hice 10 horas al 50, 6 al 100 y 30 nocturnas"). horas: cada tipo con su cantidad en dígitos, así: "10 al 50, 6 al 100, 30 nocturnas".
 - CANCELAR_CUOTAS: cancelar una compra en cuotas ("cancelá las cuotas de las zapatillas"). descripcion: cuál.
 - PERDONAR: dar por perdida la parte que alguien le debe de una juntada ("lo de Pablo dalo por perdido"): devolucionPersona y devolucionDe.
-- VER: pide una lista o un resumen. ver: FIJOS (qué fijos tiene o le faltan pagar), DEUDAS (quién le debe), CUOTAS, COSTOS_IA (cuánto lleva gastado en IA), RESUMEN_SEMANA, RESUMEN_MES, HOY (gastos de hoy), MES (total del mes por categoría), CALCULO (su sueldo calculado), DASHBOARD, AYUDA (qué puede hacer el bot).
+- VER: pide una lista o un resumen. ver: FIJOS (qué fijos tiene o le faltan pagar), DEUDAS (quién le debe), CUOTAS, COSTOS_IA (cuánto lleva gastado en IA), RESUMEN_SEMANA, RESUMEN_MES, HOY (gastos de hoy), MES (total del mes por categoría), CALCULO (su sueldo calculado), DASHBOARD, AYUDA (qué puede hacer el bot), TARJETA (cuánto lleva en el resumen de la tarjeta, cuándo cierra o vence, cuánto se debita).
+- TARJETA: da un dato del resumen de la tarjeta de crédito; no es un gasto. tarjetaDato: FECHAS (cuándo cierra y vence: tarjetaCierre y tarjetaVencimiento como los dice, "26/11"), TOTAL (cuánto dice el resumen: monto) o PAGO (se debitó o pagó el resumen; monto si lo dice). "Pagué con la tarjeta" es un GASTO, no esto.
 - PREGUNTA: cualquier otra pregunta sobre sus gastos, ingresos o compras ("¿cuánto gasté en pan?", "compará octubre con septiembre").
 - DUDOSO: no está claro qué quiere ("pan 3700?", "el seguro 32 mil"). opciones: las 2 o 3 intenciones más probables, de la más a la menos. Completá igual los datos.
 - OTRO: un saludo, una prueba o algo que no es nada de esto.

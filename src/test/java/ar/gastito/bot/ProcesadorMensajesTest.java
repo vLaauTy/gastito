@@ -101,6 +101,7 @@ class ProcesadorMensajesTest {
     private final ar.gastito.fijo.GastoFijoService gastosFijos = mock(ar.gastito.fijo.GastoFijoService.class);
     private final ConversacionVarios varios = mock(ConversacionVarios.class);
     private final ConversacionCuotas cuotas = mock(ConversacionCuotas.class);
+    private final ar.gastito.tarjeta.CicloTarjetaService ciclo = mock(ar.gastito.tarjeta.CicloTarjetaService.class);
     private final ConversacionRecibos recibos = mock(ConversacionRecibos.class);
     private final ConversacionEscalas escalas = mock(ConversacionEscalas.class);
     private final ComandosSueldo comandosSueldo = mock(ComandosSueldo.class);
@@ -120,7 +121,8 @@ class ProcesadorMensajesTest {
         procesador = new ProcesadorMensajes(interpretador, movimientos, catalogos, usoIa, new ResolvedorFechas(),
                 tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, resumenes,
                 new FormatoResumen(formato, new GraficoMes(formato), dashboard), consultas, new FormatoConsulta(formato),
-                repetidos, juntadas, fijos, altaFijo, naturales, disponible, gastosFijos, varios, cuotas, recibos,
+                repetidos, juntadas, fijos, altaFijo, naturales, disponible, gastosFijos, varios, cuotas,
+                new ConversacionTarjeta(ciclo, formato), recibos,
                 escalas,
                 comandosSueldo,
                 new FormatoCostos(costosIa, formato, RELOJ), properties, dashboard,
@@ -917,20 +919,46 @@ class ProcesadorMensajesTest {
     }
 
     @Test
-    void elMenuFijoTieneResumenCuantoMeQuedaFijosYMeDeben() {
+    void elMenuFijoTieneResumenCuantoMeQuedaFijosTarjetaYMeDeben() {
         assertThat(MenuFijo.teclado().getKeyboard()).extracting(fila -> fila.stream()
                 .map(org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton::getText)
                 .toList())
                 .containsExactly(List.of(MenuFijo.RESUMEN, MenuFijo.DISPONIBLE), List.of(MenuFijo.FIJOS,
-                        MenuFijo.ME_DEBEN), List.of(MenuFijo.HOY, MenuFijo.MES, MenuFijo.AYUDA));
+                        MenuFijo.TARJETA, MenuFijo.ME_DEBEN), List.of(MenuFijo.HOY, MenuFijo.MES, MenuFijo.AYUDA));
         when(disponible.responder()).thenReturn("💰 Te queda $10");
         when(fijos.lista()).thenReturn(List.of(Accion.Enviar.texto("📋 Fijos")));
         when(juntadas.abiertas()).thenReturn(List.of(Accion.Enviar.texto("👥 Te deben")));
+        when(ciclo.panel()).thenReturn(Optional.empty());
 
         assertThat(texto(MenuFijo.DISPONIBLE)).isEqualTo("💰 Te queda $10");
         assertThat(texto(MenuFijo.FIJOS)).isEqualTo("📋 Fijos");
         assertThat(texto(MenuFijo.ME_DEBEN)).isEqualTo("👥 Te deben");
+        assertThat(texto(MenuFijo.TARJETA)).contains("Todavía no sé cuándo cierra la tarjeta");
         verifyNoInteractions(interpretador);
+    }
+
+    @Test
+    void elTotalDelResumenQueSeEsperabaNoPasaPorLaIa() {
+        when(ciclo.cargarTotal(7L, new BigDecimal("250000"))).thenReturn(new ar.gastito.tarjeta.CicloTarjetaService
+                .TotalCargado(ConversacionTarjetaTest.cerrado("250000"), new BigDecimal("250000"),
+                        new BigDecimal("200000"), new BigDecimal("50000")));
+        procesador.procesarBoton(CHAT, TARJETA, "tt:7");
+
+        assertThat(texto("250.000")).contains("faltan <b>$50.000</b> sin cargar");
+        verifyNoInteractions(interpretador);
+    }
+
+    @Test
+    void lasFechasDeLaTarjetaDichasEnUnMensajeSeGuardan() {
+        when(interpretador.interpretar(any(), any())).thenReturn(new InterpretadorService.Orden(
+                new ValidadorInterpretacion.FechasTarjeta(java.time.LocalDate.of(2026, 11, 26),
+                        java.time.LocalDate.of(2026, 12, 11)), null));
+        when(ciclo.cargarFechas(any(), any())).thenReturn(new ar.gastito.tarjeta.CicloTarjetaService.FechasCargadas(
+                ConversacionTarjetaTest.proximo(), null));
+
+        texto("la tarjeta cierra el 26/11 y vence el 11/12");
+
+        verify(ciclo).cargarFechas(java.time.LocalDate.of(2026, 11, 26), java.time.LocalDate.of(2026, 12, 11));
     }
 
     @Test

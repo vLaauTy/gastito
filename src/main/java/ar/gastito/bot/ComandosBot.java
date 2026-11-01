@@ -35,6 +35,7 @@ class ComandosBot {
     private final ConversacionFijos fijos;
     private final ConversacionAltaFijo altaFijo;
     private final ConversacionCuotas cuotas;
+    private final ConversacionTarjeta tarjeta;
     private final ComandosSueldo comandosSueldo;
     private final ComandoDisponible disponible;
     private final FormatoCostos formatoCostos;
@@ -44,8 +45,8 @@ class ComandosBot {
     ComandosBot(MovimientoService movimientos, FormatoMensajes formato, GraficoMes grafico,
             ComandosIngreso comandosIngreso, ResumenService resumenes, FormatoResumen formatoResumen,
             ConversacionJuntadas juntadas, ConversacionFijos fijos, ConversacionAltaFijo altaFijo,
-            ConversacionCuotas cuotas, ComandosSueldo comandosSueldo, ComandoDisponible disponible,
-            FormatoCostos formatoCostos, String urlDashboard, Interpretar interpretar) {
+            ConversacionCuotas cuotas, ConversacionTarjeta tarjeta, ComandosSueldo comandosSueldo,
+            ComandoDisponible disponible, FormatoCostos formatoCostos, String urlDashboard, Interpretar interpretar) {
         this.movimientos = movimientos;
         this.formato = formato;
         this.grafico = grafico;
@@ -56,6 +57,7 @@ class ComandosBot {
         this.fijos = fijos;
         this.altaFijo = altaFijo;
         this.cuotas = cuotas;
+        this.tarjeta = tarjeta;
         this.comandosSueldo = comandosSueldo;
         this.disponible = disponible;
         this.formatoCostos = formatoCostos;
@@ -90,6 +92,7 @@ class ComandosBot {
                             .orElseGet(() -> interpretar.interpretar(chatId, "agregá un gasto fijo: " + argumentos));
             case "/fijos" -> fijos.lista();
             case "/cuotas" -> cuotas.lista();
+            case "/tarjeta" -> tarjeta.estado();
             case "/calcular" -> argumentos.isBlank() || ParserHorasSueldo.posicionales(argumentos).isPresent()
                     ? List.of(comandosSueldo.calcularDeComando(limpio))
                     : interpretar.interpretar(chatId, "este mes hice " + argumentos);
@@ -126,6 +129,7 @@ class ComandosBot {
             case CALCULO -> "/calculo";
             case DASHBOARD -> "/dashboard";
             case AYUDA -> "/ayuda";
+            case TARJETA -> "/tarjeta";
         };
     }
 

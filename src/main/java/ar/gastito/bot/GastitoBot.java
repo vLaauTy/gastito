@@ -93,6 +93,7 @@ public class GastitoBot implements SpringLongPollingBot, LongPollingSingleThread
                 new BotCommand("disponible", "Cuánto te queda este mes"),
                 new BotCommand("mes", "Total del mes por categoría"),
                 new BotCommand("resumen", "Tu semana hasta hoy (/resumen mes: el mes)"),
+                new BotCommand("tarjeta", "Cuánto llevás de tarjeta y cuándo vence"),
                 new BotCommand("juntadas", "Quién te debe plata de las juntadas"),
                 new BotCommand("fijo", "Agregar un gasto fijo (o decí: agregá un fijo…)"),
                 new BotCommand("fijos", "Tus gastos fijos y su próximo cobro"),

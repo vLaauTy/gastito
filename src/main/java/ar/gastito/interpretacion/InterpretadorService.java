@@ -1,6 +1,7 @@
 package ar.gastito.interpretacion;
 
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -130,7 +131,12 @@ public class InterpretadorService {
      * @throws ar.gastito.ia.IaNoDisponibleException si hacía falta la IA y no se pudo usar
      */
     public Resultado interpretar(String texto, PropositoIa proposito) {
-        // 0. Un pedido de lista obvio ("¿qué fijos me faltan?") o una pregunta obvia, sin monto: sin IA.
+        // 0. Lo obvio de la tarjeta ("cierra el 26/11 y vence el 11/12", "se debitó la tarjeta"), un pedido de lista
+        // obvio ("¿qué fijos me faltan?") o una pregunta obvia, sin monto: sin IA.
+        Optional<ValidadorInterpretacion.Resultado> tarjeta = ParserTarjeta.parsear(texto, LocalDate.now(clock));
+        if (tarjeta.isPresent()) {
+            return new Orden(tarjeta.get(), null);
+        }
         Optional<ValidadorInterpretacion.Lista> lista = ClasificadorIntencion.pedidoDeLista(texto);
         if (lista.isPresent()) {
             return new Orden(new ValidadorInterpretacion.Ver(lista.get()), null);
