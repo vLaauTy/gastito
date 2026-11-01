@@ -48,8 +48,32 @@ public record DatosResumen(
      * @param hasta último día con datos: en un resumen parcial, hoy
      * @param fin   último día del período
      * @param dias  cuántos días se cuentan (desde el inicio hasta "hasta")
+     * @param registroDesde si el registro empezó dentro del período, el día del primer gasto: el período está
+     *                      incompleto y no lleva comparaciones ni consejo; null si ya se registraba desde antes
      */
-    public record Periodo(String tipo, LocalDate desde, LocalDate hasta, LocalDate fin, boolean parcial, int dias) {
+    public record Periodo(String tipo, LocalDate desde, LocalDate hasta, LocalDate fin, boolean parcial, int dias,
+            LocalDate registroDesde) {
+
+        public Periodo(String tipo, LocalDate desde, LocalDate hasta, LocalDate fin, boolean parcial, int dias) {
+            this(tipo, desde, hasta, fin, parcial, dias, null);
+        }
+    }
+
+    /** Lleva consejo (y escenarios de ahorro): hay datos suficientes y el registro no empezó a mitad del período. */
+    public boolean conConsejo() {
+        return !pocosDatos && periodo.registroDesde() == null;
+    }
+
+    /**
+     * Lo que va en lugar del consejo: el registro empezó a mitad del período, o hay pocos datos. Null si lleva
+     * consejo.
+     */
+    public String sinConsejo() {
+        if (periodo.registroDesde() != null) {
+            return "Registro desde el " + periodo.registroDesde().format(java.time.format.DateTimeFormatter
+                    .ofPattern("dd/MM")) + ": este período está incompleto, así que no lo comparo ni te doy consejos.";
+        }
+        return pocosDatos ? POCOS_DATOS : null;
     }
 
     /**

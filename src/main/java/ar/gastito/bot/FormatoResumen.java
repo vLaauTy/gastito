@@ -49,6 +49,7 @@ public class FormatoResumen {
     private static final DateTimeFormatter MES_Y_ANIO = DateTimeFormatter.ofPattern("MMMM yyyy", ES_AR);
     private static final DateTimeFormatter MES = DateTimeFormatter.ofPattern("MMMM", ES_AR);
     private static final DateTimeFormatter DIA_SEMANA = DateTimeFormatter.ofPattern("EEEE d", ES_AR);
+    private static final DateTimeFormatter DIA_MES = DateTimeFormatter.ofPattern("dd/MM");
     private static final DateTimeFormatter CLAVE = DateTimeFormatter.BASIC_ISO_DATE;
 
     private final FormatoMensajes formato;
@@ -75,12 +76,17 @@ public class FormatoResumen {
             encabezado.append("\n<i>").append(semanal ? "Semana" : "Mes").append(" parcial, hasta el ")
                     .append(DIA_SEMANA.format(d.periodo().hasta())).append("</i>");
         }
+        boolean registroParcial = d.periodo().registroDesde() != null;
+        if (registroParcial) {
+            encabezado.append("\n<i>Registro desde el ").append(DIA_MES.format(d.periodo().registroDesde()))
+                    .append("</i>");
+        }
         if (d.cantidadGastos() == 0) {
             encabezado.append("\nNo registraste gastos ").append(semanal ? "esta semana." : "este mes.");
         } else {
             encabezado.append("\nGastaste <b>").append(formato.pesos(d.totalGastado())).append("</b> en ")
                     .append(d.cantidadGastos()).append(d.cantidadGastos() == 1 ? " gasto" : " gastos")
-                    .append(comparacion(d, semanal, r));
+                    .append(registroParcial ? "" : comparacion(d, semanal, r));
         }
         partes.add(encabezado.toString());
 
@@ -130,8 +136,8 @@ public class FormatoResumen {
             }
             partes.add(ia.toString());
         }
-        if (d.pocosDatos()) {
-            partes.add("👉 " + DatosResumen.POCOS_DATOS);
+        if (d.sinConsejo() != null) {
+            partes.add("👉 " + html(d.sinConsejo()));
         }
 
         String pie = "🖥 Más detalle en el dashboard: <a href=\"" + html(urlDashboard) + "\">" + html(urlDashboard)

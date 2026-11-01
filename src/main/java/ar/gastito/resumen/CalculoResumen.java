@@ -75,6 +75,9 @@ public class CalculoResumen {
 
         // Si el registro empezó después del inicio del período anterior, ese período no tiene datos: no es $0.
         boolean conDatos = inicio.hayDatosDesde(anterior.desde());
+        // Si empezó dentro de este período, el período está incompleto: no se compara ni lleva consejo.
+        LocalDate registroDesde = inicio.primerDia()
+                .filter(d -> d.isAfter(periodo.desde()) && !d.isAfter(hasta)).orElse(null);
         BigDecimal total = suma(gastos);
         BigDecimal totalAnterior = conDatos ? suma(gastosAnteriores) : null;
         List<DatosResumen.Categoria> categorias = porCategoria(gastos, conDatos ? gastosAnteriores : null);
@@ -101,7 +104,8 @@ public class CalculoResumen {
         }
 
         return new DatosResumen(
-                new DatosResumen.Periodo(periodo.tipo().name(), periodo.desde(), hasta, periodo.hasta(), parcial, dias),
+                new DatosResumen.Periodo(periodo.tipo().name(), periodo.desde(), hasta, periodo.hasta(), parcial, dias,
+                        registroDesde),
                 total,
                 gastos.size(),
                 new DatosResumen.Comparacion(anterior.desde(), hastaAnterior, conDatos, totalAnterior,
@@ -112,7 +116,7 @@ public class CalculoResumen {
                 diasSinGastos,
                 sinEspecificar(gastos),
                 productos(periodo.desde(), hasta),
-                pocosDatos ? List.of() : escenarios(categorias, hormiga, dias, alMes),
+                pocosDatos || registroDesde != null ? List.of() : escenarios(categorias, hormiga, dias, alMes),
                 ingresosDelMes,
                 costoIa,
                 pocosDatos,

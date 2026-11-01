@@ -35,7 +35,7 @@ import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Origen;
 
 /**
- * Octubre de 2026 es el primer mes registrado: 3 gastos, y Supermercado con uno solo. Septiembre no tiene datos (no
+ * Octubre de 2026 es el primer mes registrado, desde el 1: 3 gastos, y Supermercado con uno solo. Septiembre no tiene datos (no
  * es que se gastó $0). El mínimo para el consejo está bajo para que los escenarios se calculen igual.
  */
 @DataJpaTest
@@ -81,7 +81,7 @@ class CalculoResumenSinDatosTest {
 
     @BeforeEach
     void cargarGastos() {
-        gasto("Supermercado", "4500", OCTUBRE.plusDays(4));
+        gasto("Supermercado", "4500", OCTUBRE);
         gasto("Kiosco", "1200", OCTUBRE.plusDays(9));
         gasto("Kiosco", "800", OCTUBRE.plusDays(19));
     }

@@ -82,7 +82,7 @@ public class ResumenService {
         ObjectNode paraIa = json.valueToTree(datos);
         paraIa.remove("notas");
         RedactorResumen.Redaccion texto = redactor.redactar(
-                RedactorResumen.Pedido.de(periodo.tipo(), paraIa, !datos.pocosDatos()));
+                RedactorResumen.Pedido.de(periodo.tipo(), paraIa, datos.conConsejo()));
         Resumen resumen = resumenes.save(new Resumen(periodo.tipo(), periodo.desde(), datos.periodo().hasta(),
                 datos.periodo().parcial(), automatico, datosJson, texto.observaciones(), texto.consejo(),
                 texto.descartado(), texto.usoIaId(), LocalDateTime.now(clock)));

@@ -161,6 +161,27 @@ class FormatoResumenTest {
     }
 
     @Test
+    void unMesConElRegistroEmpezadoALaMitadDiceDesdeCuandoYNoCompara() {
+        DatosResumen conDatos = datos("MENSUAL", LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31), false, null,
+                null);
+        DatosResumen d = new DatosResumen(new DatosResumen.Periodo("MENSUAL", LocalDate.of(2026, 10, 1),
+                LocalDate.of(2026, 10, 31), LocalDate.of(2026, 10, 31), false, 31, LocalDate.of(2026, 10, 31)),
+                conDatos.totalGastado(), conDatos.cantidadGastos(),
+                new DatosResumen.Comparacion(LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30), false, null, null),
+                conDatos.porCategoria(), conDatos.gastoMasGrande(), conDatos.hormiga(), conDatos.diasSinGastos(),
+                conDatos.sinEspecificar(), conDatos.productos(), List.of(), null, null, false, List.of());
+        Resumen r = new Resumen(TipoResumen.MENSUAL, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31), false,
+                true, "{}", List.of(), null, false, null, LocalDateTime.now());
+
+        String html = formatoResumen.mensaje(new ResumenService.Armado(r, d), 0);
+
+        assertThat(html).startsWith("📊 <b>Tu mes</b> · Octubre 2026\n<i>Registro desde el 31/10</i>\n"
+                + "Gastaste <b>$52.300</b> en 23 gastos\n");
+        assertThat(html).doesNotContain("Sin datos de septiembre").doesNotContain("%")
+                .contains("👉 Registro desde el 31/10: este período está incompleto");
+    }
+
+    @Test
     void unaSemanaQueCruzaDeMes() {
         assertThat(FormatoResumen.rango(LocalDate.of(2026, 10, 26), LocalDate.of(2026, 11, 1)))
                 .isEqualTo("26 de octubre al 1 de noviembre");

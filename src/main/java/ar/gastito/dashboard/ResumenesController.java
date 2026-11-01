@@ -48,7 +48,7 @@ public class ResumenesController {
                     return ResponseEntity.ok(new UltimoResumen(r.getId(), r.getTipo().name(), r.getDesde(),
                             r.getHasta(), d.periodo().fin(), r.isParcial(), r.isAutomatico(),
                             r.getObservaciones(), r.getConsejo(), r.isTextoIaDescartado(),
-                            r.getUsoIaId() != null, d.pocosDatos() ? DatosResumen.POCOS_DATOS : null,
+                            r.getUsoIaId() != null, d.sinConsejo(),
                             d.notas() == null ? List.of() : d.notas(), r.getCreadoEn()));
                 })
                 .orElseGet(() -> ResponseEntity.noContent().build());
