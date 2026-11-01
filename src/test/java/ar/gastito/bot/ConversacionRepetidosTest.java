@@ -78,7 +78,7 @@ class ConversacionRepetidosTest {
         when(movimientos.confirmar(15L)).thenReturn(new MovimientoService.Confirmacion(confirmado("1500", KIOSCO),
                 new BigDecimal("3000")));
 
-        List<Accion> acciones = conversacion.deNuevo(100, 15L).orElseThrow();
+        List<Accion> acciones = conversacion.deNuevo(100, 15L, m -> Teclado.NINGUNO).orElseThrow();
 
         assertThat(((Accion.Editar) acciones.get(0)).html()).startsWith("✅ <b>Guardado</b>");
     }
@@ -86,10 +86,10 @@ class ConversacionRepetidosTest {
     @Test
     void comprarDeNuevoUnTicketOAlgoIncompletoVuelveALaTarjetaDeSiempre() {
         when(movimientos.buscar(15L)).thenReturn(ticket("8050", SUPER, PRODUCTOS));
-        assertThat(conversacion.deNuevo(100, 15L)).isEmpty();
+        assertThat(conversacion.deNuevo(100, 15L, m -> Teclado.NINGUNO)).isEmpty();
 
         when(movimientos.buscar(15L)).thenReturn(conCategoria("1500", null));
-        assertThat(conversacion.deNuevo(100, 15L)).isEmpty();
+        assertThat(conversacion.deNuevo(100, 15L, m -> Teclado.NINGUNO)).isEmpty();
         verify(movimientos, never()).confirmar(15L);
     }
 

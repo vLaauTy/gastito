@@ -173,7 +173,7 @@ class ProcesadorMensajesTest {
     }
 
     @Test
-    void guardarTransformaLaTarjetaConElTotalDelMes() {
+    void guardarDejaLaTarjetaGuardadoConEditarDeshacerYElTotalDelMes() {
         when(movimientos.confirmar(ID))
                 .thenReturn(new MovimientoService.Confirmacion(confirmado("1500", KIOSCO), new BigDecimal("5200")));
 
@@ -181,8 +181,9 @@ class ProcesadorMensajesTest {
 
         Accion.Editar editada = edicion(acciones);
         assertThat(editada.mensajeId()).isEqualTo(TARJETA);
-        assertThat(editada.html()).startsWith("✅ <b>Guardado</b>").endsWith("llevás <b>$5.200</b> en 🍬 Kiosco.");
-        assertThat(editada.teclado().isVacio()).isTrue();
+        assertThat(editada.html()).startsWith("✅ <b>Guardado</b> · <b>$1.500</b> · 🍬 Kiosco")
+                .endsWith("\n📊 En octubre 2026 llevás <b>$5.200</b> en 🍬 Kiosco.");
+        assertThat(editada.teclado().botones()).extracting(Teclado.Boton::datos).contains("e:15", "du:15");
         assertThat(acciones).contains(new Accion.Avisar("✅ Guardado"));
     }
 
@@ -669,9 +670,12 @@ class ProcesadorMensajesTest {
         when(movimientos.confirmar(ID))
                 .thenReturn(new MovimientoService.Confirmacion(guardado, new BigDecimal("20000")));
         procesador.tarjetaEnviada(CHAT, ID, TARJETA);
+        // Con el botón queda la misma tarjeta que un guardado automático, y el total del mes como una línea más.
         Accion.Editar editada = edicion(tocar("g:15"));
-        assertThat(editada.html()).startsWith("✅ <b>Guardado</b> · Supermercado Día")
-                .endsWith("llevás <b>$20.000</b> en 🛒 Supermercado.");
+        assertThat(editada.html()).startsWith("✅ <b>Guardado</b> · <b>$8.050</b> · 🛒 Supermercado · 💳 Débito\nSupermercado Día")
+                .contains("productos")
+                .endsWith("\n📊 En octubre 2026 llevás <b>$20.000</b> en 🛒 Supermercado.");
+        assertThat(editada.teclado().botones()).extracting(Teclado.Boton::datos).containsExactly("e:15", "du:15");
     }
 
     @Test
@@ -1185,7 +1189,7 @@ class ProcesadorMensajesTest {
         assertThat(tocar("ru:" + ID + ":7")).containsExactly(new Accion.Avisar("🔗 Unidos"));
 
         // "Compré de nuevo" de algo que no se puede guardar así: vuelve la tarjeta de siempre.
-        when(repetidos.deNuevo(TARJETA, ID)).thenReturn(Optional.empty());
+        when(repetidos.deNuevo(eq(TARJETA), eq(ID), any())).thenReturn(Optional.empty());
         when(movimientos.buscar(ID)).thenReturn(conCategoria("1500", KIOSCO));
         assertThat(edicion(tocar("rd:" + ID)).html()).startsWith("🧾 <b>Nuevo gasto</b>");
     }

@@ -2,6 +2,7 @@ package ar.gastito.bot;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 
 import org.springframework.stereotype.Component;
 
@@ -66,15 +67,17 @@ public class ConversacionRepetidos {
     /**
      * "Compré de nuevo": se guarda el nuevo. Si le falta algo, o es un ticket (que tiene sus propios avisos para
      * revisar), vacío: vuelve la tarjeta de siempre.
+     *
+     * @param teclado los botones de la tarjeta "✅ Guardado" (✏️ Editar y ↩️ Deshacer)
      */
-    public Optional<List<Accion>> deNuevo(int mensajeId, long nuevoId) {
+    public Optional<List<Accion>> deNuevo(int mensajeId, long nuevoId, Function<Movimiento, Teclado> teclado) {
         Movimiento nuevo = movimientos.buscar(nuevoId);
         if (!nuevo.isCompleto() || nuevo.getOrigen() == Origen.TICKET) {
             return Optional.empty();
         }
         MovimientoService.Confirmacion c = movimientos.confirmar(nuevoId);
         return Optional.of(List.of(new Accion.Editar(mensajeId,
-                tarjetas.guardado(c.movimiento(), c.totalMesCategoria()), Teclado.NINGUNO),
+                tarjetas.guardadoConfirmado(c.movimiento(), c.totalMesCategoria()), teclado.apply(c.movimiento())),
                 new Accion.Avisar("✅ Guardado")));
     }
 }

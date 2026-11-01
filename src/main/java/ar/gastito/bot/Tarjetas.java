@@ -198,6 +198,17 @@ public class Tarjetas {
     }
 
     /**
+     * Un gasto guardado con el botón: la misma tarjeta que uno que se guardó solo, más una línea con lo que lleva
+     * el mes en su categoría.
+     */
+    public String guardadoConfirmado(Movimiento m, BigDecimal totalMes) {
+        String total = m.getCategoria() == null || totalMes == null ? ""
+                : "\n📊 En " + formato.mes(YearMonth.from(m.getFechaHora())) + " llevás <b>"
+                        + formato.pesos(totalMes) + "</b> en " + html(m.getCategoria().getNombreConEmoji()) + ".";
+        return guardadoAutomatico(m) + total;
+    }
+
+    /**
      * Un gasto que se guardó solo, en dos renglones: "✅ Guardado · $3.700 · 🍬 Kiosco · 💵 Efectivo" y la
      * descripción (de un ticket, con cuántos productos).
      */

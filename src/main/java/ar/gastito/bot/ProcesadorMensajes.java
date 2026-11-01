@@ -280,8 +280,15 @@ public class ProcesadorMensajes {
                 if (c.movimiento().getPlanCuotasId() != null) {
                     yield cuotas.guardada(mensajeId, c);
                 }
-                yield List.of(new Accion.Editar(mensajeId, tarjetas.guardado(c.movimiento(), c.totalMesCategoria()),
-                        Teclado.NINGUNO), new Accion.Avisar("✅ Guardado"));
+                if (c.movimiento().isIngreso()) {
+                    yield List.of(new Accion.Editar(mensajeId,
+                            tarjetas.guardado(c.movimiento(), c.totalMesCategoria()), Teclado.NINGUNO),
+                            new Accion.Avisar("✅ Guardado"));
+                }
+                // Guardado con el botón: la misma tarjeta que uno que se guardó solo, con ✏️ Editar y ↩️ Deshacer.
+                yield List.of(new Accion.Editar(mensajeId,
+                        tarjetas.guardadoConfirmado(c.movimiento(), c.totalMesCategoria()),
+                        guardado.teclado(c.movimiento())), new Accion.Avisar("✅ Guardado"));
             }
             case Tarjetas.CANCELAR -> {
                 Movimiento cancelado = movimientos.cancelar(id);
@@ -337,7 +344,7 @@ public class ProcesadorMensajes {
             case ConversacionVarios.GUARDAR_TODO, ConversacionVarios.CANCELAR_TODOS -> varios.boton(mensajeId,
                     accion, id);
             case Tarjetas.UNIR -> repetidos.unir(mensajeId, id, requerido(elegido));
-            case Tarjetas.DE_NUEVO -> repetidos.deNuevo(mensajeId, id)
+            case Tarjetas.DE_NUEVO -> repetidos.deNuevo(mensajeId, id, guardado::teclado)
                     .orElseGet(() -> List.of(edicion.principal(chatId, mensajeId, edicion.pendiente(id))));
             case FlujoDeMensajes.ES_GASTO -> flujo.esUnGasto(chatId, mensajeId, id);
             case FlujoDeMensajes.ES_PREGUNTA -> flujo.esUnaPregunta(mensajeId, id);
