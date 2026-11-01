@@ -600,6 +600,31 @@ del neto contra el mes anterior y contra el mismo mes del año anterior. Y se le
 descontaron de ganancias este año?", "¿cuánto aumentó mi sueldo desde enero?", "¿cuánto cobré de más o de menos
 contra lo que calculé?".
 
+### Tarjeta de crédito
+
+Las compras con crédito cuentan como gasto el día de la compra; además, Gastito sabe **en qué resumen entra cada
+una** y **cuándo sale la plata** (MasterCard Gold, débito automático de Galicia):
+
+- Cada compra va al resumen cuyo período la incluye (después del cierre anterior y hasta su cierre, el día del
+  cierre incluido). Las cuotas van una por resumen desde el de la compra (o el siguiente, con
+  `gastito.cuotas.primera-cuota: MES_SIGUIENTE`). La tarjeta de una compra con crédito dice "🗓 Entra en el resumen
+  que vence ≈ 11/12".
+- Mientras el banco no muestra el próximo cierre, Java lo **estima** (≈) desde el último cargado: el mismo día del
+  mes, corrido al lunes si cae en fin de semana, y la misma distancia hasta el vencimiento. Desde 2 días después del
+  cierre, si sigue estimado, el bot pregunta una vez por día "¿Ya sabés el próximo cierre y vencimiento?" (con
+  **Todavía no** vuelve en 3 días). Se cargan diciéndolo ("la tarjeta cierra el 26/11 y vence el 11/12") o en el
+  dashboard, y las compras se reasignan solas.
+- **3 días antes del vencimiento:** "El 11/11 vence la tarjeta: según lo cargado, $X. Se debita de Galicia.", con
+  **Cargar total del resumen**. Si el total real ("el resumen de la tarjeta es de 250.000") no coincide, avisa
+  cuánto falta cargar; no crea gastos.
+- **El día del vencimiento:** "¿Se debitó el resumen de la tarjeta?" (**Sí** / **Todavía no**, una vez por día). Con
+  Sí, o diciendo "se debitó la tarjeta, 250.000" (se confirma con un botón), queda un `PAGO_TARJETA` desde Galicia,
+  que no cuenta como gasto, y el resumen pagado.
+- "¿Cuánto llevo de tarjeta?", "¿cuánto vence el 11?", **💳 Tarjeta** o `/tarjeta`: el resumen cerrado por pagar, el
+  próximo con lo que llevás (compras + cuotas) y las cuotas ya comprometidas. Se reconoce sin IA.
+- Para arrancar hace falta un cierre real: decíselo al bot ("la tarjeta cerró el 29/10 y vence el 11/11") o cargalo en
+  el dashboard. Los avisos no salen antes de las 9 (`gastito.tarjeta.*` en `application.yml`).
+
 ### Costos de la IA
 
 `/costos` muestra el total del mes en dólares, la proyección a fin de mes (lo gastado ÷ días transcurridos × días
@@ -681,6 +706,7 @@ Abajo del chat queda un menú fijo con estos comandos, que también están en el
 | 📅 Mes         | `/mes`       | Total del mes y barras por categoría             |
 | 💸 Costos IA   | `/costos`    | Lo gastado en IA este mes, la proyección y el desglose |
 |                | `/resumen`   | La semana hasta hoy; `/resumen mes`, el mes      |
+| 💳 Tarjeta     | `/tarjeta`   | Cuánto llevás de tarjeta y cuándo vence          |
 |                | `/juntadas`  | Quién te debe plata de las juntadas              |
 |                | `/fijo`, `/fijos` | Agregar un gasto fijo; los que tenés y su próximo cobro |
 | 🖥 Dashboard   | `/dashboard` | El link del dashboard (se abre desde la PC)      |
@@ -713,6 +739,9 @@ http://localhost:8090
   últimos 6 meses, el gráfico del sueldo de los últimos 12
   meses y el formulario **Cargar ingreso**.
 - **Juntadas** y **Cuotas** (solo lectura; se cargan y se cobran desde el bot): las juntadas abiertas con quién debe cuánto y las cerradas, y las compras en cuotas con lo que falta pagar en los próximos 6 meses. En el Resumen, la tarjeta **Fijos y juntadas** dice cuántos fijos faltan cargar y cuánta plata hay por cobrar.
+- **Tarjeta:** el resumen cerrado por pagar, el próximo (cierra y vence, ≈ si es estimado, y cuánto llevás), las
+  compras y cuotas de cada resumen, las cuotas comprometidas en los siguientes, y los formularios para cargar las
+  fechas y el total del resumen. En el Resumen, la tarjeta **Tarjeta** muestra el cerrado y el próximo.
 - **Costos IA:** lo gastado en la IA (en USD) en el mes: totales, proyección, tope, desglose por propósito, costo por
   día, historial de 6 meses y las 10 llamadas más caras.
 - **Exportar CSV:** los gastos e ingresos del mes para Excel en castellano (separador `;`, coma decimal).
@@ -783,6 +812,9 @@ decimales, y acepta `?mes=2026-10` (por defecto, el mes actual):
 | `GET /api/sueldo/calculo`         | El cálculo guardado de un mes (`mes`); `POST` lo guarda, `POST /api/sueldo/calcular` es la cuenta en vivo |
 | `GET/POST/PUT /api/sueldo/conceptos` | Los conceptos del sueldo                                     |
 | `GET/POST/PUT /api/sueldo/escalas` | Las escalas con vigencia (la hora normal y el monto o porcentaje de cada concepto) |
+| `GET /api/tarjeta`                | El ciclo de la tarjeta: por pagar, próximo, siguientes con cuotas y pagados, con sus compras (`configurada` false sin ningún cierre) |
+| `POST /api/tarjeta/fechas`        | Cargar el cierre y el vencimiento (`cierre`, `vencimiento`); el resumen sale del mes del cierre |
+| `POST /api/tarjeta/{id}/total`    | El total que dice el resumen (`total`) y la diferencia con lo cargado |
 | `GET /api/resumenes/ultimo`       | El último resumen: período, lo que notó la IA y el consejo (204 si no hay) |
 | `GET /api/catalogo`               | Categorías, medios de pago, cuentas y tipos de ingreso          |
 | `GET /api/ingresos`               | Ingresos del mes y totales por tipo                             |
