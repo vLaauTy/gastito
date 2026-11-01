@@ -131,6 +131,14 @@ gastito:
   cuotas:
     # MISMO_MES: la primera cuota es la del mes de la compra. MES_SIGUIENTE: si la tarjeta cobra al mes siguiente.
     primera-cuota: MISMO_MES
+  tarjeta:
+    # El ciclo de la tarjeta: fechas estimadas hasta que se cargan, avisos de vencimiento y débito del resumen.
+    dias-para-preguntar-fechas: 2   # después del cierre, si el próximo sigue estimado
+    dias-al-posponer-fechas: 3      # "Todavía no"
+    dias-aviso-vencimiento: 3
+    hora-avisos: 9                  # antes de esta hora no se manda ningún aviso de la tarjeta
+    tolerancia-diferencia: 1        # entre el total del resumen y lo cargado
+    resumenes-siguientes: 6         # con cuotas comprometidas, en el dashboard
   fijos:
     # Como máximo, cada cuánto se manda el recordatorio agrupado de fijos vencidos sin cargar.
     intervalo-recordatorio: 3d

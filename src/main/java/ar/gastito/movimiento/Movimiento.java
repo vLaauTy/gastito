@@ -552,6 +552,31 @@ public class Movimiento {
         return m;
     }
 
+    /**
+     * El débito del resumen de la tarjeta desde su cuenta, ya confirmado. No cuenta como gasto: las compras ya se
+     * contaron el día que se hicieron.
+     */
+    public static Movimiento pagoTarjeta(BigDecimal monto, String descripcion, TarjetaCredito tarjeta, Cuenta cuenta,
+            LocalDateTime fechaHora, Origen origen, String textoOriginal, LocalDateTime ahora) {
+        if (monto == null || monto.signum() <= 0) {
+            throw new IllegalArgumentException("El pago de la tarjeta tiene que ser mayor a cero");
+        }
+        Movimiento m = new Movimiento();
+        m.tipo = TipoMovimiento.PAGO_TARJETA;
+        m.monto = monto;
+        m.descripcion = descripcion;
+        m.tarjeta = tarjeta;
+        m.cuenta = cuenta;
+        m.fechaHora = fechaHora;
+        m.origen = origen;
+        m.estado = EstadoMovimiento.CONFIRMADO;
+        m.textoOriginal = textoOriginal != null && textoOriginal.length() > LARGO_MAXIMO_TEXTO_ORIGINAL
+                ? textoOriginal.substring(0, LARGO_MAXIMO_TEXTO_ORIGINAL)
+                : textoOriginal;
+        m.creadoEn = ahora;
+        return m;
+    }
+
     /** Al elegir de quién es la devolución: la descripción ("Pablo, del Asado") y, si no se dijo, la cuenta. */
     public void asignarDevolucion(String nuevaDescripcion, Cuenta cuentaSiFalta) {
         verificarPendiente();

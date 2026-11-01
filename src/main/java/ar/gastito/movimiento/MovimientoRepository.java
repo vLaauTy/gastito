@@ -153,6 +153,30 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
             order by m.fechaHora""")
     List<Movimiento> gastosConfirmados(@Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta);
 
+    // --- Ciclo de la tarjeta ---
+
+    /** Las compras con la tarjeta (sin las cuotas) confirmadas entre las dos fechas, de la más vieja a la más nueva. */
+    @EntityGraph(attributePaths = {"categoria"})
+    @Query("""
+            select m from Movimiento m
+            where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
+              and m.tipo = ar.gastito.movimiento.TipoMovimiento.GASTO
+              and m.tarjeta.id = :tarjeta and m.planCuotasId is null
+              and m.fechaHora >= :desde and m.fechaHora < :hasta
+            order by m.fechaHora, m.id""")
+    List<Movimiento> comprasConTarjeta(@Param("tarjeta") Long tarjetaId, @Param("desde") LocalDateTime desde,
+            @Param("hasta") LocalDateTime hasta);
+
+    /** Todas las cuotas confirmadas con la tarjeta (a qué resumen va cada una se calcula en Java). */
+    @EntityGraph(attributePaths = {"categoria"})
+    @Query("""
+            select m from Movimiento m
+            where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
+              and m.tipo = ar.gastito.movimiento.TipoMovimiento.GASTO
+              and m.tarjeta.id = :tarjeta and m.planCuotasId is not null
+            order by m.fechaHora, m.id""")
+    List<Movimiento> cuotasConTarjeta(@Param("tarjeta") Long tarjetaId);
+
     // --- Compras en cuotas ---
 
     /** Las cuotas ya generadas de un plan, de la 1 a la última. */
