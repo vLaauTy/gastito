@@ -31,6 +31,18 @@
     return (v < 0 ? '-$' : '$') + texto;
   }
 
+  /** "US$ 20", "US$ 9,99": una compra en dólares. */
+  function dolaresCompra(n) {
+    const v = Number(n);
+    return 'US$ ' + (Number.isInteger(v) ? enteros : conDecimales).format(v);
+  }
+
+  /** "US$ 20 ≈ $30.000", "US$ 20 ≈ sin estimar" o, ya corregida con el resumen, "US$ 20 = $31.200". */
+  function montoEnDolares(usd, monto, estimado) {
+    if (!estimado) return `${dolaresCompra(usd)} = ${pesos(monto)}`;
+    return Number(monto) === 0 ? `${dolaresCompra(usd)} ≈ sin estimar` : `${dolaresCompra(usd)} ≈ ${pesos(monto)}`;
+  }
+
   function dolares(n) {
     const v = Number(n);
     // Una llamada a Haiku cuesta fracciones de centavo: por debajo de 1 centavo se muestran hasta 6 decimales.
@@ -478,12 +490,39 @@
       h('td', {}, window.Iconos.etiquetaCategoria(m.categoria)),
       h('td', { class: m.sinEspecificar ? 'sin-especificar' : null }, window.Iconos.medio(m.medio)),
       h('td', {}, h('span', { class: `chip ${m.origen.toLowerCase()}` }, window.Iconos.iconoOrigen(m.origen), origenTexto(m.origen))),
-      h('td', { class: 'amt' }, m.estimado ? `≈ ${pesos(m.monto)}` : pesos(m.monto),
-        m.estimado ? h('span', { class: 'chip estimado', title: 'Fijo tildado con el monto aproximado: corregilo en Fijos' }, 'estimado') : null),
+      h('td', { class: 'amt' }, montoFila(m), chipEstimado(m)),
       accionesMovimiento(m),
     );
     if (boton) boton.addEventListener('click', () => desplegarTicket(boton, fila, m.id));
     return fila;
+  }
+
+  function montoFila(m) {
+    if (m.dolares != null) return montoEnDolares(m.dolares, m.monto, m.estimado);
+    return m.estimado ? `≈ ${pesos(m.monto)}` : pesos(m.monto);
+  }
+
+  function chipEstimado(m) {
+    if (!m.estimado) return null;
+    const titulo = m.dolares != null
+      ? 'Compra en dólares: los pesos son estimados hasta que llegue el resumen (Corregir monto en el menú ⋯)'
+      : 'Fijo tildado con el monto aproximado: corregilo en Fijos';
+    return h('span', { class: 'chip estimado', title: titulo }, 'estimado');
+  }
+
+  /** Una compra en dólares: lo que cobraron en pesos según el resumen (deja de ser estimado). */
+  function corregirPesos(m) {
+    abrirDialogoMonto({
+      titulo: `Corregir ${m.descripcion || 'la compra en dólares'}`,
+      nota: `${montoEnDolares(m.dolares, m.monto, m.estimado)}${m.estimado ? ' (estimado)' : ''}. Poné lo que te cobraron en pesos según el resumen.`,
+      valor: m.estimado ? '' : String(m.monto).replace('.', ','),
+      exito: `${m.descripcion || 'Compra'} corregida`,
+      enviar: (monto) => api(`/api/dolar/compras/${m.id}/pesos`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ monto }),
+      }),
+    });
   }
 
   // --- Editar y eliminar un gasto ---
@@ -494,6 +533,8 @@
    */
   function accionesMovimiento(m) {
     const menu = h('div', { class: 'menu-acciones', role: 'menu' },
+      m.dolares != null ? h('button', { type: 'button', class: 'mini', role: 'menuitem', onclick: () => { cerrarMenus(); corregirPesos(m); } },
+        window.Iconos.svg('banknote'), 'Corregir monto') : null,
       h('button', { type: 'button', class: 'mini', role: 'menuitem', onclick: () => { cerrarMenus(); abrirEdicion(m); } },
         window.Iconos.svg('pencil'), 'Editar'),
       h('button', { type: 'button', class: 'mini peligro', role: 'menuitem', onclick: () => { cerrarMenus(); pedirBorrado(m); } },
@@ -543,9 +584,11 @@
     $('#form-movimiento-error').hidden = true;
     $('#mv-monto').value = montoEditable(m.monto);
     const fijo = MONTO_FIJO[m.especial];
+    const nota = fijo || (m.dolares != null
+      ? `Compra de ${dolaresCompra(m.dolares)}: el monto son los pesos. Si lo cambiás, queda como lo que te cobraron.` : '');
     $('#mv-monto').disabled = !!fijo;
-    $('#mv-monto-nota').hidden = !fijo;
-    $('#mv-monto-nota').textContent = fijo || '';
+    $('#mv-monto-nota').hidden = !nota;
+    $('#mv-monto-nota').textContent = nota;
     $('#mv-fecha').value = m.fechaHora.slice(0, 10);
     $('#mv-desc').value = m.descripcion || '';
     $('#mv-categoria').value = m.categoriaId == null ? '' : String(m.categoriaId);
@@ -1474,7 +1517,7 @@
   }
 
   // Lo que sueldo.js y tarjeta.js necesitan de acá (los formatos, la API y los avisos), sin repetirlo.
-  window.Gastito = Object.assign(window.Gastito || {}, { h, api, pesos, mostrarAviso, nombreMes, mesYAnio, mayuscula, numeroArg, fechaCorta, estado, toast: (m, t) => window.Iconos.toast(m, t) });
+  window.Gastito = Object.assign(window.Gastito || {}, { h, api, pesos, dolaresCompra, montoEnDolares, mostrarAviso, nombreMes, mesYAnio, mayuscula, numeroArg, fechaCorta, estado, toast: (m, t) => window.Iconos.toast(m, t) });
 
   iniciar();
 })();

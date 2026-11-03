@@ -2,6 +2,7 @@ package ar.gastito.dashboard;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Optional;
 
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -30,7 +31,8 @@ public class EdicionMovimientosController {
     }
 
     /**
-     * @param monto       como lo escribe el usuario: "3.700", "3700,50", "4 mil"
+     * @param monto       como lo escribe el usuario: "3.700", "3700,50", "4 mil" (o 0 en una compra en dólares que
+     *                    sigue sin estimar)
      * @param fecha       el día; la hora queda la que tenía
      * @param medioPagoId null es "sin especificar"
      * @param cuentaId    null es sin cuenta
@@ -42,6 +44,8 @@ public class EdicionMovimientosController {
     @PutMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ConsultaMovimientos.Fila editar(@PathVariable long id, @RequestBody Cambio cambio) {
         BigDecimal monto = Montos.parsearConPalabras(cambio.monto())
+                .or(() -> cambio.monto() != null && cambio.monto().strip().matches("0+([.,]0+)?")
+                        ? Optional.of(BigDecimal.ZERO) : Optional.empty())
                 .orElseThrow(() -> new IllegalArgumentException("No entendí el monto. Por ejemplo: 3.700"));
         return edicion.editar(id, monto, cambio.fecha(), cambio.descripcion(), cambio.categoriaId(),
                 cambio.medioPagoId(), cambio.cuentaId());

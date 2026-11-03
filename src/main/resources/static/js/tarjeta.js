@@ -6,7 +6,7 @@
  * dashboard, no calcula nada: los totales, las diferencias y en qué resumen entra cada compra llegan de la API.
  */
 (() => {
-  const { h, api, pesos, fechaCorta, toast } = window.Gastito;
+  const { h, api, pesos, fechaCorta, toast, dolaresCompra, montoEnDolares } = window.Gastito;
   const { Iconos } = window;
   const $ = (selector) => document.querySelector(selector);
 
@@ -24,7 +24,17 @@
     if (d === 0) return h('p', { class: 'down con-icono' }, Iconos.svg('circle-check'), 'Coincide con lo cargado');
     return h('p', { class: 'up con-icono' }, Iconos.svg('triangle-alert'),
       d > 0 ? `El resumen dice ${pesos(r.totalReal)} y cargaste ${pesos(r.cargado)}: faltan ${pesos(d)} sin cargar.`
-        : `El resumen dice ${pesos(r.totalReal)} y cargaste ${pesos(r.cargado)}: cargaste ${pesos(-d)} de más.`);
+        : `El resumen dice ${pesos(r.totalReal)} y cargaste ${pesos(r.cargado)}: cargaste ${pesos(-d)} de más.`,
+      r.dolaresEstimados ? ' Incluye compras en dólares con los pesos estimados: parte de la diferencia puede venir de ahí (corregilas en Movimientos).' : '');
+  }
+
+  /** "Compras en dólares: US$ 20 (≈ $30.000)", o null si el resumen no tiene. */
+  function comprasEnDolares(r) {
+    if (!(Number(r.dolares) > 0)) return null;
+    const sinEstimar = r.dolaresSinEstimar > 0
+      ? ` · ${r.dolaresSinEstimar === 1 ? '1 sin estimar' : `${r.dolaresSinEstimar} sin estimar`}` : '';
+    return h('p', {}, 'Compras en dólares: ', h('b', { class: 'money' }, dolaresCompra(r.dolares)),
+      ` (${r.dolaresEstimados ? '≈' : '='} ${pesos(r.dolaresEnPesos)})${sinEstimar}`);
   }
 
   const desglose = (r) => `compras ${pesos(r.compras)} + cuotas ${pesos(r.cuotas)}`;
@@ -58,7 +68,8 @@
       h('td', {}, fechaCorta(l.fecha)),
       h('td', {}, detalle, l.juntada ? h('span', { class: 'chip extra' }, 'juntada: total pagado') : null),
       h('td', {}, Iconos.etiquetaCategoria(l.categoria)),
-      h('td', { class: 'num money' }, pesos(l.monto)));
+      h('td', { class: 'num money' }, l.dolares != null ? montoEnDolares(l.dolares, l.monto, l.estimado) : pesos(l.monto),
+        l.dolares != null && l.estimado ? h('span', { class: 'chip estimado' }, 'estimado') : null));
   }
 
   function formTotal(r) {
@@ -98,6 +109,7 @@
       h('p', { class: 'note' }, `Del ${fechaCorta(r.desde)} al ${dia(r.cierre, r.estimadas)} · vence el ${dia(r.vencimiento, r.estimadas)}`
         + (r.cuentaDebito ? ` · se debita de ${r.cuentaDebito}` : '')),
       h('p', {}, 'Según lo cargado ', h('b', { class: 'money' }, pesos(r.cargado)), ` (${desglose(r)})`),
+      comprasEnDolares(r),
       r.totalReal != null ? h('p', {}, 'El resumen dice ', h('b', { class: 'money' }, pesos(r.totalReal))) : null,
       diferencia(r),
       r.estado === 'CERRADO' ? formTotal(r) : null,
@@ -111,7 +123,33 @@
       r.detalle.map((l) => l.descripcion).join(', ')));
   }
 
+  // --- Dólar tarjeta ---
+
+  async function vistaDolar() {
+    const { valor, cargadaEn } = await api('/api/dolar');
+    $('#t-dolar-nota').textContent = valor == null
+      ? 'Todavía no cargaste ninguna: las compras en dólares quedan sin estimar hasta que la cargues o llegue el resumen.'
+      : `Está a ${pesos(valor)} desde el ${fechaCorta(cargadaEn)}. Con ella se estiman los pesos de las compras en dólares hasta que llegue el resumen.`;
+    $('#t-form-dolar').elements.valor.value = valor == null ? '' : String(valor).replace('.', ',');
+  }
+
+  async function guardarDolar(e) {
+    e.preventDefault();
+    const error = $('#t-dolar-error');
+    mensajeError(error, null);
+    const valor = window.Gastito.numeroArg(e.currentTarget.elements.valor.value);
+    if (!Number.isFinite(valor) || valor <= 0) { mensajeError(error, new Error('Escribí la cotización, por ejemplo 1.500')); return; }
+    try {
+      await api('/api/dolar', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ valor }) });
+      toast('Dólar tarjeta guardado');
+      await vista();
+    } catch (err) {
+      mensajeError(error, err);
+    }
+  }
+
   async function vista() {
+    await vistaDolar();
     const { configurada, panel } = await api('/api/tarjeta');
     const nota = $('#t-fechas-nota');
     if (!configurada) {
@@ -168,6 +206,7 @@
   }
 
   $('#t-form-fechas').addEventListener('submit', guardarFechas);
+  $('#t-form-dolar').addEventListener('submit', guardarDolar);
 
   window.Gastito.alCargarResumen = [...(window.Gastito.alCargarResumen || []), enResumen];
   window.Gastito.alCargarTarjeta = [...(window.Gastito.alCargarTarjeta || []), vista];

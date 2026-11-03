@@ -139,24 +139,26 @@ public class ConsultaMovimientos {
      * @param sinEspecificar   si no se sabe con qué se pagó (se muestra en gris, para corregirlo)
      * @param ticket           si vino de la foto de un ticket (la fila se despliega con los productos)
      * @param foto             si guardó la foto del ticket
-     * @param estimado         el cobro de un fijo tildado con el monto aproximado, sin corregir
+     * @param estimado         el cobro de un fijo tildado con el monto aproximado, o una compra en dólares con los
+     *                         pesos estimados (0 si quedó sin estimar), sin corregir
      * @param medioPagoId      para el diálogo de editar; null si no se sabe
      * @param cuentaId         para el diálogo de editar; null si no tiene
      * @param especial         lo que no se borra como un gasto común (ver {@link Especial}), o null
      * @param cuotaActual      de una cuota, cuál es; si no, null
      * @param cuotaTotal       de una cuota, de cuántas; si no, null
+     * @param dolares          de una compra en dólares, cuántos (monto son los pesos); si no, null
      */
     public record Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
             String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
             boolean foto, boolean estimado, Long medioPagoId, Long cuentaId, Especial especial, Integer cuotaActual,
-            Integer cuotaTotal) {
+            Integer cuotaTotal, BigDecimal dolares) {
 
         /** Una fila de un gasto común, sin los datos para editar (los tests y lo que no se edita). */
         public Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
                 String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
                 boolean foto, boolean estimado) {
             this(id, fechaHora, descripcion, categoriaId, categoria, emoji, medio, sinEspecificar, origen, monto,
-                    ticket, foto, estimado, null, null, null, null, null);
+                    ticket, foto, estimado, null, null, null, null, null, null);
         }
     }
 
@@ -274,7 +276,7 @@ public class ConsultaMovimientos {
                 m.getFotoTicket() != null, m.isMontoEstimado(),
                 m.getMedioPago() == null ? null : m.getMedioPago().getId(),
                 m.getCuenta() == null ? null : m.getCuenta().getId(),
-                Especial.de(m), m.getCuotaActual(), m.getCuotaTotal());
+                Especial.de(m), m.getCuotaActual(), m.getCuotaTotal(), dosDecimales(m.getMontoOriginal()));
     }
 
     private static boolean sinEspecificar(Movimiento m) {

@@ -55,7 +55,7 @@ class EdicionMovimientosControllerTest {
         when(edicion.editar(7L, new BigDecimal("3500"), LocalDate.of(2026, 10, 20), "Pancho", 1L, null, 2L))
                 .thenReturn(new ConsultaMovimientos.Fila(7L, LocalDateTime.of(2026, 10, 20, 16, 42), "Pancho", 1L,
                         "Kiosco", "🍬", "Galicia", false, "TEXTO", new BigDecimal("3500.00"), false, false, false,
-                        null, 2L, null, null, null));
+                        null, 2L, null, null, null, null));
 
         mvc.perform(put("/api/movimientos/7").contentType(MediaType.APPLICATION_JSON).content(CAMBIO))
                 .andExpect(status().isOk())
