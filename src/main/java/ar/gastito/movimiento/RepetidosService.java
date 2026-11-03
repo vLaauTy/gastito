@@ -41,7 +41,7 @@ public class RepetidosService {
     /** El gasto que ya estaba y se parece al nuevo, o vacío. Si hay varios, el de monto y hora más cercanos. */
     @Transactional(readOnly = true)
     public Optional<Movimiento> buscar(Movimiento nuevo) {
-        if (nuevo.getTipo() != TipoMovimiento.GASTO || nuevo.getMonto() == null
+        if (nuevo.getTipo() != TipoMovimiento.GASTO || nuevo.getMonto() == null || nuevo.isEnDolares()
                 || !COMPARABLES.contains(nuevo.getOrigen())) {
             return Optional.empty();
         }

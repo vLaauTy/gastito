@@ -29,6 +29,7 @@ import ar.gastito.movimiento.MovimientoInterpretado;
  * <li>Medio de pago o cuenta que no existen: vacío.</li>
  * <li>Pago con tarjeta de crédito: se asocia la tarjeta y no la cuenta (la cuenta paga el resumen).</li>
  * <li>Monto ausente, inválido o no positivo: queda vacío y se pide en la tarjeta.</li>
+ * <li>Monto en dólares: viaja aparte ({@link Valida#dolares()}), sin cuotas ni juntada; los pesos los estima Java.</li>
  * </ul>
  */
 @Component
@@ -51,12 +52,18 @@ public class ValidadorInterpretacion {
      *
      * @param juntada si pagó por un grupo (el monto es el total), o null
      * @param cuotas  si es una compra en cuotas (el monto es el total), o null
+     * @param dolares si el monto es en dólares: cuántos (el movimiento trae el mismo número), o null si es en pesos
      */
     public record Valida(MovimientoInterpretado movimiento, Confianza confianza, PedidoJuntada juntada,
-            PedidoCuotas cuotas) implements Resultado {
+            PedidoCuotas cuotas, BigDecimal dolares) implements Resultado {
 
         public Valida(MovimientoInterpretado movimiento, Confianza confianza) {
-            this(movimiento, confianza, null, null);
+            this(movimiento, confianza, null, null, null);
+        }
+
+        public Valida(MovimientoInterpretado movimiento, Confianza confianza, PedidoJuntada juntada,
+                PedidoCuotas cuotas) {
+            this(movimiento, confianza, juntada, cuotas, null);
         }
     }
 
@@ -178,6 +185,10 @@ public class ValidadorInterpretacion {
     public record PagoTarjeta(BigDecimal monto) implements Resultado {
     }
 
+    /** "El dólar tarjeta está a 1500": la cotización de referencia (null si no dijo cuánto: se muestra la actual). */
+    public record Dolar(BigDecimal cotizacion) implements Resultado {
+    }
+
     public Resultado validar(InterpretacionIa ia, Catalogo catalogo, LocalDateTime ahora) {
         Intencion intencion = ia == null ? Intencion.OTRO : Intencion.de(ia.intencion());
         return switch (intencion) {
@@ -199,6 +210,7 @@ public class ValidadorInterpretacion {
             case BAJA_FIJO -> new BajaFijo(texto(ia.descripcion()));
             case VER -> Lista.de(ia.ver()).<Resultado>map(Ver::new).orElseGet(Pregunta::new);
             case TARJETA -> comoTarjeta(ia, ahora.toLocalDate());
+            case DOLAR -> new Dolar(monto(ia.monto()).orElse(null));
         };
     }
 
@@ -303,7 +315,10 @@ public class ValidadorInterpretacion {
         LocalDateTime fechaHora = fechas.resolver(ia.fecha(), ia.hora(), ahora);
         BigDecimal monto = monto(ia.monto()).orElse(null);
 
-        PedidoCuotas cuotas = PedidoCuotas.de(ia.cuotasCantidad(), ia.cuotasValorCuota(), monto);
+        // En dólares: los pesos los estima Java después. Las cuotas y las juntadas en dólares no se registran.
+        BigDecimal dolares = ia.enDolares() ? monto : null;
+        PedidoCuotas cuotas = dolares != null ? null
+                : PedidoCuotas.de(ia.cuotasCantidad(), ia.cuotasValorCuota(), monto);
         if (cuotas != null) {
             monto = cuotas.total();
             if (tarjeta == null) {
@@ -318,7 +333,8 @@ public class ValidadorInterpretacion {
                 ? MovimientoInterpretado.conCategoria(monto, descripcion, candidatas.get(0), medio, cuenta, tarjeta,
                         fechaHora)
                 : new MovimientoInterpretado(monto, descripcion, null, candidatas, medio, cuenta, tarjeta, fechaHora);
-        return new Valida(movimiento, confianza, PedidoJuntada.de(ia.juntadaPersonas(), ia.juntadaNombres()), cuotas);
+        return new Valida(movimiento, confianza, dolares != null ? null
+                : PedidoJuntada.de(ia.juntadaPersonas(), ia.juntadaNombres()), cuotas, dolares);
     }
 
     /**

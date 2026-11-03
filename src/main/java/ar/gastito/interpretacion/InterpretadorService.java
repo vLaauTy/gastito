@@ -1,5 +1,6 @@
 package ar.gastito.interpretacion;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -68,12 +69,18 @@ public class InterpretadorService {
      * @param usoIaId registro en uso_ia, o null si se resolvió sin IA
      * @param juntada si pagó por un grupo (el monto es el total), o null
      * @param cuotas  si es una compra en cuotas (el monto es el total), o null
+     * @param dolares si es una compra en dólares: cuántos (el movimiento trae el mismo número), o null
      */
     public record Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId,
-            PedidoJuntada juntada, PedidoCuotas cuotas) implements Resultado {
+            PedidoJuntada juntada, PedidoCuotas cuotas, BigDecimal dolares) implements Resultado {
 
         public Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId) {
-            this(movimiento, confianza, usoIaId, null, null);
+            this(movimiento, confianza, usoIaId, null, null, null);
+        }
+
+        public Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId,
+                PedidoJuntada juntada, PedidoCuotas cuotas) {
+            this(movimiento, confianza, usoIaId, juntada, cuotas, null);
         }
     }
 
@@ -137,6 +144,10 @@ public class InterpretadorService {
         if (tarjeta.isPresent()) {
             return new Orden(tarjeta.get(), null);
         }
+        Optional<BigDecimal> cotizacion = ParserDolar.cotizacion(texto);
+        if (cotizacion.isPresent()) {
+            return new Orden(new ValidadorInterpretacion.Dolar(cotizacion.get()), null);
+        }
         Optional<ValidadorInterpretacion.Lista> lista = ClasificadorIntencion.pedidoDeLista(texto);
         if (lista.isPresent()) {
             return new Orden(new ValidadorInterpretacion.Ver(lista.get()), null);
@@ -147,8 +158,9 @@ public class InterpretadorService {
         Catalogo catalogo = catalogos.cargar();
         LocalDateTime ahora = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MINUTES);
 
-        // 1. Parser simple: "kiosco 1500".
-        Optional<ParserSimple.Resultado> simple = parser.parsear(texto, catalogo);
+        // 1. Parser simple: "kiosco 1500". Si habla de dólares, no: tomaría el monto como pesos.
+        boolean dolares = ParserDolar.mencionaDolares(texto);
+        Optional<ParserSimple.Resultado> simple = dolares ? Optional.empty() : parser.parsear(texto, catalogo);
         if (simple.isPresent()) {
             ParserSimple.Resultado r = simple.get();
             return new Interpretado(MovimientoInterpretado.conCategoria(r.monto(), r.descripcion(), r.categoria(),
@@ -157,7 +169,7 @@ public class InterpretadorService {
         }
 
         // 2. Historial: el resto del mensaje coincide con gastos que el usuario ya confirmó en una sola categoría.
-        Optional<ParserSimple.Separado> separado = parser.separar(texto, catalogo);
+        Optional<ParserSimple.Separado> separado = dolares ? Optional.empty() : parser.separar(texto, catalogo);
         if (separado.isPresent()) {
             ParserSimple.Separado s = separado.get();
             Optional<HistorialCategorias.Aprendido> aprendido = historial.buscar(s.resto(), catalogo);
@@ -216,8 +228,8 @@ public class InterpretadorService {
         Optional<HistorialCategorias.Aprendido> aprendido = historial.buscar(v.movimiento().descripcion(), catalogo);
         return aprendido.isPresent()
                 ? new Interpretado(v.movimiento().conCategoriaElegida(aprendido.get().categoria()), Confianza.ALTA,
-                        usoIaId, v.juntada(), v.cuotas())
-                : new Interpretado(v.movimiento(), v.confianza(), usoIaId, v.juntada(), v.cuotas());
+                        usoIaId, v.juntada(), v.cuotas(), v.dolares())
+                : new Interpretado(v.movimiento(), v.confianza(), usoIaId, v.juntada(), v.cuotas(), v.dolares());
     }
 
     private static Cuenta cuenta(MedioPago medio, Cuenta cuenta) {

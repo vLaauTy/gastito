@@ -153,6 +153,30 @@ class InterpretadorServiceTest {
         verifyNoInteractions(ia);
     }
 
+    // --- Dólares ---
+
+    @Test
+    void unGastoEnDolaresNoLoResuelveElHistorialSinoLaIa() {
+        yaConfirmo(new DescripcionConfirmada("Steam", SUPER.getId()));
+        iaResponde(new InterpretacionIa("GASTO", "20", "Steam", List.of("Otros"), "alta", "Tarjeta de crédito", "",
+                "", "", "", List.of(), "", "", "", "", "", "", "", "", "", "", "", "", List.of(), "", "", "", "USD"), 9);
+
+        InterpretadorService.Interpretado i = (InterpretadorService.Interpretado) interpretador.interpretar(
+                "20 dólares en steam");
+
+        assertThat(i.dolares()).isEqualByComparingTo("20");
+        assertThat(i.usoIaId()).isEqualTo(9);
+    }
+
+    @Test
+    void laCotizacionDelDolarSeEntiendeSinIa() {
+        InterpretadorService.Resultado r = interpretador.interpretar("el dólar tarjeta está a 1500");
+
+        assertThat(r).isEqualTo(new InterpretadorService.Orden(
+                new ValidadorInterpretacion.Dolar(new BigDecimal("1500")), null));
+        verifyNoInteractions(ia);
+    }
+
     private void iaResponde(InterpretacionIa respuesta, long usoIaId) {
         when(ia.extraer(anyString(), anyString(), eq(InterpretacionIa.class), eq(PropositoIa.TEXTO)))
                 .thenReturn(new ClienteIa.Respuesta<>(respuesta, usoIaId));

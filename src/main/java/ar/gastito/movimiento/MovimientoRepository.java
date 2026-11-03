@@ -51,13 +51,15 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
      * Los gastos contra los que se busca una compra repetida, como huellas (id, fecha, monto, categoría, comercio y 1
      * si es el cobro pendiente de un fijo):
      * los confirmados entre desde y hasta que ya ocurrieron (las cuotas futuras no), y los cobros pendientes de
-     * gastos fijos del mes. El monto de una juntada es el total pagado, no mi parte.
+     * gastos fijos del mes. El monto de una juntada es el total pagado, no mi parte. Las compras en dólares no
+     * (sus pesos son estimados).
      */
     @Query(nativeQuery = true, value = """
             SELECT m.id, m.fecha_hora, COALESCE(j.total_pagado, m.monto), m.categoria_id, m.comercio,
                    CASE WHEN m.estado = 'PENDIENTE' THEN 1 ELSE 0 END
             FROM movimiento m LEFT JOIN juntada j ON j.movimiento_id = m.id
             WHERE m.tipo = 'GASTO' AND m.id <> :excepto AND m.monto IS NOT NULL
+              AND m.moneda = 'ARS'
               AND ((m.estado = 'CONFIRMADO' AND m.fecha_hora BETWEEN :desde AND :hasta AND m.fecha_hora <= :ahora)
                 OR (m.estado = 'PENDIENTE' AND m.gasto_fijo_id IS NOT NULL AND m.fijo_periodo = :periodo))""")
     List<Object[]> huellasCandidatas(@Param("excepto") Long excepto, @Param("desde") LocalDateTime desde,
@@ -166,6 +168,15 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
             order by m.fechaHora, m.id""")
     List<Movimiento> comprasConTarjeta(@Param("tarjeta") Long tarjetaId, @Param("desde") LocalDateTime desde,
             @Param("hasta") LocalDateTime hasta);
+
+    /** Las compras en dólares que siguen estimadas (o sin estimar), pendientes o guardadas, la más nueva primero. */
+    @EntityGraph(attributePaths = {"categoria"})
+    @Query("""
+            select m from Movimiento m
+            where m.moneda = 'USD' and m.montoEstimado = true
+              and m.estado <> ar.gastito.movimiento.EstadoMovimiento.CANCELADO
+            order by m.fechaHora desc, m.id desc""")
+    List<Movimiento> comprasEnDolaresEstimadas();
 
     /** Todas las cuotas confirmadas con la tarjeta (a qué resumen va cada una se calcula en Java). */
     @EntityGraph(attributePaths = {"categoria"})

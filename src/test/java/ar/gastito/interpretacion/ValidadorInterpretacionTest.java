@@ -371,4 +371,41 @@ class ValidadorInterpretacionTest {
         assertThat(((ValidadorInterpretacion.AltaFijo) validador.validar(fijo("Expensas", "10", "", "sí"), catalogo,
                 AHORA)).pedido().variable()).isTrue();
     }
+
+    // --- Dólares ---
+
+    private static InterpretacionIa conMoneda(String monto, String medio, String cuotas, String moneda) {
+        return new InterpretacionIa("GASTO", monto, "Steam", List.of("Otros"), "alta", medio, "", "", "", "",
+                List.of(), "", "", "", "", "", cuotas, "", "", "", "", "", "", List.of(), "", "", "", moneda);
+    }
+
+    @Test
+    void unGastoEnDolaresTraeLosDolaresAparteYSinCuotas() {
+        ValidadorInterpretacion.Valida v = validar(conMoneda("20", "Tarjeta de crédito", "3", "USD"));
+
+        assertThat(v.dolares()).isEqualByComparingTo("20");
+        assertThat(v.movimiento().monto()).isEqualByComparingTo("20");
+        assertThat(v.movimiento().medioPago()).isSameAs(CREDITO);
+        assertThat(v.cuotas()).isNull();
+        assertThat(v.juntada()).isNull();
+    }
+
+    @Test
+    void unGastoEnDolaresConCentavos() {
+        assertThat(validar(conMoneda("9.99", "", "", "usd")).dolares()).isEqualByComparingTo("9.99");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ARS", ""})
+    void enPesosNoHayDolares(String moneda) {
+        assertThat(validar(conMoneda("20000", "", "", moneda)).dolares()).isNull();
+    }
+
+    @Test
+    void laCotizacionDelDolarDichaComoSea() {
+        assertThat(validador.validar(new InterpretacionIa("DOLAR", "1620", "", List.of(), "", "", "", "", ""),
+                catalogo, AHORA)).isEqualTo(new ValidadorInterpretacion.Dolar(new BigDecimal("1620.00")));
+        assertThat(validador.validar(new InterpretacionIa("DOLAR", "", "", List.of(), "", "", "", "", ""),
+                catalogo, AHORA)).isEqualTo(new ValidadorInterpretacion.Dolar(null));
+    }
 }

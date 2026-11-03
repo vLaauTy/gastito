@@ -27,12 +27,14 @@ intencion:
 - PERDONAR: dar por perdida la parte que alguien le debe de una juntada ("lo de Pablo dalo por perdido"): devolucionPersona y devolucionDe.
 - VER: pide una lista o un resumen. ver: FIJOS (qué fijos tiene o le faltan pagar), DEUDAS (quién le debe), CUOTAS, COSTOS_IA (cuánto lleva gastado en IA), RESUMEN_SEMANA, RESUMEN_MES, HOY (gastos de hoy), MES (total del mes por categoría), CALCULO (su sueldo calculado), DASHBOARD, AYUDA (qué puede hacer el bot), TARJETA (cuánto lleva en el resumen de la tarjeta, cuándo cierra o vence, cuánto se debita).
 - TARJETA: da un dato del resumen de la tarjeta de crédito; no es un gasto. tarjetaDato: FECHAS (cuándo cierra y vence: tarjetaCierre y tarjetaVencimiento como los dice, "26/11"), TOTAL (cuánto dice el resumen: monto) o PAGO (se debitó o pagó el resumen; monto si lo dice). "Pagué con la tarjeta" es un GASTO, no esto.
+- DOLAR: dice a cuánto está el dólar tarjeta ("el dólar está a 1500", "el dólar tarjeta subió a 1.620"): el valor va en monto. Comprar algo en dólares es un GASTO, no esto.
 - PREGUNTA: cualquier otra pregunta sobre sus gastos, ingresos o compras ("¿cuánto gasté en pan?", "compará octubre con septiembre").
 - DUDOSO: no está claro qué quiere ("pan 3700?", "el seguro 32 mil"). opciones: las 2 o 3 intenciones más probables, de la más a la menos. Completá igual los datos.
 - OTRO: un saludo, una prueba o algo que no es nada de esto.
 
 Datos:
-- monto: en pesos, solo dígitos y punto decimal (1500, 1500.50). A la argentina "1.500" es mil quinientos y "1.500,50" lleva centavos; "15 mil" o "15k" = 15000. Si no dice cuánto, vacío.
+- monto: solo dígitos y punto decimal (1500, 1500.50). A la argentina "1.500" es mil quinientos y "1.500,50" lleva centavos; "15 mil" o "15k" = 15000. Si no dice cuánto, vacío.
+- moneda: USD si el monto es en dólares ("20 dólares", "US$ 15", "u$s 9,99", "15 verdes"): el monto va en dólares, sin convertir. Si no, ARS. "Lo de Steam salió 31.200" (lo que le cobraron en pesos por algo que compró en dólares) es un GASTO en ARS con esa descripción.
 - descripcion: corta, con mayúscula inicial, sin monto, fecha ni medio ("Pan de pancho y papas", "Nafta").
 - categorias: 1 a 3 nombres exactos, de la más a la menos probable ("Otros" si ninguna encaja). confianza: alta (sin dudas: un comercio o producto claro, o igual a un gasto ya clasificado), media (dos o tres razonables), baja (no hay forma de saberlo). Ante la duda entre alta y media, media.
 - medioPago: "la tarjeta", "con crédito" o "en cuotas" = Tarjeta de crédito; "débito" = Débito; "transferí" = Transferencia; "con QR" = QR. cuenta: solo si la nombra ("desde Mercado Pago").

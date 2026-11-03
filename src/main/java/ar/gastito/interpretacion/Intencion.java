@@ -36,7 +36,9 @@ public enum Intencion {
     /** "¿Qué fijos me faltan?", "mandame el resumen de la semana": ver una lista o un resumen. */
     VER,
     /** "La tarjeta cierra el 26/11 y vence el 11/12", "el resumen es de 250 mil", "se debitó la tarjeta". */
-    TARJETA;
+    TARJETA,
+    /** "El dólar tarjeta está a 1500": la cotización de referencia para estimar las compras en dólares. */
+    DOLAR;
 
     /** Lo que devolvió la IA; si no es ninguno de estos, OTRO. "FIJO" es el nombre viejo de ALTA_FIJO. */
     public static Intencion de(String texto) {

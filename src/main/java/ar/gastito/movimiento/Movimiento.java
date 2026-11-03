@@ -1,6 +1,7 @@
 package ar.gastito.movimiento;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -35,6 +36,8 @@ import ar.gastito.catalogo.TarjetaCredito;
 public class Movimiento {
 
     public static final String MONEDA_POR_DEFECTO = "ARS";
+    /** Las compras en dólares, solo con tarjeta de crédito: monto es su equivalente en pesos. */
+    public static final String MONEDA_DOLAR = "USD";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -46,6 +49,12 @@ public class Movimiento {
     private BigDecimal monto;
 
     private String moneda = MONEDA_POR_DEFECTO;
+
+    /** En una compra en dólares: cuántos dólares. Null en pesos. */
+    private BigDecimal montoOriginal;
+
+    /** En una compra en dólares: los pesos por dólar con que se estimó, o los reales al corregirla con el resumen. */
+    private BigDecimal cotizacionUsada;
 
     private String descripcion;
 
@@ -129,7 +138,10 @@ public class Movimiento {
     /** Con gastoFijoId: el mes (día 1) al que corresponde el cobro. */
     private LocalDate fijoPeriodo;
 
-    /** El cobro de un fijo se tildó con el monto aproximado ("Pagado") y todavía no se corrigió con el real. */
+    /**
+     * El cobro de un fijo se tildó con el monto aproximado ("Pagado"), o una compra en dólares tiene los pesos
+     * estimados con la cotización de referencia: todavía no se corrigió con el real.
+     */
     private boolean montoEstimado;
 
     /** Una cuota de una compra en cuotas, o null. */
@@ -240,6 +252,10 @@ public class Movimiento {
         if (nuevo == null || nuevo.signum() <= 0) {
             throw new IllegalArgumentException("El monto tiene que ser mayor a cero");
         }
+        if (isEnDolares()) {
+            ponerPesosReales(nuevo);
+            return;
+        }
         this.monto = nuevo;
     }
 
@@ -259,6 +275,7 @@ public class Movimiento {
      */
     public void cambiarMedioPago(MedioPago nuevo, TarjetaCredito tarjetaCredito) {
         verificarPendiente();
+        exigirTarjetaSiEsEnDolares(nuevo);
         this.medioPago = nuevo;
         if (nuevo != null && nuevo.esTarjetaDeCredito()) {
             this.tarjeta = tarjetaCredito;
@@ -284,7 +301,11 @@ public class Movimiento {
             if (nuevoMonto.signum() <= 0) {
                 throw new IllegalArgumentException("El monto tiene que ser mayor a cero");
             }
-            this.monto = nuevoMonto;
+            if (isEnDolares()) {
+                ponerPesosReales(nuevoMonto);
+            } else {
+                this.monto = nuevoMonto;
+            }
         }
         if (nuevaDescripcion != null) {
             this.descripcion = nuevaDescripcion;
@@ -296,6 +317,7 @@ public class Movimiento {
             this.categoria = nuevaCategoria;
         }
         if (nuevoMedio != null) {
+            exigirTarjetaSiEsEnDolares(nuevoMedio);
             this.medioPago = nuevoMedio;
             if (nuevoMedio.esTarjetaDeCredito()) {
                 this.tarjeta = tarjetaCredito;
@@ -310,7 +332,8 @@ public class Movimiento {
      * Edición completa de un gasto, pendiente o ya guardado (el dashboard, o ✏️ Editar sobre uno que se guardó solo):
      * reemplaza todos los datos editables. Con tarjeta de crédito, la cuenta queda vacía (es la que paga el resumen).
      * El monto de una juntada o de una cuota depende de otros datos: no se cambia acá. En el cobro de un fijo, el
-     * monto nuevo deja de ser estimado.
+     * monto nuevo deja de ser estimado. En una compra en dólares, el monto son los pesos reales (una sin estimar
+     * puede seguir en 0).
      *
      * @param nuevoMedio  null es "sin especificar"
      * @param nuevaCuenta null es sin cuenta
@@ -323,7 +346,8 @@ public class Movimiento {
         if (tipo != TipoMovimiento.GASTO) {
             throw new IllegalArgumentException("Solo se editan gastos");
         }
-        if (nuevoMonto == null || nuevoMonto.signum() <= 0) {
+        boolean sigueSinEstimar = isSinEstimar() && nuevoMonto != null && nuevoMonto.signum() == 0;
+        if (!sigueSinEstimar && (nuevoMonto == null || nuevoMonto.signum() <= 0)) {
             throw new IllegalArgumentException("El monto tiene que ser mayor a cero");
         }
         if (nuevaCategoria == null) {
@@ -338,8 +362,12 @@ public class Movimiento {
                     ? "El monto de una juntada es tu parte: se cambia desde la juntada, que la reparte de nuevo"
                     : "El monto de una cuota sale del plan de cuotas: no se cambia suelto");
         }
+        exigirTarjetaSiEsEnDolares(nuevoMedio);
         if (cambiaMonto && gastoFijoId != null) {
             montoEstimado = false;
+        }
+        if (cambiaMonto && isEnDolares()) {
+            ponerPesosReales(nuevoMonto);
         }
         this.monto = nuevoMonto;
         this.descripcion = nuevaDescripcion == null || nuevaDescripcion.isBlank() ? null : nuevaDescripcion.strip();
@@ -488,6 +516,73 @@ public class Movimiento {
         verificarPendiente();
         this.gastoFijoId = null;
         this.fijoPeriodo = null;
+    }
+
+    // --- Compras en dólares ---
+
+    /**
+     * Una compra con la tarjeta en dólares (pendiente): monto pasa a ser los pesos estimados con la cotización de
+     * referencia, o 0 sin cotización ("≈ sin estimar"), y queda estimado hasta que se corrige con el resumen.
+     *
+     * @param cotizacion pesos por dólar, o null si no hay ninguna cargada
+     */
+    public void pasarADolares(BigDecimal dolares, BigDecimal cotizacion) {
+        verificarPendiente();
+        if (dolares == null || dolares.signum() <= 0) {
+            throw new IllegalArgumentException("El monto en dólares tiene que ser mayor a cero");
+        }
+        if (medioPago == null || !medioPago.esTarjetaDeCredito()) {
+            throw new MovimientoEspecialException("Las compras en dólares van con tarjeta de crédito");
+        }
+        this.moneda = MONEDA_DOLAR;
+        this.montoOriginal = dolares.setScale(2, RoundingMode.HALF_UP);
+        this.montoEstimado = true;
+        estimarPesos(cotizacion);
+    }
+
+    /** Vuelve a estimar los pesos con otra cotización (o 0 sin ninguna). Solo mientras siga estimado. */
+    public void estimarPesos(BigDecimal cotizacion) {
+        if (!isEnDolares() || !montoEstimado) {
+            throw new IllegalStateException("El movimiento " + id + " no es una compra en dólares estimada");
+        }
+        this.cotizacionUsada = cotizacion == null ? null : cotizacion.setScale(4, RoundingMode.HALF_UP);
+        this.monto = cotizacion == null ? BigDecimal.ZERO.setScale(2)
+                : montoOriginal.multiply(cotizacion).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * "Lo de Steam salió 31.200" (o Corregir monto en la web): lo que cobraron en pesos según el resumen. Deja de ser
+     * estimado y queda la cotización real.
+     */
+    public void corregirPesosDeDolares(BigDecimal pesos) {
+        if (!isEnDolares() || estado == EstadoMovimiento.CANCELADO) {
+            throw new IllegalStateException("El movimiento " + id + " no es una compra en dólares");
+        }
+        if (pesos == null || pesos.signum() <= 0) {
+            throw new IllegalArgumentException("El monto tiene que ser mayor a cero");
+        }
+        ponerPesosReales(pesos);
+    }
+
+    private void ponerPesosReales(BigDecimal pesos) {
+        this.monto = pesos.setScale(2, RoundingMode.HALF_UP);
+        this.montoEstimado = false;
+        this.cotizacionUsada = monto.divide(montoOriginal, 4, RoundingMode.HALF_UP);
+    }
+
+    private void exigirTarjetaSiEsEnDolares(MedioPago nuevo) {
+        if (isEnDolares() && (nuevo == null || !nuevo.esTarjetaDeCredito())) {
+            throw new MovimientoEspecialException("Las compras en dólares van con tarjeta de crédito");
+        }
+    }
+
+    public boolean isEnDolares() {
+        return MONEDA_DOLAR.equals(moneda);
+    }
+
+    /** Una compra en dólares que se guardó sin cotización: 0 pesos hasta que se estime o se corrija. */
+    public boolean isSinEstimar() {
+        return isEnDolares() && montoEstimado && monto != null && monto.signum() == 0;
     }
 
     // --- Compras en cuotas ---
@@ -682,6 +777,14 @@ public class Movimiento {
 
     public String getMoneda() {
         return moneda;
+    }
+
+    public BigDecimal getMontoOriginal() {
+        return montoOriginal;
+    }
+
+    public BigDecimal getCotizacionUsada() {
+        return cotizacionUsada;
     }
 
     public String getDescripcion() {

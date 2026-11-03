@@ -51,7 +51,22 @@ public record InterpretacionIa(
         @JsonPropertyDescription("TARJETA: FECHAS, TOTAL o PAGO")
         String tarjetaDato,
         String tarjetaCierre,
-        String tarjetaVencimiento) {
+        String tarjetaVencimiento,
+        @JsonPropertyDescription("ARS o USD")
+        String moneda) {
+
+    /** En pesos (sin decir la moneda). */
+    public InterpretacionIa(String intencion, String monto, String descripcion, List<String> categorias,
+            String confianza, String medioPago, String cuenta, String fecha, String hora, String juntadaPersonas,
+            List<String> juntadaNombres, String devolucionPersona, String devolucionDe, String fijoDia,
+            String fijoFrecuencia, String fijoVariable, String cuotasCantidad, String cuotasValorCuota,
+            String fijoAlias, String claseIngreso, String campo, String ver, String horas, List<String> opciones,
+            String tarjetaDato, String tarjetaCierre, String tarjetaVencimiento) {
+        this(intencion, monto, descripcion, categorias, confianza, medioPago, cuenta, fecha, hora, juntadaPersonas,
+                juntadaNombres, devolucionPersona, devolucionDe, fijoDia, fijoFrecuencia, fijoVariable, cuotasCantidad,
+                cuotasValorCuota, fijoAlias, claseIngreso, campo, ver, horas, opciones, tarjetaDato, tarjetaCierre,
+                tarjetaVencimiento, "");
+    }
 
     /** Sin los datos del resumen de la tarjeta. */
     public InterpretacionIa(String intencion, String monto, String descripcion, List<String> categorias,
@@ -94,6 +109,11 @@ public record InterpretacionIa(
         return new InterpretacionIa(elegida.name(), monto, descripcion, categorias, confianza, medioPago, cuenta,
                 fecha, hora, juntadaPersonas, juntadaNombres, devolucionPersona, devolucionDe, fijoDia, fijoFrecuencia,
                 fijoVariable, cuotasCantidad, cuotasValorCuota, fijoAlias, claseIngreso, campo, ver, horas, opciones,
-                tarjetaDato, tarjetaCierre, tarjetaVencimiento);
+                tarjetaDato, tarjetaCierre, tarjetaVencimiento, moneda);
+    }
+
+    /** Si dijo que el monto es en dólares. */
+    public boolean enDolares() {
+        return moneda != null && moneda.strip().equalsIgnoreCase("USD");
     }
 }
