@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
@@ -216,5 +217,59 @@ class ConversacionTarjetaTest {
         when(ciclo.panel()).thenReturn(Optional.empty());
 
         assertThat(texto(conversacion.pago(null, ""))).contains("No tengo ningún resumen cerrado sin debitar");
+    }
+
+    // --- Compras en dólares ---
+
+    /** El próximo con Steam US$ 20 ≈ $30.000, iCloud US$ 5 sin estimar y una remera de $2.500. */
+    static VistaResumenTarjeta proximoConDolares() {
+        LocalDateTime dia = LocalDateTime.of(2026, 10, 31, 9, 0);
+        return new VistaResumenTarjeta(PROXIMO, YearMonth.of(2026, 11), LocalDate.of(2026, 10, 30),
+                LocalDate.of(2026, 11, 30), LocalDate.of(2026, 12, 14), true, EstadoResumenTarjeta.ABIERTO,
+                new BigDecimal("32500"), BigDecimal.ZERO, new BigDecimal("32500"), null, null,
+                "MasterCard Gold", "Galicia", List.of(
+                        new VistaResumenTarjeta.Linea(1L, dia, "Steam", "Suscripciones", "📺",
+                                new BigDecimal("30000"), null, null, false, new BigDecimal("20"), true),
+                        new VistaResumenTarjeta.Linea(2L, dia, "iCloud", "Suscripciones", "📺",
+                                BigDecimal.ZERO, null, null, false, new BigDecimal("5"), true),
+                        new VistaResumenTarjeta.Linea(3L, dia, "Remera", "Ropa", "👕",
+                                new BigDecimal("2500"), null, null, false)));
+    }
+
+    @Test
+    void elProximoResumenMuestraAparteLasComprasEnDolares() {
+        when(ciclo.panel()).thenReturn(Optional.of(new CicloTarjetaService.Panel("MasterCard Gold", "Galicia",
+                List.of(), proximoConDolares(), List.of(), BigDecimal.ZERO, List.of())));
+
+        String texto = texto(conversacion.estado());
+
+        assertThat(texto).contains("Llevás <b>$32.500</b>");
+        assertThat(texto).contains("💵 Compras en dólares: US$ 25 (≈ $30.000 · 1 sin estimar)");
+    }
+
+    @Test
+    void sinComprasEnDolaresNoLasMenciona() {
+        conPanel();
+
+        assertThat(texto(conversacion.estado())).doesNotContain("dólares");
+    }
+
+    @Test
+    void laDiferenciaConElTotalRealAvisaQueLosDolaresSonEstimados() {
+        VistaResumenTarjeta r = proximoConDolares();
+
+        String texto = conversacion.textoTotal(new CicloTarjetaService.TotalCargado(r, new BigDecimal("40000"),
+                r.cargado(), new BigDecimal("7500")));
+
+        assertThat(texto).contains("faltan <b>$7.500</b> sin cargar");
+        assertThat(texto).contains("incluye US$ 25 en compras en dólares con los pesos estimados (≈ $30.000)");
+    }
+
+    @Test
+    void sinDolaresEstimadosLaDiferenciaNoLosMenciona() {
+        VistaResumenTarjeta r = cerrado("250000");
+
+        assertThat(conversacion.textoTotal(new CicloTarjetaService.TotalCargado(r, new BigDecimal("250000"),
+                r.cargado(), new BigDecimal("50000")))).doesNotContain("dólares");
     }
 }

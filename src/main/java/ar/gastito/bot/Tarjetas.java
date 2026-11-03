@@ -214,7 +214,7 @@ public class Tarjetas {
      */
     public String guardadoAutomatico(Movimiento m) {
         Categoria c = m.getCategoria();
-        String linea = "✅ <b>Guardado</b> · <b>" + formato.pesos(m.getMonto()) + "</b> · "
+        String linea = "✅ <b>Guardado</b> · <b>" + formato.monto(m) + "</b> · "
                 + (c == null ? "🏷 Sin categoría" : html(c.getNombreConEmoji())) + " · " + medioCorto(m);
         String detalle = m.getDescripcion() == null || m.getDescripcion().isBlank() ? "" : html(m.getDescripcion());
         long productos = m.getItems().stream().filter(i -> !i.isDescuento()).count();
@@ -237,7 +237,7 @@ public class Tarjetas {
     /** ↩️ Deshacer: el gasto se borró. */
     public String deshecho(Movimiento m) {
         Categoria c = m.getCategoria();
-        return "↩️ <b>Deshecho</b> · <s>" + formato.pesos(m.getMonto()) + "</s>"
+        return "↩️ <b>Deshecho</b> · <s>" + formato.monto(m) + "</s>"
                 + (c == null ? "" : " · " + html(c.getNombreConEmoji()))
                 + (m.getDescripcion() == null ? "" : "\n" + html(m.getDescripcion()))
                 + "\nNo quedó guardado.";
@@ -350,7 +350,7 @@ public class Tarjetas {
                     : "📥 Ya no te deben nada");
         } else {
             lineas.add(m.getMonto() == null ? "💰 <i>Falta el monto</i>"
-                    : "💰 <b>" + formato.pesos(m.getMonto()) + "</b>");
+                    : "💰 <b>" + formato.monto(m) + "</b>");
         }
         if (m.getDescripcion() != null && !m.getDescripcion().isBlank()) {
             lineas.add("📝 " + html(m.getDescripcion()));

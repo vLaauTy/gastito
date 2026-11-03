@@ -43,6 +43,28 @@ public class FormatoMensajes {
         return "$" + formato(m.scale() > 0 ? "#,##0.00" : "#,##0").format(monto);
     }
 
+    /** "US$ 20", "US$ 9,99": una compra en dólares. */
+    public String dolaresCompra(BigDecimal monto) {
+        BigDecimal m = monto.stripTrailingZeros();
+        return "US$ " + formato(m.scale() > 0 ? "#,##0.00" : "#,##0").format(monto);
+    }
+
+    /**
+     * El monto de un movimiento: en pesos, o en una compra en dólares "US$ 20 ≈ $30.000 (estimado)",
+     * "US$ 20 ≈ sin estimar" o, ya corregida con el resumen, "US$ 20 = $31.200".
+     */
+    public String monto(Movimiento m) {
+        if (!m.isEnDolares()) {
+            return pesos(m.getMonto());
+        }
+        String dolares = dolaresCompra(m.getMontoOriginal());
+        if (m.isSinEstimar()) {
+            return dolares + " ≈ sin estimar";
+        }
+        return m.isMontoEstimado() ? dolares + " ≈ " + pesos(m.getMonto()) + " (estimado)"
+                : dolares + " = " + pesos(m.getMonto());
+    }
+
     /** "US$ 0,000242": los costos de la IA son muy chicos, se muestran hasta 6 decimales. */
     public String dolares(BigDecimal monto) {
         return "US$ " + formato("#,##0.00####").format(monto);
@@ -78,7 +100,7 @@ public class FormatoMensajes {
         List<String> partes = new ArrayList<>();
         partes.add(html(categoria == null ? "¿Qué categoría?" : categoria.getNombreConEmoji()));
         if (m.getMonto() != null) {
-            partes.add(pesos(m.getMonto()));
+            partes.add(monto(m));
         }
         String descripcion = m.getDescripcion();
         if (descripcion != null && !descripcion.isBlank()

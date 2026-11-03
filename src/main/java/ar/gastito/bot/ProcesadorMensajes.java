@@ -56,6 +56,7 @@ public class ProcesadorMensajes {
     private final ConversacionVarios varios;
     private final ConversacionCuotas cuotas;
     private final ConversacionTarjeta tarjeta;
+    private final ConversacionDolares dolares;
     private final ConversacionRecibos recibos;
     private final ConversacionEscalas escalas;
     private final ComandosSueldo comandosSueldo;
@@ -75,7 +76,7 @@ public class ProcesadorMensajes {
             ConversacionAltaFijo altaFijo, PedidosNaturales naturales, ComandoDisponible disponible,
             GastoFijoService gastosFijos,
             ConversacionVarios varios, ConversacionCuotas cuotas, ConversacionTarjeta tarjeta,
-            ConversacionRecibos recibos,
+            ConversacionDolares dolares, ConversacionRecibos recibos,
             ConversacionEscalas escalas,
             ComandosSueldo comandosSueldo, FormatoCostos formatoCostos, GastitoProperties properties,
             DashboardProperties dashboard, BotProperties bot, Clock clock) {
@@ -92,6 +93,7 @@ public class ProcesadorMensajes {
         this.varios = varios;
         this.cuotas = cuotas;
         this.tarjeta = tarjeta;
+        this.dolares = dolares;
         this.recibos = recibos;
         this.escalas = escalas;
         this.comandosSueldo = comandosSueldo;
@@ -99,11 +101,11 @@ public class ProcesadorMensajes {
         this.edicion = new EdicionDeCampos(movimientos, juntadas, tarjetas, formato, fechas, clock, guardado);
         // Los atajos que no se entienden sin IA se interpretan como cualquier mensaje (flujo se asigna abajo).
         this.comandos = new ComandosBot(movimientos, formato, grafico, comandosIngreso, resumenes, formatoResumen,
-                juntadas, fijos, altaFijo, cuotas, tarjeta, comandosSueldo, disponible, formatoCostos, dashboard.url(),
-                this::interpretarTexto);
+                juntadas, fijos, altaFijo, cuotas, tarjeta, dolares, comandosSueldo, disponible, formatoCostos,
+                dashboard.url(), this::interpretarTexto);
         this.flujo = new FlujoDeMensajes(interpretador, movimientos, usoIa, tarjetas, formato, comandosIngreso,
                 consultas, formatoConsulta, repetidos, juntadas, fijos, altaFijo, naturales, gastosFijos, varios,
-                cuotas, tarjeta, comandosSueldo, edicion, comandos, guardado);
+                cuotas, tarjeta, dolares, comandosSueldo, edicion, comandos, guardado);
         this.medios = new MediosRecibidos(transcripciones, tickets, recibos, escalas, altaFijo, comandosSueldo, edicion,
                 flujo, properties.audio().duracionMaxima());
     }
@@ -151,6 +153,17 @@ public class ProcesadorMensajes {
                 }
             }
             tarjeta.olvidar(chatId);
+        }
+
+        // Una compra en dólares esperaba la cotización.
+        if (dolares.esperando(chatId)) {
+            if (comando == null) {
+                Optional<List<Accion>> respuesta = dolares.texto(chatId, limpio, flujo::tarjetaNueva);
+                if (respuesta.isPresent()) {
+                    return respuesta.get();
+                }
+            }
+            dolares.olvidar(chatId);
         }
 
         // La juntada esperaba un nombre o la parte de alguien.
@@ -246,6 +259,7 @@ public class ProcesadorMensajes {
         fijos.olvidar(chatId);
         altaFijo.olvidar(chatId);
         tarjeta.olvidar(chatId);
+        dolares.olvidar(chatId);
         EdicionDeCampos.Espera previa = edicion.quitar(chatId);
         if (previa != null && (previa.mensajeId() == null || previa.mensajeId() != mensajeId)) {
             acciones.addAll(edicion.restaurar(previa));
@@ -341,6 +355,9 @@ public class ProcesadorMensajes {
             case ConversacionTarjeta.TODAVIA_NO_FECHAS, ConversacionTarjeta.CARGAR_TOTAL, ConversacionTarjeta.DEBITADO,
                     ConversacionTarjeta.TODAVIA_NO_DEBITO, ConversacionTarjeta.CONFIRMAR_PAGO,
                     ConversacionTarjeta.CANCELAR_PAGO -> tarjeta.boton(chatId, mensajeId, accion, id, elegido);
+            case ConversacionDolares.CON_TARJETA, ConversacionDolares.EN_PESOS, ConversacionDolares.NO_SE,
+                    ConversacionDolares.CORREGIR, ConversacionDolares.OTRO_GASTO -> dolares.boton(chatId, mensajeId,
+                            accion, id, elegido, flujo::tarjetaNueva, m -> edicion.principal(chatId, mensajeId, m));
             case ConversacionVarios.GUARDAR_TODO, ConversacionVarios.CANCELAR_TODOS -> varios.boton(mensajeId,
                     accion, id);
             case Tarjetas.UNIR -> repetidos.unir(mensajeId, id, requerido(elegido));

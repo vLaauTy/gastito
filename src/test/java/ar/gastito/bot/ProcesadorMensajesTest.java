@@ -102,6 +102,7 @@ class ProcesadorMensajesTest {
     private final ConversacionVarios varios = mock(ConversacionVarios.class);
     private final ConversacionCuotas cuotas = mock(ConversacionCuotas.class);
     private final ar.gastito.tarjeta.CicloTarjetaService ciclo = mock(ar.gastito.tarjeta.CicloTarjetaService.class);
+    private final ar.gastito.dolar.CompraEnDolaresService compras = mock(ar.gastito.dolar.CompraEnDolaresService.class);
     private final ConversacionRecibos recibos = mock(ConversacionRecibos.class);
     private final ConversacionEscalas escalas = mock(ConversacionEscalas.class);
     private final ComandosSueldo comandosSueldo = mock(ComandosSueldo.class);
@@ -122,7 +123,8 @@ class ProcesadorMensajesTest {
                 tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, resumenes,
                 new FormatoResumen(formato, new GraficoMes(formato), dashboard), consultas, new FormatoConsulta(formato),
                 repetidos, juntadas, fijos, altaFijo, naturales, disponible, gastosFijos, varios, cuotas,
-                new ConversacionTarjeta(ciclo, formato), recibos,
+                new ConversacionTarjeta(ciclo, formato), new ConversacionDolares(compras, movimientos, formato),
+                recibos,
                 escalas,
                 comandosSueldo,
                 new FormatoCostos(costosIa, formato, RELOJ), properties, dashboard,

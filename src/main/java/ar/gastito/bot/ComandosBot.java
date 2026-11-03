@@ -36,6 +36,7 @@ class ComandosBot {
     private final ConversacionAltaFijo altaFijo;
     private final ConversacionCuotas cuotas;
     private final ConversacionTarjeta tarjeta;
+    private final ConversacionDolares dolares;
     private final ComandosSueldo comandosSueldo;
     private final ComandoDisponible disponible;
     private final FormatoCostos formatoCostos;
@@ -45,8 +46,9 @@ class ComandosBot {
     ComandosBot(MovimientoService movimientos, FormatoMensajes formato, GraficoMes grafico,
             ComandosIngreso comandosIngreso, ResumenService resumenes, FormatoResumen formatoResumen,
             ConversacionJuntadas juntadas, ConversacionFijos fijos, ConversacionAltaFijo altaFijo,
-            ConversacionCuotas cuotas, ConversacionTarjeta tarjeta, ComandosSueldo comandosSueldo,
-            ComandoDisponible disponible, FormatoCostos formatoCostos, String urlDashboard, Interpretar interpretar) {
+            ConversacionCuotas cuotas, ConversacionTarjeta tarjeta, ConversacionDolares dolares,
+            ComandosSueldo comandosSueldo, ComandoDisponible disponible, FormatoCostos formatoCostos,
+            String urlDashboard, Interpretar interpretar) {
         this.movimientos = movimientos;
         this.formato = formato;
         this.grafico = grafico;
@@ -58,6 +60,7 @@ class ComandosBot {
         this.altaFijo = altaFijo;
         this.cuotas = cuotas;
         this.tarjeta = tarjeta;
+        this.dolares = dolares;
         this.comandosSueldo = comandosSueldo;
         this.disponible = disponible;
         this.formatoCostos = formatoCostos;
@@ -93,6 +96,9 @@ class ComandosBot {
             case "/fijos" -> fijos.lista();
             case "/cuotas" -> cuotas.lista();
             case "/tarjeta" -> tarjeta.estado();
+            // "/dolar 1500" lo entiende el parser sin IA; si no, lo interpreta la IA como cualquier mensaje.
+            case "/dolar" -> argumentos.isBlank() ? dolares.cotizacion(chatId, null, "", null)
+                    : interpretar.interpretar(chatId, "dólar " + argumentos);
             case "/calcular" -> argumentos.isBlank() || ParserHorasSueldo.posicionales(argumentos).isPresent()
                     ? List.of(comandosSueldo.calcularDeComando(limpio))
                     : interpretar.interpretar(chatId, "este mes hice " + argumentos);

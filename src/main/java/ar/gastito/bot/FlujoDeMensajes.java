@@ -73,6 +73,7 @@ class FlujoDeMensajes {
     private final ConversacionVarios varios;
     private final ConversacionCuotas cuotas;
     private final ConversacionTarjeta tarjeta;
+    private final ConversacionDolares dolares;
     private final ComandosSueldo comandosSueldo;
     private final EdicionDeCampos edicion;
     private final ComandosBot comandos;
@@ -83,8 +84,8 @@ class FlujoDeMensajes {
             FormatoConsulta formatoConsulta, ConversacionRepetidos repetidos, ConversacionJuntadas juntadas,
             ConversacionFijos fijos, ConversacionAltaFijo altaFijo, PedidosNaturales naturales,
             GastoFijoService gastosFijos, ConversacionVarios varios, ConversacionCuotas cuotas,
-            ConversacionTarjeta tarjeta, ComandosSueldo comandosSueldo, EdicionDeCampos edicion, ComandosBot comandos,
-            GuardadoAutomatico guardado) {
+            ConversacionTarjeta tarjeta, ConversacionDolares dolares, ComandosSueldo comandosSueldo,
+            EdicionDeCampos edicion, ComandosBot comandos, GuardadoAutomatico guardado) {
         this.interpretador = interpretador;
         this.movimientos = movimientos;
         this.usoIa = usoIa;
@@ -102,6 +103,7 @@ class FlujoDeMensajes {
         this.varios = varios;
         this.cuotas = cuotas;
         this.tarjeta = tarjeta;
+        this.dolares = dolares;
         this.comandosSueldo = comandosSueldo;
         this.edicion = edicion;
         this.comandos = comandos;
@@ -135,7 +137,7 @@ class FlujoDeMensajes {
         boolean audio = origen == Origen.AUDIO;
         String prefijo = audio ? escuche(texto) : "";
         return switch (resultado) {
-            case InterpretadorService.Interpretado i -> List.of(gastoInterpretado(chatId, i, texto, origen));
+            case InterpretadorService.Interpretado i -> List.of(gastoInterpretado(chatId, i, texto, origen, prefijo));
             case InterpretadorService.Pregunta _ -> List.of(Accion.Enviar.conMenu(responderPregunta(texto, audio)));
             case InterpretadorService.Dudoso d -> List.of(preguntarQueQuiere(d, texto, origen, prefijo));
             case InterpretadorService.Devolucion d -> List.of(juntadas.devolucion(d.datos(), origen, texto, prefijo));
@@ -148,8 +150,13 @@ class FlujoDeMensajes {
         };
     }
 
-    private Accion gastoInterpretado(long chatId, InterpretadorService.Interpretado i, String texto, Origen origen) {
+    private Accion gastoInterpretado(long chatId, InterpretadorService.Interpretado i, String texto, Origen origen,
+            String prefijo) {
         Movimiento m = crearGasto(i, origen, texto);
+        // En dólares: con la tarjeta y con los pesos estimados (si no hay cotización, la pide).
+        if (i.dolares() != null && m.getMonto() != null && m.isPendiente()) {
+            return dolares.nueva(chatId, m, prefijo, this::tarjetaNueva);
+        }
         Optional<GastoFijo> fijo = m.isPendiente() ? gastosFijos.vincular(texto) : Optional.empty();
         fijo.ifPresent(f -> gastosFijos.vincular(m, f));
         if (m.getMonto() == null) {
@@ -197,6 +204,7 @@ class FlujoDeMensajes {
                 case CANCELAR_CUOTAS -> "🗂 Cancelar unas cuotas";
                 case PERDONAR -> "🚫 Dar por perdida una deuda";
                 case TARJETA -> "💳 Datos de la tarjeta";
+                case DOLAR -> "💵 A cuánto está el dólar";
                 default -> "📋 Ver una lista";
             }, ES_OTRA + ":" + id + ":" + opcion.ordinal());
         };
@@ -229,6 +237,8 @@ class FlujoDeMensajes {
             case ValidadorInterpretacion.FechasTarjeta f -> tarjeta.fechas(chatId, f, prefijo);
             case ValidadorInterpretacion.TotalTarjeta t -> tarjeta.total(t.total(), null, prefijo);
             case ValidadorInterpretacion.PagoTarjeta p -> tarjeta.pago(p.monto(), prefijo);
+            case ValidadorInterpretacion.Dolar d -> dolares.cotizacion(chatId, d.cotizacion(), prefijo,
+                    this::tarjetaNueva);
             default -> List.of(Accion.Enviar.texto(prefijo + "🤔 No entendí qué querés hacer. ¿Me lo contás de otra forma?"));
         };
     }
@@ -250,7 +260,9 @@ class FlujoDeMensajes {
             } catch (IaNoDisponibleException e) {
                 return Optional.empty();
             }
-            if (!(r instanceof InterpretadorService.Interpretado i) || i.movimiento().monto() == null) {
+            // Una compra en dólares tiene su propio camino (medio, cotización): va sola.
+            if (!(r instanceof InterpretadorService.Interpretado i) || i.movimiento().monto() == null
+                    || i.dolares() != null) {
                 return Optional.empty();
             }
             interpretados.add(i);
@@ -291,11 +303,12 @@ class FlujoDeMensajes {
     }
 
     /**
-     * La tarjeta de un gasto recién creado con monto: la de "¿ya lo tenías registrado?", "✅ Guardado" si es claro
-     * y se guardó solo, o la de siempre para confirmarlo.
+     * La tarjeta de un gasto recién creado con monto: la de "¿ya lo tenías registrado?" (o "¿es lo que te cobraron
+     * por la compra en dólares?"), "✅ Guardado" si es claro y se guardó solo, o la de siempre para confirmarlo.
      */
     Accion.Enviar tarjetaNueva(Movimiento m) {
         return fijos.siActualizaUnEstimado(m)
+                .or(() -> dolares.siCorrigeUnaCompra(m))
                 .or(() -> repetidos.siEsRepetido(m))
                 .or(() -> guardado.corresponde(m) ? Optional.of(guardado.guardar(m, "")) : Optional.empty())
                 .orElseGet(() -> Accion.Enviar.tarjeta(tarjetas.pendiente(m)
@@ -324,6 +337,10 @@ class FlujoDeMensajes {
             return List.of(new Accion.Avisar("Ese mensaje ya no está pendiente"));
         }
         Movimiento m = crearGasto(dudoso.dudoso().comoGasto(), dudoso.origen(), dudoso.texto());
+        if (dudoso.dudoso().comoGasto().dolares() != null && m.getMonto() != null) {
+            return List.of(new Accion.Editar(mensajeId, "👉 🧾 Es un gasto", Teclado.NINGUNO),
+                    dolares.nueva(chatId, m, "", this::tarjetaNueva));
+        }
         return List.of(m.getMonto() == null ? edicion.principal(chatId, mensajeId, m)
                 : repetidos.siEsRepetido(m, mensajeId).orElseGet(() -> edicion.principal(chatId, mensajeId, m)));
     }

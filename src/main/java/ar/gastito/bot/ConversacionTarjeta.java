@@ -80,6 +80,7 @@ public class ConversacionTarjeta {
         for (VistaResumenTarjeta r : p.porPagar()) {
             partes.add("🧾 <b>Resumen cerrado por pagar</b>\nVence el " + dia(r.vencimiento(), r.estimadas())
                     + " · según lo cargado <b>" + formato.pesos(r.cargado()) + "</b>"
+                    + comprasEnDolares(r)
                     + (r.totalReal() == null ? "" : "\nEl resumen dice <b>" + formato.pesos(r.totalReal()) + "</b>")
                     + (p.cuentaDebito() == null ? "" : "\nSe debita de " + html(p.cuentaDebito()) + "."));
         }
@@ -87,7 +88,7 @@ public class ConversacionTarjeta {
         partes.add("🛒 <b>Próximo resumen</b>\nCierra " + dia(proximo.cierre(), proximo.estimadas()) + " · vence "
                 + dia(proximo.vencimiento(), proximo.estimadas()) + "\nLlevás <b>" + formato.pesos(proximo.cargado())
                 + "</b> (compras " + formato.pesos(proximo.compras()) + " + cuotas " + formato.pesos(proximo.cuotas())
-                + ")");
+                + ")" + comprasEnDolares(proximo));
         if (!p.siguientes().isEmpty()) {
             StringBuilder cuotas = new StringBuilder("🗂 <b>Cuotas ya comprometidas</b>");
             for (VistaResumenTarjeta r : p.siguientes()) {
@@ -150,7 +151,22 @@ public class ConversacionTarjeta {
                 + formato.pesos(t.cargado()) + ": " + (t.diferencia().signum() > 0
                         ? "faltan <b>" + formato.pesos(t.diferencia()) + "</b> sin cargar."
                         : "cargaste <b>" + formato.pesos(t.diferencia().negate()) + "</b> de más.")
+                + (t.resumen().dolaresEstimados() ? "\n💵 Ojo: lo cargado incluye " + formato.dolaresCompra(
+                        t.resumen().dolares()) + " en compras en dólares con los pesos estimados (≈ " + formato.pesos(
+                                t.resumen().dolaresEnPesos()) + "): parte de la diferencia puede venir de ahí. Cuando "
+                        + "sepas cuánto te cobró cada una, decímelo." : "")
                 + "\nNo agregué nada: revisalo cuando puedas.";
+    }
+
+    /** "\n💵 Compras en dólares: US$ 20 (≈ $30.000 · 1 sin estimar)", o "" si el resumen no tiene. */
+    private String comprasEnDolares(VistaResumenTarjeta r) {
+        if (r.dolares().signum() == 0) {
+            return "";
+        }
+        int sinEstimar = r.dolaresSinEstimar();
+        return "\n💵 Compras en dólares: " + formato.dolaresCompra(r.dolares()) + " (" + (r.dolaresEstimados() ? "≈ "
+                : "= ") + formato.pesos(r.dolaresEnPesos()) + (sinEstimar == 0 ? ""
+                        : " · " + sinEstimar + " sin estimar") + ")";
     }
 
     /** "Se debitó la tarjeta, 250.000": se confirma con un botón antes de registrar el pago. */

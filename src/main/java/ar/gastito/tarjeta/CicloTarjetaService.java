@@ -435,7 +435,7 @@ public class CicloTarjetaService {
         return new VistaResumenTarjeta.Linea(m.getId(), m.getFechaHora(), m.getDescripcion(),
                 m.getCategoria() == null ? null : m.getCategoria().getNombre(),
                 m.getCategoria() == null ? null : m.getCategoria().getEmoji(), monto, m.getCuotaActual(),
-                m.getCuotaTotal(), m.isJuntada());
+                m.getCuotaTotal(), m.isJuntada(), m.getMontoOriginal(), m.isEnDolares() && m.isMontoEstimado());
     }
 
     private static BigDecimal suma(List<VistaResumenTarjeta.Linea> lineas) {

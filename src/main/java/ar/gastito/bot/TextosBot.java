@@ -45,6 +45,7 @@ final class TextosBot {
             • "¿cuánto llevo de tarjeta?", "¿cuánto vence el 11?" (o el botón 💳 Tarjeta)
             • "la tarjeta cierra el 26/11 y vence el 11/12": hasta que me lo digas, las estimo (≈)
             • "el resumen de la tarjeta es de 250.000", "se debitó la tarjeta"
+            • "pagué 20 dólares de Steam con la tarjeta": estimo los pesos con el dólar tarjeta ("el dólar está a 1500" o /dolar 1500) y, cuando llega el resumen, "lo de Steam salió 31.200"
 
             <b>🧮 Sueldo</b>
             • "este mes hice 10 horas al 50, 6 al 100 y 30 nocturnas": calculo el sueldo del mes
@@ -61,7 +62,7 @@ final class TextosBot {
             El domingo a las 21 te mando cómo fue tu semana y el día 1 a las 9, cómo fue el mes. Si la PC estaba apagada, te llega apenas la prendés.
 
             <b>Atajos</b> (si preferís comandos)
-            /hoy · /mes · /disponible · /resumen · /tarjeta · /juntadas · /fijos · /cuotas · /calculo · /costos · /dashboard""";
+            /hoy · /mes · /disponible · /resumen · /tarjeta · /dolar · /juntadas · /fijos · /cuotas · /calculo · /costos · /dashboard""";
 
     private TextosBot() {
     }

@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.stream.Stream;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -28,10 +29,18 @@ public record VistaResumenTarjeta(Long id, YearMonth periodo, LocalDate desde, L
      * Una compra o una cuota del resumen.
      *
      * @param cuota   el número de cuota, o null si es una compra en un pago
-     * @param juntada si fue una juntada: el monto es el total que se pagó con la tarjeta, no mi parte
+     * @param juntada  si fue una juntada: el monto es el total que se pagó con la tarjeta, no mi parte
+     * @param dolares  si fue una compra en dólares: cuántos (el monto son los pesos), o null
+     * @param estimado los pesos de una compra en dólares son estimados (0 si quedó sin estimar)
      */
     public record Linea(Long movimientoId, LocalDateTime fecha, String descripcion, String categoria, String emoji,
-            BigDecimal monto, Integer cuota, Integer cuotas, boolean juntada) {
+            BigDecimal monto, Integer cuota, Integer cuotas, boolean juntada, BigDecimal dolares, boolean estimado) {
+
+        /** En pesos. */
+        public Linea(Long movimientoId, LocalDateTime fecha, String descripcion, String categoria, String emoji,
+                BigDecimal monto, Integer cuota, Integer cuotas, boolean juntada) {
+            this(movimientoId, fecha, descripcion, categoria, emoji, monto, cuota, cuotas, juntada, null, false);
+        }
     }
 
     /** Lo que se va a debitar: el total del resumen si se cargó; si no, lo cargado en Gastito. */
@@ -48,5 +57,33 @@ public record VistaResumenTarjeta(Long id, YearMonth periodo, LocalDate desde, L
     @JsonProperty
     public int cantidadCuotas() {
         return (int) detalle.stream().filter(l -> l.cuota() != null).count();
+    }
+
+    /** Las compras en dólares del resumen: cuántos dólares en total (cero si no hay). */
+    @JsonProperty
+    public BigDecimal dolares() {
+        return enDolares().map(Linea::dolares).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /** Los pesos de las compras en dólares (estimados o ya corregidos), incluidos en compras y en cargado. */
+    @JsonProperty
+    public BigDecimal dolaresEnPesos() {
+        return enDolares().map(Linea::monto).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /** Alguna compra en dólares sigue con los pesos estimados: lo cargado no es exacto. */
+    @JsonProperty
+    public boolean dolaresEstimados() {
+        return enDolares().anyMatch(Linea::estimado);
+    }
+
+    /** Las compras en dólares que quedaron sin estimar (0 pesos hasta que se corrigen). */
+    @JsonProperty
+    public int dolaresSinEstimar() {
+        return (int) enDolares().filter(l -> l.estimado() && l.monto().signum() == 0).count();
+    }
+
+    private Stream<Linea> enDolares() {
+        return detalle.stream().filter(l -> l.dolares() != null);
     }
 }
