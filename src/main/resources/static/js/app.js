@@ -1452,18 +1452,23 @@
   // --- Eventos ---
 
   function conectar() {
+    // Un diálogo se cierra con un click en el fondo solo si el click también empezó ahí: al seleccionar el texto
+    // de un campo arrastrando y soltar fuera del cuadro, el navegador manda el click al fondo.
+    let presionadoEn = null;
+    document.addEventListener('pointerdown', (e) => { presionadoEn = e.target; }, true);
+    const enElFondo = (e, id) => e.target.id === id && presionadoEn === e.target;
     document.addEventListener('click', (e) => {
       const vista = e.target.closest('[data-view]');
       if (vista) { e.preventDefault(); irA(vista.dataset.view); return; }
       const mes = e.target.closest('[data-mes]');
       if (mes) { cambiarMes(Number(mes.dataset.mes)); return; }
       if (e.target.closest('[data-abrir-ingreso]')) { abrirFormulario(); return; }
-      if (e.target.closest('[data-cerrar]') || e.target.id === 'modal') cerrarFormulario();
+      if (e.target.closest('[data-cerrar]') || enElFondo(e, 'modal')) cerrarFormulario();
       if (e.target.closest('[data-abrir-fijo]')) { abrirFormularioFijo(null); return; }
-      if (e.target.closest('[data-cerrar-fijo]') || e.target.id === 'modal-fijo') cerrarFormularioFijo();
-      if (e.target.closest('[data-cerrar-monto]') || e.target.id === 'modal-monto') cerrarDialogoMonto();
-      if (e.target.closest('[data-cerrar-movimiento]') || e.target.id === 'modal-movimiento') cerrarEdicion();
-      if (e.target.closest('[data-cerrar-borrar]') || e.target.id === 'modal-borrar') cerrarBorrado();
+      if (e.target.closest('[data-cerrar-fijo]') || enElFondo(e, 'modal-fijo')) cerrarFormularioFijo();
+      if (e.target.closest('[data-cerrar-monto]') || enElFondo(e, 'modal-monto')) cerrarDialogoMonto();
+      if (e.target.closest('[data-cerrar-movimiento]') || enElFondo(e, 'modal-movimiento')) cerrarEdicion();
+      if (e.target.closest('[data-cerrar-borrar]') || enElFondo(e, 'modal-borrar')) cerrarBorrado();
       if (!e.target.closest('.menu-acciones')) cerrarMenus();
     });
     document.addEventListener('keydown', (e) => {
