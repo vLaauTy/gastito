@@ -7,7 +7,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-class ReconocedorTarjetaTest {
+public class ReconocedorTarjetaTest {
 
     static final Cuenta GALICIA = new Cuenta("Galicia", "galicia");
     static final Cuenta CUENTA_MP = new Cuenta("Mercado Pago", "mercadopago,mp");
@@ -20,7 +20,7 @@ class ReconocedorTarjetaTest {
     static final Catalogo DOS = new Catalogo(List.of(), List.of(DEBITO, CREDITO), List.of(GALICIA, CUENTA_MP),
             List.of(GOLD, MP));
 
-    static <T> T conId(T entidad, long id) {
+    public static <T> T conId(T entidad, long id) {
         try {
             Field f = entidad.getClass().getDeclaredField("id");
             f.setAccessible(true);

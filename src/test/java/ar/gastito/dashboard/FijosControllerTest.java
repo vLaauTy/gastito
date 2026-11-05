@@ -175,6 +175,37 @@ class FijosControllerTest {
     }
 
     @Test
+    void unFijoConCreditoEligeLaTarjetaConElMedio() throws Exception {
+        ar.gastito.catalogo.MedioPago credito = ar.gastito.catalogo.ReconocedorTarjetaTest.conId(
+                new ar.gastito.catalogo.MedioPago(ar.gastito.catalogo.MedioPago.TARJETA_DE_CREDITO, "credito"), 3L);
+        ar.gastito.catalogo.TarjetaCredito gold = ar.gastito.catalogo.ReconocedorTarjetaTest.conId(
+                new ar.gastito.catalogo.TarjetaCredito("MasterCard Gold", null, null, null, null, "master"), 1L);
+        ar.gastito.catalogo.TarjetaCredito mp = ar.gastito.catalogo.ReconocedorTarjetaTest.conId(
+                new ar.gastito.catalogo.TarjetaCredito("Mercado Pago", null, null, null, null, "mp"), 2L);
+        when(catalogos.cargar()).thenReturn(new Catalogo(List.of(SERVICIOS), List.of(credito), List.of(),
+                List.of(gold, mp)));
+        when(fijos.alta(any())).thenReturn(new VistaFijo(9L, "Netflix", new BigDecimal("11999.00"),
+                new BigDecimal("11999.00"), "Servicios", "💡", "Mercado Pago", 7, Frecuencia.MENSUAL, false, null,
+                false, true, LocalDate.of(2026, 11, 7)));
+
+        mvc.perform(post("/api/fijos").contentType(MediaType.APPLICATION_JSON).content("""
+                {"nombre":"Netflix","monto":11999,"categoriaId":5,"medioPagoId":-2,"diaDelMes":7,
+                 "frecuencia":"MENSUAL"}"""))
+                .andExpect(status().isOk());
+
+        org.mockito.ArgumentCaptor<GastoFijoService.NuevoFijo> captor =
+                org.mockito.ArgumentCaptor.forClass(GastoFijoService.NuevoFijo.class);
+        verify(fijos).alta(captor.capture());
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().tarjeta()).isSameAs(mp);
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().medioPago()).isSameAs(credito);
+
+        mvc.perform(post("/api/fijos").contentType(MediaType.APPLICATION_JSON).content("""
+                {"nombre":"Spotify","monto":4999,"categoriaId":5,"medioPagoId":3,"diaDelMes":12,
+                 "frecuencia":"MENSUAL"}"""))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void laAltaResuelveLaCategoriaPorId() throws Exception {
         when(catalogos.cargar()).thenReturn(new Catalogo(List.of(SERVICIOS), List.of(), List.of(), Optional.empty()));
         VistaFijo creado = new VistaFijo(9L, "Luz", new BigDecimal("28000.00"), new BigDecimal("28000.00"),

@@ -141,6 +141,9 @@ public class MovimientoService {
      */
     @Transactional
     public Movimiento cambiarMedioPago(Long id, Long medioPagoId, Long tarjetaId) {
+        if (medioPagoId != null && medioPagoId < 0) {
+            return cambiarMedioPago(id, idCredito(), -medioPagoId);
+        }
         Movimiento m = buscarPendiente(id);
         MedioPago medio = medioPagoId == null ? null : medios.findById(medioPagoId)
                 .orElseThrow(() -> new NoSuchElementException("No existe el medio de pago " + medioPagoId));
@@ -156,6 +159,12 @@ public class MovimientoService {
                 .findFirst().orElseThrow(() -> new IllegalStateException("No hay un medio de pago con crédito"));
         m.corregir(null, null, null, null, credito, tarjetaPara(credito, tarjetaId, m));
         return m;
+    }
+
+    private Long idCredito() {
+        return medios.findByActivoTrueOrderById().stream().filter(MedioPago::esTarjetaDeCredito).findFirst()
+                .map(MedioPago::getId)
+                .orElseThrow(() -> new IllegalStateException("No hay un medio de pago con crédito"));
     }
 
     /** La tarjeta de un gasto con crédito: la elegida, la que ya tenía o la única activa. */
@@ -212,10 +221,17 @@ public class MovimientoService {
         return editar(id, monto, descripcion, fechaHora, categoriaId, medioPagoId, cuentaId, null);
     }
 
-    /** @param tarjetaId con crédito, cuál; null para la que ya tenía o la única activa */
+    /**
+     * @param medioPagoId null es "sin especificar"; negativo, −id de una tarjeta: crédito con esa tarjeta (así lo
+     *                    manda el selector del dashboard, como los botones del bot)
+     * @param tarjetaId   con crédito, cuál; null para la que ya tenía o la única activa
+     */
     @Transactional
     public Movimiento editar(Long id, BigDecimal monto, String descripcion, LocalDateTime fechaHora, Long categoriaId,
             Long medioPagoId, Long cuentaId, Long tarjetaId) {
+        if (medioPagoId != null && medioPagoId < 0) {
+            return editar(id, monto, descripcion, fechaHora, categoriaId, idCredito(), cuentaId, -medioPagoId);
+        }
         Movimiento m = buscar(id);
         Categoria categoria = categoriaId == null ? null : categorias.findById(categoriaId)
                 .orElseThrow(() -> new IllegalArgumentException("No existe la categoría " + categoriaId));

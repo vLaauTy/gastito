@@ -151,7 +151,15 @@ public class ConsultaMovimientos {
     public record Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
             String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
             boolean foto, boolean estimado, Long medioPagoId, Long cuentaId, Especial especial, Integer cuotaActual,
-            Integer cuotaTotal, BigDecimal dolares) {
+            Integer cuotaTotal, BigDecimal dolares, Long tarjetaId) {
+
+        public Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
+                String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
+                boolean foto, boolean estimado, Long medioPagoId, Long cuentaId, Especial especial, Integer cuotaActual,
+                Integer cuotaTotal, BigDecimal dolares) {
+            this(id, fechaHora, descripcion, categoriaId, categoria, emoji, medio, sinEspecificar, origen, monto,
+                    ticket, foto, estimado, medioPagoId, cuentaId, especial, cuotaActual, cuotaTotal, dolares, null);
+        }
 
         /** Una fila de un gasto común, sin los datos para editar (los tests y lo que no se edita). */
         public Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
@@ -276,7 +284,8 @@ public class ConsultaMovimientos {
                 m.getFotoTicket() != null, m.isMontoEstimado(),
                 m.getMedioPago() == null ? null : m.getMedioPago().getId(),
                 m.getCuenta() == null ? null : m.getCuenta().getId(),
-                Especial.de(m), m.getCuotaActual(), m.getCuotaTotal(), dosDecimales(m.getMontoOriginal()));
+                Especial.de(m), m.getCuotaActual(), m.getCuotaTotal(), dosDecimales(m.getMontoOriginal()),
+                m.getTarjeta() == null ? null : m.getTarjeta().getId());
     }
 
     private static boolean sinEspecificar(Movimiento m) {

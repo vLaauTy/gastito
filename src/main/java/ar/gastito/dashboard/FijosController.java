@@ -186,17 +186,21 @@ public class FijosController {
         Catalogo catalogo = catalogos.cargar();
         Categoria categoria = catalogo.categorias().stream().filter(c -> c.getId() == p.categoriaId())
                 .findFirst().orElseThrow(() -> new NoSuchElementException("No existe la categoría " + p.categoriaId()));
-        MedioPago medioPago = p.medioPagoId() == null ? null
-                : catalogo.mediosPago().stream().filter(m -> m.getId() == p.medioPagoId()).findFirst()
-                        .orElseThrow(() -> new NoSuchElementException("No existe el medio de pago " + p.medioPagoId()));
+        // Negativo: −id de la tarjeta (el selector del dashboard tiene una opción por tarjeta).
+        Long tarjetaId = p.medioPagoId() != null && p.medioPagoId() < 0 ? Long.valueOf(-p.medioPagoId())
+                : p.tarjetaId();
+        Long medioPagoId = p.medioPagoId() != null && p.medioPagoId() < 0 ? null : p.medioPagoId();
+        MedioPago medioPago = medioPagoId == null ? null
+                : catalogo.mediosPago().stream().filter(m -> m.getId() == medioPagoId).findFirst()
+                        .orElseThrow(() -> new NoSuchElementException("No existe el medio de pago " + medioPagoId));
         Cuenta cuenta = p.cuentaId() == null ? null
                 : catalogo.cuentas().stream().filter(c -> c.getId() == p.cuentaId()).findFirst()
                         .orElseThrow(() -> new NoSuchElementException("No existe la cuenta " + p.cuentaId()));
         Frecuencia frecuencia = frecuencia(p.frecuencia());
-        boolean credito = p.tarjeta() || p.tarjetaId() != null || (medioPago != null && medioPago.esTarjetaDeCredito());
+        boolean credito = p.tarjeta() || tarjetaId != null || (medioPago != null && medioPago.esTarjetaDeCredito());
         TarjetaCredito tarjeta = null;
         if (credito) {
-            tarjeta = (p.tarjetaId() != null ? catalogo.tarjeta(p.tarjetaId()) : catalogo.tarjetaUnica())
+            tarjeta = (tarjetaId != null ? catalogo.tarjeta(tarjetaId) : catalogo.tarjetaUnica())
                     .orElseThrow(() -> new IllegalArgumentException("Elegí con qué tarjeta de crédito se paga"));
             medioPago = catalogo.medioCredito().orElse(medioPago);
             cuenta = null;

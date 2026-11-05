@@ -305,6 +305,8 @@
       <header>
         <div><h1>Tarjeta</h1><div class="sub" id="t-sub"></div></div>
       </header>
+      <div class="pestanas" id="t-pestanas" role="tablist" aria-label="Tarjetas"></div>
+      <p class="note" id="t-entre-todas" hidden></p>
       <section class="cards" aria-label="Resúmenes de la tarjeta">
         <div class="card"><div class="label">Resumen cerrado por pagar</div><div class="big" id="t-cerrado">…</div><div class="note" id="t-cerrado-nota"></div></div>
         <div class="card"><div class="label">Próximo resumen</div><div class="big" id="t-proximo">…</div><div class="note" id="t-proximo-nota"></div></div>
@@ -333,6 +335,26 @@
       <section class="card" aria-label="Cuotas en los resúmenes siguientes">
         <h2>Cuotas en los resúmenes siguientes</h2>
         <div id="t-siguientes" class="lista"></div>
+      </section>
+      <section class="card table-card" aria-label="Tus tarjetas">
+        <div class="head">
+          <h2>Tus tarjetas</h2>
+          <button type="button" id="t-agregar">Agregar tarjeta</button>
+        </div>
+        <p class="note">Cada compra con crédito es de una tarjeta, y cada una tiene su ciclo y se paga desde su cuenta. Los alias son las palabras con las que la nombrás en un mensaje ("con la master"). Dar de baja no borra lo que ya cargaste.</p>
+        <div id="t-lista-tarjetas" class="lista"></div>
+        <form id="t-form-tarjeta" class="form-linea" novalidate hidden>
+          <input type="hidden" name="id">
+          <label>Nombre <input name="nombre" required autocomplete="off" placeholder="Ej: Visa Signature"></label>
+          <label>Emisor <input name="banco" autocomplete="off" placeholder="Ej: Galicia"></label>
+          <label>Se paga desde <select name="cuentaDebitoId"><option value="">—</option></select></label>
+          <label>Alias (separados por coma) <input name="alias" autocomplete="off" placeholder="visa, la de galicia"></label>
+          <label>Color <input type="color" name="color" value="#2D6CDF"></label>
+          <label>Inicial <input name="inicial" maxlength="2" size="3" autocomplete="off"></label>
+          <button type="submit" class="primary">Guardar tarjeta</button>
+          <button type="button" id="t-cancelar-tarjeta">Cancelar</button>
+        </form>
+        <p class="error" id="t-tarjeta-error" role="alert" hidden></p>
       </section>
     </div>
 
@@ -480,7 +502,6 @@
     <select id="f-medio"><option value="">—</option></select>
     <label for="f-cuenta">Cuenta</label>
     <select id="f-cuenta"><option value="">—</option></select>
-    <label class="check"><input type="checkbox" id="f-tarjeta"> Se paga con la tarjeta de crédito</label>
     <label for="f-alias">Alias, para reconocerlo en un mensaje (separados por coma)</label>
     <input id="f-alias" placeholder="edesur, factura de luz" autocomplete="off">
     <label class="check"><input type="checkbox" id="f-variable"> El monto cambia todos los meses</label>

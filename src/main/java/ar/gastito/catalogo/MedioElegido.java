@@ -14,7 +14,7 @@ import java.util.Optional;
 public record MedioElegido(MedioPago medio, TarjetaCredito tarjeta) {
 
     /** Una opción para un botón. {@code valor} es el id del medio, o −id de la tarjeta. */
-    public record Opcion(String nombre, long valor, MedioPago medio, TarjetaCredito tarjeta) {
+    public record Opcion(String nombre, Long valor, MedioPago medio, TarjetaCredito tarjeta) {
 
         public boolean esTarjeta() {
             return tarjeta != null;
@@ -22,7 +22,7 @@ public record MedioElegido(MedioPago medio, TarjetaCredito tarjeta) {
     }
 
     /** El valor del botón que elige crédito con esa tarjeta. */
-    public static long valor(TarjetaCredito tarjeta) {
+    public static Long valor(TarjetaCredito tarjeta) {
         return -tarjeta.getId();
     }
 

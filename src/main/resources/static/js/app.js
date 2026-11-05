@@ -592,7 +592,7 @@
     $('#mv-fecha').value = m.fechaHora.slice(0, 10);
     $('#mv-desc').value = m.descripcion || '';
     $('#mv-categoria').value = m.categoriaId == null ? '' : String(m.categoriaId);
-    $('#mv-medio').value = m.medioPagoId == null ? '' : String(m.medioPagoId);
+    $('#mv-medio').value = valorDeMedio($('#mv-medio'), m.medioPagoId, m.tarjetaId);
     $('#mv-cuenta').value = m.cuentaId == null ? '' : String(m.cuentaId);
     $('#modal-movimiento').hidden = false;
     (fijo ? $('#mv-fecha') : $('#mv-monto')).focus();
@@ -1263,9 +1263,8 @@
     $('#f-categoria').value = f ? f.categoriaId : '';
     $('#f-dia').value = f && f.diaDelMes != null ? f.diaDelMes : '';
     $('#f-frecuencia').value = f ? f.frecuencia : 'MENSUAL';
-    $('#f-medio').value = f && f.medioPagoId ? f.medioPagoId : '';
+    $('#f-medio').value = valorDeMedio($('#f-medio'), f ? f.medioPagoId : null, f ? f.tarjetaId : null);
     $('#f-cuenta').value = f && f.cuentaId ? f.cuentaId : '';
-    $('#f-tarjeta').checked = !!(f && f.tarjeta);
     $('#f-alias').value = f && f.alias ? f.alias : '';
     $('#f-variable').checked = !!(f && f.montoVariable);
     $('#f-proponer').checked = !!(f && f.proponerMonto);
@@ -1288,7 +1287,6 @@
       categoriaId: Number($('#f-categoria').value),
       medioPagoId: $('#f-medio').value ? Number($('#f-medio').value) : null,
       cuentaId: $('#f-cuenta').value ? Number($('#f-cuenta').value) : null,
-      tarjeta: $('#f-tarjeta').checked,
       diaDelMes: $('#f-dia').value ? Number($('#f-dia').value) : null,
       frecuencia: $('#f-frecuencia').value,
       montoVariable: $('#f-variable').checked,
@@ -1432,6 +1430,13 @@
 
   // --- Catálogo (filtros y formulario) ---
 
+  /** El valor del selector de medio: la opción de la tarjeta (−id) si la hay; si no, el medio. */
+  function valorDeMedio(select, medioPagoId, tarjetaId) {
+    const deTarjeta = tarjetaId == null ? null : String(-tarjetaId);
+    if (deTarjeta && [...select.options].some((o) => o.value === deTarjeta)) return deTarjeta;
+    return medioPagoId == null ? '' : String(medioPagoId);
+  }
+
   function llenarCatalogo(c) {
     estado.catalogo = c;
     window.Iconos.cargarCategorias(c.categorias);
@@ -1443,9 +1448,10 @@
       cl.clave === 'EXTRA' ? 'Extra (trabajo particular, una venta, un regalo…)' : cl.nombre)));
     $('#i-cuenta').replaceChildren(...c.cuentas.map((cu) => h('option', { value: cu.id }, cu.nombre)),
       h('option', { value: '' }, 'Efectivo'));
-    $('#f-medio').append(...c.mediosPago.map((m) => h('option', { value: m.id }, m.nombre)));
+    // Con más de una tarjeta, una opción por tarjeta (valor −id de la tarjeta) en lugar de "Tarjeta de crédito".
+    $('#f-medio').append(...c.mediosConTarjeta.map((m) => h('option', { value: m.id }, m.nombre)));
     $('#f-cuenta').append(...c.cuentas.map((cu) => h('option', { value: cu.id }, cu.nombre)));
-    $('#mv-medio').append(...c.mediosPago.map((m) => h('option', { value: m.id }, m.nombre)));
+    $('#mv-medio').append(...c.mediosConTarjeta.map((m) => h('option', { value: m.id }, m.nombre)));
     $('#mv-cuenta').append(...c.cuentas.map((cu) => h('option', { value: cu.id }, cu.nombre)));
   }
 

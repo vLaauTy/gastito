@@ -416,3 +416,13 @@ tr[hidden] { display: none !important; }
 .form-linea { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 8px; }
 .form-linea label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
 #t-resumenes > .card p { margin: 6px 0; }
+
+/* Tarjeta: una pestaña por tarjeta de crédito, con su inicial en su color */
+.pestanas { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; }
+.pestanas:empty { display: none; }
+.pestana { min-height: 40px; border-radius: 999px; }
+.pestana[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-fg); }
+.inicial-tarjeta { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 4px; border-radius: 6px; background: var(--tarjeta, var(--muted)); color: #fff; font-size: 12px; font-weight: 700; }
+.fila-tarjeta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--row); }
+.fila-tarjeta .datos { flex: 1 1 220px; min-width: 0; }
+.fila-tarjeta.inactiva { opacity: .6; }

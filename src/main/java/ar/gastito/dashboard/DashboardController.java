@@ -29,6 +29,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import ar.gastito.catalogo.Catalogo;
+import ar.gastito.catalogo.MedioElegido;
+import ar.gastito.catalogo.TarjetaCredito;
 import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.interpretacion.Montos;
 import ar.gastito.movimiento.ClaseIngreso;
@@ -141,8 +143,13 @@ public class DashboardController {
     public record Clase(String clave, String nombre) {
     }
 
+    /**
+     * @param mediosConTarjeta los medios para elegir en un gasto: con más de una tarjeta activa, una opción por
+     *                         tarjeta (id = −id de la tarjeta) en lugar de "Tarjeta de crédito"
+     * @param tarjetas         las tarjetas activas
+     */
     public record CatalogoDashboard(List<Opcion> categorias, List<Opcion> mediosPago, List<Opcion> cuentas,
-            List<Clase> clasesIngreso) {
+            List<Clase> clasesIngreso, List<Opcion> mediosConTarjeta, List<Opcion> tarjetas) {
     }
 
     @GetMapping("/catalogo")
@@ -152,7 +159,10 @@ public class DashboardController {
                 c.categorias().stream().map(x -> new Opcion(x.getId(), x.getNombre(), x.getEmoji(), x.getIcono())).toList(),
                 c.mediosPago().stream().map(x -> new Opcion(x.getId(), x.getNombre(), null, null)).toList(),
                 c.cuentas().stream().map(x -> new Opcion(x.getId(), x.getNombre(), null, null)).toList(),
-                Arrays.stream(ClaseIngreso.values()).map(x -> new Clase(x.name(), x.getNombre())).toList());
+                Arrays.stream(ClaseIngreso.values()).map(x -> new Clase(x.name(), x.getNombre())).toList(),
+                MedioElegido.opciones(c).stream().map(o -> new Opcion(o.valor(), o.nombre(), null, null)).toList(),
+                c.tarjetas().stream().sorted(java.util.Comparator.comparing(TarjetaCredito::getId))
+                        .map(t -> new Opcion(t.getId(), t.getNombre(), null, null)).toList());
     }
 
     public record CambioDeIcono(String icono) {
