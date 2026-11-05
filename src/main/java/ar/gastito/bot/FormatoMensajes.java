@@ -113,6 +113,14 @@ public class FormatoMensajes {
     }
 
     /** "Efectivo", "Débito (Galicia)", "Sin medio de pago". */
+    /** Con tarjeta de crédito, la tarjeta ("MasterCard Gold"); si no, el medio y la cuenta. */
+    public static String medio(Movimiento m) {
+        if (m.getTarjeta() != null && m.getMedioPago() != null && m.getMedioPago().esTarjetaDeCredito()) {
+            return m.getTarjeta().getNombre();
+        }
+        return medio(m.getMedioPago(), m.getCuenta());
+    }
+
     public static String medio(MedioPago medio, Cuenta cuenta) {
         if (medio == null && cuenta == null) {
             return "Sin medio de pago";

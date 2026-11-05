@@ -157,6 +157,12 @@ class FlujoDeMensajes {
         if (i.dolares() != null && m.getMonto() != null && m.isPendiente()) {
             return dolares.nueva(chatId, m, prefijo, this::tarjetaNueva);
         }
+        // "Con mercado pago" solo: ¿plata de la cuenta o la tarjeta? Se pregunta antes de seguir.
+        if (i.tarjetaDudosa() != null && m.isPendiente() && m.getMonto() != null && !m.isEnDolares()) {
+            return Accion.Enviar.tarjeta(prefijo + tarjetas.pendiente(m) + "\n\n💳 <b>¿Fue con plata de la cuenta o "
+                    + "con la tarjeta de crédito " + html(i.tarjetaDudosa().getNombre()) + "?</b>",
+                    tarjetas.cuentaOTarjeta(m, i.tarjetaDudosa()), m.getId());
+        }
         Optional<GastoFijo> fijo = m.isPendiente() ? gastosFijos.vincular(texto) : Optional.empty();
         fijo.ifPresent(f -> gastosFijos.vincular(m, f));
         if (m.getMonto() == null) {
@@ -214,6 +220,8 @@ class FlujoDeMensajes {
     private List<Accion> orden(long chatId, ValidadorInterpretacion.Resultado orden, String texto, Origen origen,
             String prefijo) {
         return switch (orden) {
+            case ValidadorInterpretacion.Ver v when v.lista() == ValidadorInterpretacion.Lista.TARJETA ->
+                    tarjeta.estado(texto);
             case ValidadorInterpretacion.Ver v -> comandos.ver(chatId, v.lista());
             case ValidadorInterpretacion.Ingreso i -> {
                 Movimiento m = comandosIngreso.crear(i, origen, texto);
@@ -234,9 +242,9 @@ class FlujoDeMensajes {
                     .<List<Accion>>map(List::of).orElseGet(juntadas::abiertas);
             case ValidadorInterpretacion.BajaFijo b -> naturales.bajaDeFijo(b.cual(), prefijo)
                     .<List<Accion>>map(List::of).orElseGet(fijos::lista);
-            case ValidadorInterpretacion.FechasTarjeta f -> tarjeta.fechas(chatId, f, prefijo);
-            case ValidadorInterpretacion.TotalTarjeta t -> tarjeta.total(t.total(), null, prefijo);
-            case ValidadorInterpretacion.PagoTarjeta p -> tarjeta.pago(p.monto(), prefijo);
+            case ValidadorInterpretacion.FechasTarjeta f -> tarjeta.fechas(chatId, f, texto, prefijo);
+            case ValidadorInterpretacion.TotalTarjeta t -> tarjeta.total(chatId, t.total(), null, texto, prefijo);
+            case ValidadorInterpretacion.PagoTarjeta p -> tarjeta.pago(chatId, p.monto(), texto, prefijo);
             case ValidadorInterpretacion.Dolar d -> dolares.cotizacion(chatId, d.cotizacion(), prefijo,
                     this::tarjetaNueva);
             default -> List.of(Accion.Enviar.texto(prefijo + "🤔 No entendí qué querés hacer. ¿Me lo contás de otra forma?"));
@@ -384,5 +392,23 @@ class FlujoDeMensajes {
         }
         return List.of(edicion.principal(chatId, mensajeId, movimientos.cambiarMonto(movimientoId,
                 aproximado.get())));
+    }
+
+    /**
+     * Eligió con qué tarjeta (o "dinero en cuenta", 0, en la duda de "con mercado pago"). Un gasto pendiente sigue
+     * como uno recién cargado: si es claro, se guarda solo; uno ya guardado muestra su tarjeta con la tarjeta nueva.
+     */
+    List<Accion> elegirTarjeta(long chatId, int mensajeId, long movimientoId, long tarjetaId) {
+        Movimiento m = tarjetaId > 0 ? movimientos.elegirTarjeta(movimientoId, tarjetaId)
+                : movimientos.buscar(movimientoId);
+        Accion.Avisar aviso = new Accion.Avisar("💳 " + FormatoMensajes.medio(m));
+        if (!m.isPendiente()) {
+            return List.of(guardado.tarjeta(mensajeId, m), aviso);
+        }
+        if (guardado.corresponde(m)) {
+            Accion.Enviar guardada = guardado.guardar(m, "");
+            return List.of(new Accion.Editar(mensajeId, guardada.html(), guardada.teclado()), aviso);
+        }
+        return List.of(edicion.principal(chatId, mensajeId, m), aviso);
     }
 }

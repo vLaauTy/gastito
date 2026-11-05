@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -129,23 +130,58 @@ class CicloTarjetaServiceTest {
         planes.alGuardar(m.getId());
     }
 
+    // La MasterCard Gold (la de siempre). La de Mercado Pago está en la base desde la migración, sin fechas.
+
+    private long gold() {
+        return tarjeta().getId();
+    }
+
+    private Optional<CicloTarjetaService.Panel> panel() {
+        return ciclo.panel(gold()).filter(CicloTarjetaService.Panel::configurado);
+    }
+
+    private Optional<VistaResumenTarjeta> preguntaDeFechas() {
+        return ciclo.preguntasDeFechas().stream().filter(p -> p.tarjetaId() == gold() && p.proximo() != null)
+                .map(CicloTarjetaService.PreguntaFechas::proximo).findFirst();
+    }
+
+    private Optional<VistaResumenTarjeta> avisoDeVencimiento() {
+        return ciclo.avisosDeVencimiento().stream().filter(r -> r.tarjetaId() == gold()).findFirst();
+    }
+
+    private Optional<VistaResumenTarjeta> preguntaDeDebito() {
+        return ciclo.preguntasDeDebito().stream().filter(r -> r.tarjetaId() == gold()).findFirst();
+    }
+
+    private CicloTarjetaService.FechasCargadas cargarFechas(LocalDate cierre, LocalDate vencimiento) {
+        return ciclo.cargarFechas(gold(), cierre, vencimiento);
+    }
+
+    private CicloTarjetaService.TotalCargado cargarTotal(Long resumenId, BigDecimal total) {
+        return ciclo.cargarTotal(gold(), resumenId, total);
+    }
+
+    private CicloTarjetaService.Pago pagar(Long resumenId, BigDecimal monto, Origen origen, String texto) {
+        return ciclo.pagar(gold(), resumenId, monto, origen, texto);
+    }
+
     private void cierreReal() {
-        ciclo.cargarFechas(CIERRE, VENCIMIENTO);
+        cargarFechas(CIERRE, VENCIMIENTO);
     }
 
     // --- Fechas ---
 
     @Test
     void sinNingunCierreCargadoNoHayCiclo() {
-        assertThat(ciclo.panel()).isEmpty();
-        assertThat(ciclo.preguntaDeFechas()).isEmpty();
+        assertThat(panel()).isEmpty();
+        assertThat(preguntaDeFechas()).isEmpty();
     }
 
     @Test
     void conElCierreRealQuedaPorPagarYElProximoEstimado() {
         cierreReal();
 
-        CicloTarjetaService.Panel panel = ciclo.panel().orElseThrow();
+        CicloTarjetaService.Panel panel = panel().orElseThrow();
 
         assertThat(panel.porPagar()).singleElement().satisfies(r -> {
             assertThat(r.vencimiento()).isEqualTo(VENCIMIENTO);
@@ -161,7 +197,7 @@ class CicloTarjetaServiceTest {
 
     @Test
     void elVencimientoTieneQueSerDespuesDelCierre() {
-        assertThatThrownBy(() -> ciclo.cargarFechas(VENCIMIENTO, CIERRE)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> cargarFechas(VENCIMIENTO, CIERRE)).isInstanceOf(IllegalArgumentException.class);
     }
 
     // --- Asignación de compras y cuotas ---
@@ -172,7 +208,7 @@ class CicloTarjetaServiceTest {
         compra("10000", LocalDateTime.of(2026, 10, 29, 23, 30));
         compra("2500", LocalDateTime.of(2026, 10, 30, 0, 10));
 
-        CicloTarjetaService.Panel panel = ciclo.panel().orElseThrow();
+        CicloTarjetaService.Panel panel = panel().orElseThrow();
 
         assertThat(panel.porPagar().get(0).cargado()).isEqualByComparingTo("10000");
         assertThat(panel.proximo().compras()).isEqualByComparingTo("2500");
@@ -186,7 +222,7 @@ class CicloTarjetaServiceTest {
         cuotas("30000", 3, LocalDateTime.of(2026, 10, 28, 12, 0));
         compra("5000", LocalDateTime.of(2026, 11, 2, 12, 0));
 
-        CicloTarjetaService.Panel panel = ciclo.panel().orElseThrow();
+        CicloTarjetaService.Panel panel = panel().orElseThrow();
 
         assertThat(panel.porPagar().get(0).cuotas()).isEqualByComparingTo("10000");
         assertThat(panel.proximo().compras()).isEqualByComparingTo("5000");
@@ -204,11 +240,11 @@ class CicloTarjetaServiceTest {
     void conPrimeraCuotaAlMesSiguienteLaCuota1VaAlResumenQueSigue() {
         cierreReal();
         cuotas("30000", 3, LocalDateTime.of(2026, 10, 28, 12, 0));
-        CicloTarjetaService alMesSiguiente = new CicloTarjetaService(resumenes, repositorio, planesRepo, catalogos,
+        CicloTarjetaService alMesSiguiente = new CicloTarjetaService(resumenes, repositorio, planesRepo, catalogos, tarjetas,
                 new CuotaProperties(CuotaProperties.PrimeraCuota.MES_SIGUIENTE),
                 new TarjetaProperties(2, 3, 3, 9, BigDecimal.ONE, 6), reloj);
 
-        CicloTarjetaService.Panel panel = alMesSiguiente.panel().orElseThrow();
+        CicloTarjetaService.Panel panel = alMesSiguiente.panel(gold()).orElseThrow();
 
         assertThat(panel.porPagar().get(0).cuotas()).isEqualByComparingTo("0");
         assertThat(panel.proximo().cuotas()).isEqualByComparingTo("10000");
@@ -220,14 +256,14 @@ class CicloTarjetaServiceTest {
     void alConfirmarLasFechasLasComprasSeReasignanSolas() {
         cierreReal();
         compra("7000", LocalDateTime.of(2026, 11, 28, 12, 0));
-        assertThat(ciclo.panel().orElseThrow().proximo().compras()).isEqualByComparingTo("7000");
+        assertThat(panel().orElseThrow().proximo().compras()).isEqualByComparingTo("7000");
 
-        CicloTarjetaService.FechasCargadas cargadas = ciclo.cargarFechas(LocalDate.of(2026, 11, 26),
+        CicloTarjetaService.FechasCargadas cargadas = cargarFechas(LocalDate.of(2026, 11, 26),
                 LocalDate.of(2026, 12, 11));
 
         assertThat(cargadas.antes().cierre()).isEqualTo(LocalDate.of(2026, 11, 30));
         assertThat(cargadas.resumen().estimadas()).isFalse();
-        CicloTarjetaService.Panel panel = ciclo.panel().orElseThrow();
+        CicloTarjetaService.Panel panel = panel().orElseThrow();
         assertThat(panel.proximo().cierre()).isEqualTo(LocalDate.of(2026, 11, 26));
         assertThat(panel.proximo().compras()).isEqualByComparingTo("0");
         assertThat(ciclo.resumenDe(repositorio.findAll().stream()
@@ -252,15 +288,15 @@ class CicloTarjetaServiceTest {
     void preguntaPorLasFechasDosDiasDespuesDelCierreUnaVezPorDia() {
         cierreReal();
         reloj.ir(LocalDateTime.of(2026, 10, 30, 10, 0));
-        assertThat(ciclo.preguntaDeFechas()).isEmpty();
+        assertThat(preguntaDeFechas()).isEmpty();
 
         reloj.ir(HOY);
-        VistaResumenTarjeta proximo = ciclo.preguntaDeFechas().orElseThrow();
+        VistaResumenTarjeta proximo = preguntaDeFechas().orElseThrow();
         ciclo.preguntoFechas(proximo.id());
-        assertThat(ciclo.preguntaDeFechas()).isEmpty();
+        assertThat(preguntaDeFechas()).isEmpty();
 
         reloj.ir(HOY.plusDays(1));
-        assertThat(ciclo.preguntaDeFechas()).isPresent();
+        assertThat(preguntaDeFechas()).isPresent();
     }
 
     @Test
@@ -268,27 +304,27 @@ class CicloTarjetaServiceTest {
         cierreReal();
         reloj.ir(LocalDateTime.of(2026, 10, 31, 8, 59));
 
-        assertThat(ciclo.preguntaDeFechas()).isEmpty();
+        assertThat(preguntaDeFechas()).isEmpty();
     }
 
     @Test
     void todaviaNoVuelveAPreguntarEnTresDias() {
         cierreReal();
-        VistaResumenTarjeta proximo = ciclo.preguntaDeFechas().orElseThrow();
+        VistaResumenTarjeta proximo = preguntaDeFechas().orElseThrow();
 
         assertThat(ciclo.posponerFechas(proximo.id())).isEqualTo(LocalDate.of(2026, 11, 3));
         reloj.ir(LocalDateTime.of(2026, 11, 2, 10, 0));
-        assertThat(ciclo.preguntaDeFechas()).isEmpty();
+        assertThat(preguntaDeFechas()).isEmpty();
         reloj.ir(LocalDateTime.of(2026, 11, 3, 10, 0));
-        assertThat(ciclo.preguntaDeFechas()).isPresent();
+        assertThat(preguntaDeFechas()).isPresent();
     }
 
     @Test
     void conLasFechasConfirmadasNoPregunta() {
         cierreReal();
-        ciclo.cargarFechas(LocalDate.of(2026, 11, 26), LocalDate.of(2026, 12, 11));
+        cargarFechas(LocalDate.of(2026, 11, 26), LocalDate.of(2026, 12, 11));
 
-        assertThat(ciclo.preguntaDeFechas()).isEmpty();
+        assertThat(preguntaDeFechas()).isEmpty();
     }
 
     // --- Vencimiento y pago ---
@@ -298,15 +334,15 @@ class CicloTarjetaServiceTest {
         cierreReal();
         compra("10000", LocalDateTime.of(2026, 10, 20, 12, 0));
         reloj.ir(LocalDateTime.of(2026, 11, 7, 10, 0));
-        assertThat(ciclo.avisoDeVencimiento()).isEmpty();
+        assertThat(avisoDeVencimiento()).isEmpty();
 
         reloj.ir(LocalDateTime.of(2026, 11, 8, 10, 0));
-        VistaResumenTarjeta aviso = ciclo.avisoDeVencimiento().orElseThrow();
+        VistaResumenTarjeta aviso = avisoDeVencimiento().orElseThrow();
         assertThat(aviso.aDebitar()).isEqualByComparingTo("10000");
         ciclo.avisoVencimientoEnviado(aviso.id());
 
         reloj.ir(LocalDateTime.of(2026, 11, 9, 10, 0));
-        assertThat(ciclo.avisoDeVencimiento()).isEmpty();
+        assertThat(avisoDeVencimiento()).isEmpty();
     }
 
     @Test
@@ -314,9 +350,9 @@ class CicloTarjetaServiceTest {
         cierreReal();
         reloj.ir(LocalDateTime.of(2026, 11, 10, 10, 0));
 
-        assertThat(ciclo.avisoDeVencimiento()).isPresent();
+        assertThat(avisoDeVencimiento()).isPresent();
         reloj.ir(LocalDateTime.of(2026, 11, 11, 10, 0));
-        assertThat(ciclo.avisoDeVencimiento()).isEmpty();
+        assertThat(avisoDeVencimiento()).isEmpty();
     }
 
     @Test
@@ -324,7 +360,7 @@ class CicloTarjetaServiceTest {
         cierreReal();
         compra("200000", LocalDateTime.of(2026, 10, 20, 12, 0));
 
-        CicloTarjetaService.TotalCargado total = ciclo.cargarTotal(null, new BigDecimal("250000"));
+        CicloTarjetaService.TotalCargado total = cargarTotal(null, new BigDecimal("250000"));
 
         assertThat(total.cargado()).isEqualByComparingTo("200000");
         assertThat(total.diferencia()).isEqualByComparingTo("50000");
@@ -337,14 +373,14 @@ class CicloTarjetaServiceTest {
         cierreReal();
         compra("200000", LocalDateTime.of(2026, 10, 20, 12, 0));
 
-        assertThat(ciclo.cargarTotal(null, new BigDecimal("200000.80")).coincide()).isTrue();
+        assertThat(cargarTotal(null, new BigDecimal("200000.80")).coincide()).isTrue();
     }
 
     @Test
     void sinResumenCerradoNoHayDondeCargarElTotal() {
-        ciclo.cargarFechas(LocalDate.of(2026, 11, 26), LocalDate.of(2026, 12, 11));
+        cargarFechas(LocalDate.of(2026, 11, 26), LocalDate.of(2026, 12, 11));
 
-        assertThatThrownBy(() -> ciclo.cargarTotal(null, new BigDecimal("1000")))
+        assertThatThrownBy(() -> cargarTotal(null, new BigDecimal("1000")))
                 .isInstanceOf(NoSuchElementException.class);
     }
 
@@ -352,36 +388,36 @@ class CicloTarjetaServiceTest {
     void elDiaDelVencimientoPreguntaSiSeDebitoUnaVezPorDia() {
         cierreReal();
         reloj.ir(LocalDateTime.of(2026, 11, 10, 10, 0));
-        assertThat(ciclo.preguntaDeDebito()).isEmpty();
+        assertThat(preguntaDeDebito()).isEmpty();
 
         reloj.ir(LocalDateTime.of(2026, 11, 11, 10, 0));
-        VistaResumenTarjeta resumen = ciclo.preguntaDeDebito().orElseThrow();
+        VistaResumenTarjeta resumen = preguntaDeDebito().orElseThrow();
         ciclo.preguntoDebito(resumen.id());
-        assertThat(ciclo.preguntaDeDebito()).isEmpty();
+        assertThat(preguntaDeDebito()).isEmpty();
 
         reloj.ir(LocalDateTime.of(2026, 11, 12, 10, 0));
-        assertThat(ciclo.preguntaDeDebito()).isPresent();
+        assertThat(preguntaDeDebito()).isPresent();
     }
 
     @Test
     void elPagoDelResumenNoCuentaComoGastoYLoDejaPagado() {
         cierreReal();
         compra("200000", LocalDateTime.of(2026, 10, 20, 12, 0));
-        ciclo.cargarTotal(null, new BigDecimal("250000"));
+        cargarTotal(null, new BigDecimal("250000"));
         reloj.ir(LocalDateTime.of(2026, 11, 11, 10, 0));
         LocalDateTime noviembre = LocalDate.of(2026, 11, 1).atStartOfDay();
         BigDecimal gastosAntes = repositorio.totalGastos(noviembre, noviembre.plusMonths(1));
 
-        CicloTarjetaService.Pago pago = ciclo.pagar(null, null, Origen.AUTOMATICO, null);
+        CicloTarjetaService.Pago pago = pagar(null, null, Origen.AUTOMATICO, null);
 
         assertThat(pago.movimiento().getTipo()).isEqualTo(TipoMovimiento.PAGO_TARJETA);
         assertThat(pago.movimiento().getMonto()).isEqualByComparingTo("250000");
         assertThat(pago.movimiento().getCuenta().getNombre()).isEqualTo("Galicia");
         assertThat(pago.resumen().estado()).isEqualTo(EstadoResumenTarjeta.PAGADO);
         assertThat(repositorio.totalGastos(noviembre, noviembre.plusMonths(1))).isEqualByComparingTo(gastosAntes);
-        assertThat(ciclo.preguntaDeDebito()).isEmpty();
-        assertThat(ciclo.panel().orElseThrow().porPagar()).isEmpty();
-        assertThatThrownBy(() -> ciclo.pagar(pago.resumen().id(), null, Origen.AUTOMATICO, null))
+        assertThat(preguntaDeDebito()).isEmpty();
+        assertThat(panel().orElseThrow().porPagar()).isEmpty();
+        assertThatThrownBy(() -> pagar(pago.resumen().id(), null, Origen.AUTOMATICO, null))
                 .isInstanceOf(IllegalStateException.class);
     }
 
@@ -390,9 +426,135 @@ class CicloTarjetaServiceTest {
         cierreReal();
         reloj.ir(LocalDateTime.of(2026, 11, 11, 10, 0));
 
-        CicloTarjetaService.Pago pago = ciclo.pagar(null, new BigDecimal("180000"), Origen.TEXTO,
+        CicloTarjetaService.Pago pago = pagar(null, new BigDecimal("180000"), Origen.TEXTO,
                 "se debitó la tarjeta, 180.000");
 
         assertThat(pago.resumen().totalReal()).isEqualByComparingTo("180000");
+    }
+
+    // --- Varias tarjetas: cada una con su ciclo ---
+
+    private TarjetaCredito mercadoPago() {
+        return tarjetas.findAll().stream().filter(t -> t.getNombre().equals("Mercado Pago")).findFirst()
+                .orElseThrow();
+    }
+
+    private Movimiento compraCon(TarjetaCredito tarjeta, String monto, LocalDateTime cuando) {
+        Movimiento m = movimientos.crearPendiente(MovimientoInterpretado.conCategoria(new BigDecimal(monto), "Remera",
+                ropa(), null, null, tarjeta, cuando), Origen.TEXTO, null);
+        movimientos.confirmar(m.getId());
+        return m;
+    }
+
+    /** La de Mercado Pago cerró el 25/10 y vence el 6/11 (ya cerrada, sin pagar). */
+    private void cierreMercadoPago() {
+        ciclo.cargarFechas(mercadoPago().getId(), LocalDate.of(2026, 10, 25), LocalDate.of(2026, 11, 6));
+    }
+
+    @Test
+    void laMigracionDejaLaMasterCardGoldYLaDeMercadoPagoDesdeSuCuenta() {
+        TarjetaCredito mp = mercadoPago();
+
+        assertThat(tarjeta().getNombre()).isEqualTo("MasterCard Gold");
+        assertThat(tarjeta().alias()).contains("master", "la de galicia");
+        assertThat(mp.getCuentaDebito().getNombre()).isEqualTo("Mercado Pago");
+        assertThat(mp.alias()).contains("la de mercado pago", "mp");
+    }
+
+    @Test
+    void cadaTarjetaTieneSuCicloConSusCompras() {
+        cierreReal();
+        cierreMercadoPago();
+        compra("7000", LocalDateTime.of(2026, 10, 30, 12, 0));
+        compraCon(mercadoPago(), "3000", LocalDateTime.of(2026, 10, 30, 13, 0));
+        compraCon(mercadoPago(), "1500", LocalDateTime.of(2026, 10, 20, 13, 0));
+
+        CicloTarjetaService.Paneles paneles = ciclo.paneles();
+        CicloTarjetaService.Panel gold = paneles.tarjetas().get(0);
+        CicloTarjetaService.Panel mp = paneles.tarjetas().get(1);
+
+        assertThat(gold.tarjeta()).isEqualTo("MasterCard Gold");
+        assertThat(gold.proximo().compras()).isEqualByComparingTo("7000");
+        assertThat(mp.tarjeta()).isEqualTo("Mercado Pago");
+        assertThat(mp.proximo().compras()).isEqualByComparingTo("3000");
+        assertThat(mp.proximo().cierre()).isEqualTo(LocalDate.of(2026, 11, 25));
+        assertThat(mp.porPagar()).singleElement().satisfies(r -> {
+            assertThat(r.cargado()).isEqualByComparingTo("1500");
+            assertThat(r.vencimiento()).isEqualTo(LocalDate.of(2026, 11, 6));
+        });
+        assertThat(paneles.proximos()).isEqualByComparingTo("10000");
+    }
+
+    @Test
+    void lasCuotasVanALosResumenesDeSuTarjeta() {
+        cierreReal();
+        cierreMercadoPago();
+        Movimiento m = movimientos.crearPendiente(MovimientoInterpretado.conCategoria(new BigDecimal("30000"),
+                "Zapatillas", ropa(), null, null, mercadoPago(), LocalDateTime.of(2026, 10, 30, 12, 0)),
+                Origen.TEXTO, null);
+        planes.crear(m.getId(), 3, new BigDecimal("30000"));
+        movimientos.confirmar(m.getId());
+        planes.alGuardar(m.getId());
+
+        CicloTarjetaService.Panel mp = ciclo.panel(mercadoPago().getId()).orElseThrow();
+
+        assertThat(mp.proximo().cuotas()).isEqualByComparingTo("10000");
+        assertThat(mp.siguientes()).extracting(VistaResumenTarjeta::cuotas)
+                .allSatisfy(c -> assertThat(c).isEqualByComparingTo("10000"));
+        assertThat(panel().orElseThrow().proximo().cuotas()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void laTarjetaSinNingunCierrePideLasFechasYTodaviaNoLaPospone() {
+        cierreReal();
+        long mp = mercadoPago().getId();
+
+        assertThat(ciclo.panel(mp).orElseThrow().configurado()).isFalse();
+        assertThat(ciclo.preguntasDeFechas()).filteredOn(p -> p.tarjetaId() == mp).singleElement()
+                .satisfies(p -> {
+                    assertThat(p.proximo()).isNull();
+                    assertThat(p.clave()).isEqualTo(-mp);
+                });
+
+        ciclo.preguntoFechas(-mp);
+        assertThat(ciclo.preguntasDeFechas()).noneMatch(p -> p.tarjetaId() == mp);
+
+        reloj.ir(HOY.plusDays(1));
+        assertThat(ciclo.preguntasDeFechas()).anyMatch(p -> p.tarjetaId() == mp);
+        LocalDate hasta = ciclo.posponerFechas(-mp);
+        assertThat(hasta).isEqualTo(LocalDate.of(2026, 11, 4));
+        reloj.ir(HOY.plusDays(2));
+        assertThat(ciclo.preguntasDeFechas()).noneMatch(p -> p.tarjetaId() == mp);
+        reloj.ir(HOY.plusDays(4));
+        assertThat(ciclo.preguntasDeFechas()).anyMatch(p -> p.tarjetaId() == mp);
+    }
+
+    @Test
+    void elPagoDeCadaResumenSaleDeLaCuentaDeSuTarjeta() {
+        cierreReal();
+        cierreMercadoPago();
+        compraCon(mercadoPago(), "85000", LocalDateTime.of(2026, 10, 20, 13, 0));
+        reloj.ir(LocalDateTime.of(2026, 11, 6, 10, 0));
+
+        assertThat(ciclo.preguntasDeDebito()).extracting(VistaResumenTarjeta::tarjeta)
+                .containsExactly("Mercado Pago");
+        CicloTarjetaService.Pago pago = ciclo.pagar(mercadoPago().getId(), null, null, Origen.TEXTO,
+                "pagué la tarjeta de mercado pago");
+
+        assertThat(pago.movimiento().getTipo()).isEqualTo(TipoMovimiento.PAGO_TARJETA);
+        assertThat(pago.movimiento().getMonto()).isEqualByComparingTo("85000");
+        assertThat(pago.movimiento().getCuenta().getNombre()).isEqualTo("Mercado Pago");
+        assertThat(pago.movimiento().getTarjeta().getNombre()).isEqualTo("Mercado Pago");
+        assertThat(panel().orElseThrow().porPagar()).singleElement()
+                .extracting(VistaResumenTarjeta::estado).isEqualTo(EstadoResumenTarjeta.CERRADO);
+    }
+
+    @Test
+    void elPagoDeUnaTarjetaSinResumenIgualSaleDeSuCuenta() {
+        Movimiento pago = ciclo.pagarSinResumen(mercadoPago().getId(), new BigDecimal("85000"), Origen.TEXTO,
+                "pagué la tarjeta de mercado pago, 85.000");
+
+        assertThat(pago.getTipo()).isEqualTo(TipoMovimiento.PAGO_TARJETA);
+        assertThat(pago.getCuenta().getNombre()).isEqualTo("Mercado Pago");
     }
 }

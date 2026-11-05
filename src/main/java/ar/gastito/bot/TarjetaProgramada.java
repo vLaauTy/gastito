@@ -1,7 +1,6 @@
 package ar.gastito.bot;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -44,26 +43,29 @@ public class TarjetaProgramada {
         revisar();
     }
 
+    /** Cada tarjeta con sus avisos: uno por tarjeta y por tipo. */
     @Scheduled(cron = "0 */10 * * * *")
     public synchronized void revisar() {
-        avisar("las fechas del próximo resumen", ciclo::preguntaDeFechas, conversacion::preguntaDeFechas,
-                ciclo::preguntoFechas);
-        avisar("el vencimiento", ciclo::avisoDeVencimiento, conversacion::avisoDeVencimiento,
-                ciclo::avisoVencimientoEnviado);
-        avisar("el débito", ciclo::preguntaDeDebito, conversacion::preguntaDeDebito, ciclo::preguntoDebito);
+        avisar("las fechas del próximo resumen", ciclo::preguntasDeFechas, conversacion::preguntaDeFechas,
+                p -> ciclo.preguntoFechas(p.clave()), CicloTarjetaService.PreguntaFechas::tarjeta);
+        avisar("el vencimiento", ciclo::avisosDeVencimiento, conversacion::avisoDeVencimiento,
+                r -> ciclo.avisoVencimientoEnviado(r.id()), VistaResumenTarjeta::tarjeta);
+        avisar("el débito", ciclo::preguntasDeDebito, conversacion::preguntaDeDebito,
+                r -> ciclo.preguntoDebito(r.id()), VistaResumenTarjeta::tarjeta);
     }
 
-    private void avisar(String que, Supplier<Optional<VistaResumenTarjeta>> pendiente,
-            Function<VistaResumenTarjeta, Accion.Enviar> mensaje, Consumer<Long> enviado) {
+    private <T> void avisar(String que, Supplier<List<T>> pendientes, Function<T, Accion.Enviar> mensaje,
+            Consumer<T> enviado, Function<T, String> tarjeta) {
         try {
-            pendiente.get().ifPresent(r -> {
-                if (bot.enviarAlUsuario(List.of(mensaje.apply(r)))) {
-                    enviado.accept(r.id());
-                    log.info("Aviso de la tarjeta: {} (resumen que vence el {})", que, r.vencimiento());
+            for (T aviso : pendientes.get()) {
+                if (bot.enviarAlUsuario(List.of(mensaje.apply(aviso)))) {
+                    enviado.accept(aviso);
+                    log.info("Aviso de la tarjeta {}: {}", tarjeta.apply(aviso), que);
                 } else {
-                    log.warn("No se pudo avisar {} de la tarjeta: se reintenta en 10 minutos", que);
+                    log.warn("No se pudo avisar {} de la tarjeta {}: se reintenta en 10 minutos", que,
+                            tarjeta.apply(aviso));
                 }
-            });
+            }
         } catch (RuntimeException e) {
             log.error("Falló el aviso de {} de la tarjeta", que, e);
         }

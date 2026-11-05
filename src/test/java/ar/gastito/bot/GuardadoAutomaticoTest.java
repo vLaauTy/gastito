@@ -268,7 +268,7 @@ class GuardadoAutomaticoTest {
         Movimiento conDebito = guardado(conId(Movimiento.pendiente(new MovimientoInterpretado(new BigDecimal("3700"),
                 "Pan de pancho y papas", KIOSCO, List.of(), DEBITO, null, null, AHORA), Origen.TEXTO, "x", AHORA), ID));
         when(movimientos.editar(ID, new BigDecimal("3700"), "Pan de pancho y papas", AHORA, KIOSCO.getId(),
-                DEBITO.getId(), null)).thenReturn(conDebito);
+                DEBITO.getId(), null, null)).thenReturn(conDebito);
 
         List<Accion> acciones = tocar("gm:15:2");
 

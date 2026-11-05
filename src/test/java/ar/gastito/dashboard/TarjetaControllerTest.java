@@ -49,38 +49,56 @@ class TarjetaControllerTest {
     }
 
     @Test
-    void sinCierreCargadoNoEstaConfigurada() throws Exception {
-        when(ciclo.panel()).thenReturn(Optional.empty());
+    void unaTarjetaSinCierreCargadoNoEstaConfigurada() throws Exception {
+        when(ciclo.paneles()).thenReturn(new CicloTarjetaService.Paneles(List.of(new CicloTarjetaService.Panel(
+                "Mercado Pago", "Mercado Pago", List.of(), null, List.of(), BigDecimal.ZERO, List.of(), 2L, "#2D6CDF",
+                "P")), BigDecimal.ZERO, BigDecimal.ZERO));
 
         mvc.perform(get("/api/tarjeta"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.configurada").value(false));
+                .andExpect(jsonPath("$.tarjetas[0].configurado").value(false))
+                .andExpect(jsonPath("$.tarjetas[0].tarjetaId").value(2))
+                .andExpect(jsonPath("$.tarjetas[0].inicial").value("P"));
     }
 
     @Test
-    void elPanelTraeLosTotalesHechos() throws Exception {
-        when(ciclo.panel()).thenReturn(Optional.of(new CicloTarjetaService.Panel("MasterCard Gold", "Galicia",
-                List.of(cerrado(null, null)), cerrado(null, null), List.of(), BigDecimal.ZERO, List.of())));
+    void elPanelTraeUnaTarjetaPorBloqueYLosTotalesHechos() throws Exception {
+        when(ciclo.paneles()).thenReturn(new CicloTarjetaService.Paneles(List.of(new CicloTarjetaService.Panel(
+                "MasterCard Gold", "Galicia", List.of(cerrado(null, null)), cerrado(null, null), List.of(),
+                BigDecimal.ZERO, List.of(), 1L, "#B4531F", "M")), new BigDecimal("200000.00"),
+                new BigDecimal("200000.00")));
 
         mvc.perform(get("/api/tarjeta"))
-                .andExpect(jsonPath("$.configurada").value(true))
-                .andExpect(jsonPath("$.panel.porPagar[0].vencimiento").value("2026-11-11"))
-                .andExpect(jsonPath("$.panel.porPagar[0].cargado").value(200000.0))
-                .andExpect(jsonPath("$.panel.porPagar[0].aDebitar").value(200000.0))
-                .andExpect(jsonPath("$.panel.porPagar[0].cantidadCompras").value(1))
-                .andExpect(jsonPath("$.panel.porPagar[0].detalle[0].descripcion").value("Remera"));
+                .andExpect(jsonPath("$.proximos").value(200000.0))
+                .andExpect(jsonPath("$.porPagar").value(200000.0))
+                .andExpect(jsonPath("$.tarjetas[0].configurado").value(true))
+                .andExpect(jsonPath("$.tarjetas[0].totalPorPagar").value(200000.0))
+                .andExpect(jsonPath("$.tarjetas[0].porPagar[0].vencimiento").value("2026-11-11"))
+                .andExpect(jsonPath("$.tarjetas[0].porPagar[0].cargado").value(200000.0))
+                .andExpect(jsonPath("$.tarjetas[0].porPagar[0].aDebitar").value(200000.0))
+                .andExpect(jsonPath("$.tarjetas[0].porPagar[0].cantidadCompras").value(1))
+                .andExpect(jsonPath("$.tarjetas[0].porPagar[0].detalle[0].descripcion").value("Remera"));
     }
 
     @Test
-    void cargarLasFechas() throws Exception {
-        when(ciclo.cargarFechas(LocalDate.of(2026, 11, 26), LocalDate.of(2026, 12, 11))).thenReturn(
+    void cargarLasFechasDeUnaTarjeta() throws Exception {
+        when(ciclo.cargarFechas(2L, LocalDate.of(2026, 11, 26), LocalDate.of(2026, 12, 11))).thenReturn(
                 new CicloTarjetaService.FechasCargadas(cerrado(null, null), null));
 
         mvc.perform(post("/api/tarjeta/fechas").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"cierre\":\"2026-11-26\",\"vencimiento\":\"2026-12-11\"}"))
+                .content("{\"tarjetaId\":2,\"cierre\":\"2026-11-26\",\"vencimiento\":\"2026-12-11\"}"))
                 .andExpect(status().isOk());
 
-        verify(ciclo).cargarFechas(LocalDate.of(2026, 11, 26), LocalDate.of(2026, 12, 11));
+        verify(ciclo).cargarFechas(2L, LocalDate.of(2026, 11, 26), LocalDate.of(2026, 12, 11));
+    }
+
+    @Test
+    void lasFechasSinTarjetaSonUnError() throws Exception {
+        mvc.perform(post("/api/tarjeta/fechas").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"cierre\":\"2026-11-26\",\"vencimiento\":\"2026-12-11\"}"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(ciclo);
     }
 
     @Test
@@ -94,7 +112,7 @@ class TarjetaControllerTest {
 
     @Test
     void elTotalDelResumenDiceLaDiferencia() throws Exception {
-        when(ciclo.cargarTotal(7L, new BigDecimal("250000"))).thenReturn(new CicloTarjetaService.TotalCargado(
+        when(ciclo.cargarTotal(null, 7L, new BigDecimal("250000"))).thenReturn(new CicloTarjetaService.TotalCargado(
                 cerrado("250000", "50000.00"), new BigDecimal("250000"), new BigDecimal("200000.00"),
                 new BigDecimal("50000.00")));
 

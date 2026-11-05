@@ -20,10 +20,20 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @param cargado    compras + cuotas
  * @param totalReal  lo que dice el resumen del banco, o null si no se cargó
  * @param diferencia totalReal − cargado (positiva: falta cargar; cero dentro de la tolerancia), o null sin total real
+ * @param tarjeta    el nombre de la tarjeta
+ * @param tarjetaId  la tarjeta del resumen
  */
 public record VistaResumenTarjeta(Long id, YearMonth periodo, LocalDate desde, LocalDate cierre, LocalDate vencimiento,
         boolean estimadas, EstadoResumenTarjeta estado, BigDecimal compras, BigDecimal cuotas, BigDecimal cargado,
-        BigDecimal totalReal, BigDecimal diferencia, String tarjeta, String cuentaDebito, List<Linea> detalle) {
+        BigDecimal totalReal, BigDecimal diferencia, String tarjeta, String cuentaDebito, List<Linea> detalle,
+        Long tarjetaId) {
+
+    public VistaResumenTarjeta(Long id, YearMonth periodo, LocalDate desde, LocalDate cierre, LocalDate vencimiento,
+            boolean estimadas, EstadoResumenTarjeta estado, BigDecimal compras, BigDecimal cuotas, BigDecimal cargado,
+            BigDecimal totalReal, BigDecimal diferencia, String tarjeta, String cuentaDebito, List<Linea> detalle) {
+        this(id, periodo, desde, cierre, vencimiento, estimadas, estado, compras, cuotas, cargado, totalReal, diferencia,
+                tarjeta, cuentaDebito, detalle, null);
+    }
 
     /**
      * Una compra o una cuota del resumen.

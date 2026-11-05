@@ -9,12 +9,17 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import ar.gastito.catalogo.Catalogo;
+import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.catalogo.Categoria;
+import ar.gastito.catalogo.MedioElegido;
 import ar.gastito.catalogo.MedioPago;
+import ar.gastito.catalogo.TarjetaCredito;
 import ar.gastito.juntada.JuntadaService;
 import ar.gastito.juntada.VistaJuntada;
 import ar.gastito.movimiento.ClaseIngreso;
@@ -67,6 +72,11 @@ public class Tarjetas {
     /** Un gasto que se guardó solo: deshacerlo (se borra) o elegir el medio de pago con un toque. */
     static final String DESHACER = "du";
     static final String MEDIO_RAPIDO = "gm";
+    /**
+     * Con qué tarjeta de crédito: "tj:<movimiento>:<tarjeta>", o "tj:<movimiento>:0" para "dinero en cuenta" (la
+     * duda de "con mercado pago").
+     */
+    static final String TARJETA_ELEGIDA = "tj";
     /** Id de medio de pago que significa "sin medio de pago". */
     static final long SIN_MEDIO = 0;
 
@@ -141,13 +151,33 @@ public class Tarjetas {
         this.resumenDeTarjeta = fuente;
     }
 
-    /** "🗓 Entra en el resumen que vence ≈ 11/12", si es un gasto con la tarjeta de crédito. */
-    private Optional<String> lineaResumenTarjeta(Movimiento m) {
+    /** Las tarjetas de crédito activas (la última usada primero), para preguntar cuál; sin catálogo, ninguna. */
+    private Supplier<List<TarjetaCredito>> tarjetasActivas = List::of;
+
+    @Autowired(required = false)
+    void usarCatalogo(CatalogoService catalogos) {
+        this.tarjetasActivas = () -> catalogos.cargar().tarjetas();
+    }
+
+    /** "Entra en el resumen que vence ≈ 11/12", si es un gasto con la tarjeta de crédito y su ciclo tiene fechas. */
+    private Optional<String> resumenTarjeta(Movimiento m) {
         if (m.getTipo() != TipoMovimiento.GASTO || m.getTarjeta() == null) {
             return Optional.empty();
         }
-        return resumenDeTarjeta.apply(m).map(f -> "🗓 Entra en el resumen que vence " + (f.estimadas() ? "≈ " : "")
+        return resumenDeTarjeta.apply(m).map(f -> "entra en el resumen que vence " + (f.estimadas() ? "≈ " : "")
                 + DIA_MES.format(f.vencimiento()));
+    }
+
+    /**
+     * La línea del medio de pago: "💳 MasterCard Gold · entra en el resumen que vence ≈ 11/12" con la tarjeta,
+     * "💳 Tarjeta de crédito · ¿cuál?" si falta elegirla, o el medio (y la cuenta).
+     */
+    private String lineaMedio(Movimiento m) {
+        if (m.isFaltaTarjeta()) {
+            return "💳 Tarjeta de crédito · <b>¿cuál?</b>";
+        }
+        return "💳 " + html(FormatoMensajes.medio(m))
+                + resumenTarjeta(m).map(r -> " · " + r).orElse("");
     }
 
     private static final DateTimeFormatter DIA_MES = DateTimeFormatter.ofPattern("dd/MM");
@@ -222,7 +252,8 @@ public class Tarjetas {
             detalle += (detalle.isEmpty() ? "" : " · ") + productos + (productos == 1 ? " producto" : " productos");
         }
         return escuchado(m) + linea + (detalle.isEmpty() ? "" : "\n" + detalle)
-                + lineaResumenTarjeta(m).map(r -> "\n" + r).orElse("");
+                + resumenTarjeta(m).map(r -> "\n🗓 " + Character.toUpperCase(r.charAt(0)) + r.substring(1))
+                        .orElse("");
     }
 
     /** "💵 Efectivo", "💳 Débito (Galicia)" o "💳 <i>Sin especificar</i>". */
@@ -231,7 +262,7 @@ public class Tarjetas {
             return "💳 <i>Sin especificar</i>";
         }
         boolean efectivo = m.getMedioPago() != null && m.getMedioPago().isEfectivo();
-        return (efectivo ? "💵 " : "💳 ") + html(FormatoMensajes.medio(m.getMedioPago(), m.getCuenta()));
+        return (efectivo ? "💵 " : "💳 ") + html(FormatoMensajes.medio(m));
     }
 
     /** ↩️ Deshacer: el gasto se borró. */
@@ -275,7 +306,7 @@ public class Tarjetas {
         String linea = "💰 <b>" + formato.pesos(m.getMonto()) + "</b>"
                 + (m.getDescripcion() == null ? "" : " · " + html(m.getDescripcion()))
                 + "\n" + (c == null ? "🏷 Sin categoría" : html(c.getNombreConEmoji()))
-                + " · 💳 " + html(FormatoMensajes.medio(m.getMedioPago(), m.getCuenta()))
+                + " · 💳 " + html(FormatoMensajes.medio(m))
                 + "\n📅 " + formato.fecha(m.getFechaHora());
         int productos = (int) m.getItems().stream().filter(i -> !i.isDescuento()).count();
         return productos == 0 ? linea : linea + " · " + productos + (productos == 1 ? " producto" : " productos");
@@ -362,9 +393,8 @@ public class Tarjetas {
         Categoria c = m.getCategoria();
         lineas.add(c == null ? "🏷 <b>¿Qué categoría?</b>"
                 : (c.getEmoji() == null ? "🏷" : c.getEmoji()) + " " + html(c.getNombre()));
-        lineas.add("💳 " + html(FormatoMensajes.medio(m.getMedioPago(), m.getCuenta())));
+        lineas.add(lineaMedio(m));
         lineas.add("📅 " + formato.fecha(m.getFechaHora()));
-        lineaResumenTarjeta(m).ifPresent(lineas::add);
         juntada.ifPresent(j -> lineas.add("\n" + personas(j)));
         return String.join("\n", lineas);
     }
@@ -411,7 +441,7 @@ public class Tarjetas {
                     + (descuentos == 0 ? "" : " y " + descuentos + (descuentos == 1 ? " descuento" : " descuentos")));
         }
         lineas.add("💰 Total <b>" + formato.pesos(m.getMonto()) + "</b>");
-        lineas.add("💳 " + html(FormatoMensajes.medio(m.getMedioPago(), m.getCuenta())));
+        lineas.add(lineaMedio(m));
         Categoria c = m.getCategoria();
         lineas.add(c == null ? "🏷 <b>¿Qué categoría?</b>"
                 : (c.getEmoji() == null ? "🏷" : c.getEmoji()) + " " + html(c.getNombre()));
@@ -542,6 +572,9 @@ public class Tarjetas {
         } else if (m.getMonto() == null) {
             t.fila(boton("💰 Poner monto", EDITAR_MONTO, id), boton("✏️ Editar", EDITAR, id),
                     boton("❌ Cancelar", CANCELAR, id));
+        } else if (m.isFaltaTarjeta() && !tarjetasActivas.get().isEmpty()) {
+            filaDeTarjetas(t, id);
+            t.fila(boton("✏️ Editar", EDITAR, id), boton("❌ Cancelar", CANCELAR, id));
         } else {
             t.fila(boton("✅ Guardar", GUARDAR, id), boton("✏️ Editar", EDITAR, id),
                     boton("❌ Cancelar", CANCELAR, id));
@@ -559,13 +592,48 @@ public class Tarjetas {
      * @param medios los medios de pago del catálogo, para la fila rápida
      */
     public Teclado guardadoAutomatico(Movimiento m, List<MedioPago> medios) {
+        return guardadoAutomatico(m, new Catalogo(List.of(), medios, List.of(), tarjetasActivas.get()));
+    }
+
+    /**
+     * @param catalogo los medios de pago y las tarjetas, para la fila rápida: con más de una tarjeta, "Crédito" se
+     *                 reemplaza por una fila con un botón por tarjeta
+     */
+    public Teclado guardadoAutomatico(Movimiento m, Catalogo catalogo) {
         long id = m.getId();
         Teclado.Constructor t = Teclado.constructor();
-        if (m.getMedioPago() == null && m.getCuenta() == null && !medios.isEmpty()) {
-            t.fila(medios.stream().map(mp -> boton(medioRapido(mp), MEDIO_RAPIDO, id, mp.getId()))
+        if (m.getMedioPago() == null && m.getCuenta() == null && !catalogo.mediosPago().isEmpty()) {
+            List<MedioElegido.Opcion> opciones = MedioElegido.opciones(catalogo);
+            t.fila(opciones.stream().filter(o -> !o.esTarjeta() || !o.medio().esTarjetaDeCredito()
+                    || catalogo.tarjetas().size() <= 1)
+                    .map(o -> boton(medioRapido(o.medio()), MEDIO_RAPIDO, id, o.valor()))
                     .toArray(Teclado.Boton[]::new));
+            if (catalogo.tarjetas().size() > 1) {
+                t.fila(opciones.stream().filter(MedioElegido.Opcion::esTarjeta)
+                        .map(o -> boton("💳 " + o.nombre(), MEDIO_RAPIDO, id, o.valor()))
+                        .toArray(Teclado.Boton[]::new));
+            }
         }
         return t.fila(boton("✏️ Editar", EDITAR, id), boton("↩️ Deshacer", DESHACER, id)).build();
+    }
+
+    /** Un botón por tarjeta activa, la última usada primero. */
+    private void filaDeTarjetas(Teclado.Constructor t, long id) {
+        t.fila(tarjetasActivas.get().stream().map(c -> boton("💳 " + c.getNombre(), TARJETA_ELEGIDA, id, c.getId()))
+                .toArray(Teclado.Boton[]::new));
+    }
+
+    /**
+     * "Con mercado pago" solo: ¿fue plata de la cuenta o la tarjeta? "💰 Dinero en cuenta" o "💳 Tarjeta de crédito
+     * Mercado Pago", y abajo Editar y Cancelar.
+     */
+    public Teclado cuentaOTarjeta(Movimiento m, TarjetaCredito tarjeta) {
+        long id = m.getId();
+        return Teclado.constructor()
+                .fila(boton("💰 Dinero en cuenta", TARJETA_ELEGIDA, id, 0),
+                        boton("💳 Tarjeta de crédito " + tarjeta.getNombre(), TARJETA_ELEGIDA, id, tarjeta.getId()))
+                .fila(boton("✏️ Editar", EDITAR, id), boton("❌ Cancelar", CANCELAR, id))
+                .build();
     }
 
     /** El nombre corto de un medio para la fila rápida: "💵 Efectivo", "💳 Débito", "💳 Crédito", "🏦 Transf.", "QR". */
@@ -643,8 +711,14 @@ public class Tarjetas {
     }
 
     public Teclado medios(long id, List<MedioPago> medios) {
-        List<Teclado.Boton> botones = new ArrayList<>(medios.stream()
-                .map(mp -> boton(mp.getNombre(), MEDIO, id, mp.getId()))
+        return medios(id, new Catalogo(List.of(), medios, List.of(), tarjetasActivas.get()));
+    }
+
+    /** Los medios de pago, con un botón por tarjeta en lugar de "Tarjeta de crédito" si hay más de una. */
+    public Teclado medios(long id, Catalogo catalogo) {
+        List<Teclado.Boton> botones = new ArrayList<>(MedioElegido.opciones(catalogo).stream()
+                .map(o -> boton((o.esTarjeta() && catalogo.tarjetas().size() > 1 ? "💳 " : "") + o.nombre(), MEDIO,
+                        id, o.valor()))
                 .toList());
         botones.add(boton("Sin medio de pago", MEDIO, id, SIN_MEDIO));
         return Teclado.constructor().grilla(botones, 2).fila(volver(id)).build();

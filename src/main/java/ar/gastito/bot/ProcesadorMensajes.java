@@ -13,6 +13,8 @@ import org.springframework.stereotype.Component;
 import ar.gastito.audio.TranscripcionService;
 import ar.gastito.bot.Tarjetas.Campo;
 import ar.gastito.catalogo.CatalogoService;
+import ar.gastito.catalogo.MedioElegido;
+import ar.gastito.catalogo.TarjetaCredito;
 import ar.gastito.config.GastitoProperties;
 import ar.gastito.consulta.ConsultaService;
 import ar.gastito.dashboard.DashboardProperties;
@@ -275,8 +277,11 @@ public class ProcesadorMensajes {
                     ? "Ese gasto ya estaba guardado"
                     : "Ese gasto ya estaba cancelado"));
         } catch (MovimientoIncompletoException e) {
-            acciones.add(edicion.principal(chatId, mensajeId, movimientos.buscar(id)));
-            acciones.add(new Accion.Avisar("Antes de guardar falta elegir la categoría o poner el monto"));
+            Movimiento m = movimientos.buscar(id);
+            acciones.add(edicion.principal(chatId, mensajeId, m));
+            acciones.add(new Accion.Avisar(m.isFaltaTarjeta() && m.getCategoria() != null && m.getMonto() != null
+                    ? "Antes de guardar elegí con qué tarjeta"
+                    : "Antes de guardar falta elegir la categoría o poner el monto"));
         } catch (NoSuchElementException e) {
             log.warn("Botón para algo que no existe: {}", datos);
             acciones.add(new Accion.Avisar("No encontré ese gasto"));
@@ -322,13 +327,17 @@ public class ProcesadorMensajes {
             case Tarjetas.OTRA_CATEGORIA -> List.of(new Accion.Editar(mensajeId,
                     tarjetas.actual(edicion.editable(id)), tarjetas.categorias(id, catalogos.cargar().categorias())));
             case Tarjetas.MEDIOS -> List.of(new Accion.Editar(mensajeId, tarjetas.actual(edicion.editable(id)),
-                    tarjetas.medios(id, catalogos.cargar().mediosPago())));
+                    tarjetas.medios(id, catalogos.cargar())));
+            case Tarjetas.TARJETA_ELEGIDA -> flujo.elegirTarjeta(chatId, mensajeId, id, requerido(elegido));
             case Tarjetas.CATEGORIA -> List.of(edicion.principal(chatId, mensajeId,
                     edicion.elegirCategoria(id, requerido(elegido))));
             case Tarjetas.MEDIO -> {
-                long medio = requerido(elegido);
-                yield List.of(edicion.principal(chatId, mensajeId,
-                        edicion.cambiarMedioPago(id, medio == Tarjetas.SIN_MEDIO ? null : medio)));
+                long valor = requerido(elegido);
+                Optional<MedioElegido> medio = valor == Tarjetas.SIN_MEDIO ? Optional.empty()
+                        : MedioElegido.de(valor, catalogos.cargar());
+                yield List.of(edicion.principal(chatId, mensajeId, edicion.cambiarMedioPago(id,
+                        medio.map(e -> e.medio().getId()).orElse(null),
+                        medio.map(MedioElegido::tarjeta).map(TarjetaCredito::getId).orElse(null))));
             }
             case Tarjetas.EDITAR_MONTO -> edicion.pedir(chatId, mensajeId, id, Campo.MONTO);
             case Tarjetas.EDITAR_FECHA -> edicion.pedir(chatId, mensajeId, id, Campo.FECHA);
@@ -354,7 +363,8 @@ public class ProcesadorMensajes {
             case ConversacionCuotas.CANCELAR_PLAN -> cuotas.boton(mensajeId, id);
             case ConversacionTarjeta.TODAVIA_NO_FECHAS, ConversacionTarjeta.CARGAR_TOTAL, ConversacionTarjeta.DEBITADO,
                     ConversacionTarjeta.TODAVIA_NO_DEBITO, ConversacionTarjeta.CONFIRMAR_PAGO,
-                    ConversacionTarjeta.CANCELAR_PAGO -> tarjeta.boton(chatId, mensajeId, accion, id, elegido);
+                    ConversacionTarjeta.CANCELAR_PAGO, ConversacionTarjeta.ELEGIR_TARJETA ->
+                    tarjeta.boton(chatId, mensajeId, accion, id, elegido);
             case ConversacionDolares.CON_TARJETA, ConversacionDolares.EN_PESOS, ConversacionDolares.NO_SE,
                     ConversacionDolares.CORREGIR, ConversacionDolares.OTRO_GASTO -> dolares.boton(chatId, mensajeId,
                             accion, id, elegido, flujo::tarjetaNueva, m -> edicion.principal(chatId, mensajeId, m));

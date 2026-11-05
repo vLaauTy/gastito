@@ -196,12 +196,18 @@ class EdicionDeCampos {
 
     /** 💳 Medio de pago desde la tarjeta, pendiente o guardada sola. @param medioPagoId null es sin medio de pago */
     Movimiento cambiarMedioPago(long id, Long medioPagoId) {
+        return cambiarMedioPago(id, medioPagoId, null);
+    }
+
+    /** @param tarjetaId con crédito, cuál; null para la que tenía o la única activa */
+    Movimiento cambiarMedioPago(long id, Long medioPagoId, Long tarjetaId) {
         try {
-            return movimientos.cambiarMedioPago(id, medioPagoId);
+            return movimientos.cambiarMedioPago(id, medioPagoId, tarjetaId);
         } catch (MovimientoNoPendienteException e) {
             Movimiento m = siGuardado(e);
-            return editarGuardado(m, m.getMonto(), m.getDescripcion(), m.getFechaHora(), m.getCategoria().getId(),
-                    medioPagoId);
+            return movimientos.editar(m.getId(), m.getMonto(), m.getDescripcion(), m.getFechaHora(),
+                    m.getCategoria().getId(), medioPagoId, m.getCuenta() == null ? null : m.getCuenta().getId(),
+                    tarjetaId);
         }
     }
 

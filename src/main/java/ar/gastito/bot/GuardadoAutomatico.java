@@ -3,6 +3,7 @@ package ar.gastito.bot;
 import java.util.List;
 
 import ar.gastito.catalogo.CatalogoService;
+import ar.gastito.catalogo.MedioElegido;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Origen;
@@ -49,6 +50,10 @@ class GuardadoAutomatico {
         if (m.isJuntada() || m.getPlanCuotasId() != null || m.getGastoFijoId() != null) {
             return false;
         }
+        // Con crédito y varias tarjetas, sin decir cuál: se pregunta (sin tarjeta no se guarda).
+        if (m.isFaltaTarjeta()) {
+            return false;
+        }
         return m.getOrigen() == Origen.TEXTO || m.getOrigen() == Origen.AUDIO
                 || (m.getOrigen() == Origen.TICKET && m.getMedioPago() != null && ControlesTicket.revisar(m).isEmpty());
     }
@@ -65,7 +70,7 @@ class GuardadoAutomatico {
     }
 
     Teclado teclado(Movimiento m) {
-        return tarjetas.guardadoAutomatico(m, catalogos.cargar().mediosPago());
+        return tarjetas.guardadoAutomatico(m, catalogos.cargar());
     }
 
     /** ↩️ Deshacer: el gasto se borra (con sus productos y la foto del ticket), en cualquier momento. */
@@ -78,11 +83,18 @@ class GuardadoAutomatico {
                 new Accion.Avisar("↩️ Deshecho"));
     }
 
-    /** Un toque en la fila rápida: el gasto guardado pasa a tener ese medio de pago. */
-    List<Accion> elegirMedio(int mensajeId, long id, long medioPagoId) {
+    /**
+     * Un toque en la fila rápida: el gasto guardado pasa a tener ese medio de pago.
+     *
+     * @param valor el id del medio, o −id de una tarjeta ({@link MedioElegido})
+     */
+    List<Accion> elegirMedio(int mensajeId, long id, long valor) {
+        MedioElegido elegido = MedioElegido.de(valor, catalogos.cargar())
+                .orElseThrow(() -> new java.util.NoSuchElementException("No existe ese medio de pago"));
         Movimiento m = movimientos.buscar(id);
         Movimiento editado = movimientos.editar(id, m.getMonto(), m.getDescripcion(), m.getFechaHora(),
-                m.getCategoria().getId(), medioPagoId, m.getCuenta() == null ? null : m.getCuenta().getId());
-        return List.of(tarjeta(mensajeId, editado), new Accion.Avisar("💳 " + editado.getMedioPago().getNombre()));
+                m.getCategoria().getId(), elegido.medio().getId(), m.getCuenta() == null ? null : m.getCuenta().getId(),
+                elegido.tarjeta() == null ? null : elegido.tarjeta().getId());
+        return List.of(tarjeta(mensajeId, editado), new Accion.Avisar("💳 " + FormatoMensajes.medio(editado)));
     }
 }

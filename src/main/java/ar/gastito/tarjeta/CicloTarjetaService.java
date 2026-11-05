@@ -14,15 +14,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.springframework.stereotype.Service;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.transaction.annotation.Transactional;
 
 import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.catalogo.TarjetaCredito;
+import ar.gastito.catalogo.TarjetaCreditoRepository;
 import ar.gastito.cuota.CuotaProperties;
 import ar.gastito.cuota.PlanCuotas;
 import ar.gastito.cuota.PlanCuotasRepository;
@@ -49,13 +54,15 @@ public class CicloTarjetaService {
     private final MovimientoRepository movimientos;
     private final PlanCuotasRepository planes;
     private final CatalogoService catalogos;
+    private final TarjetaCreditoRepository tarjetas;
     private final CuotaProperties cuotas;
     private final TarjetaProperties properties;
     private final Clock clock;
 
     public CicloTarjetaService(ResumenTarjetaRepository resumenes, MovimientoRepository movimientos,
-            PlanCuotasRepository planes, CatalogoService catalogos, CuotaProperties cuotas,
-            TarjetaProperties properties, Clock clock) {
+            PlanCuotasRepository planes, CatalogoService catalogos, TarjetaCreditoRepository tarjetas,
+            CuotaProperties cuotas, TarjetaProperties properties, Clock clock) {
+        this.tarjetas = tarjetas;
         this.resumenes = resumenes;
         this.movimientos = movimientos;
         this.planes = planes;
@@ -85,26 +92,70 @@ public class CicloTarjetaService {
     // --- Consultas ---
 
     /**
-     * Todo lo de la tarjeta para mostrar.
+     * Todo lo de una tarjeta para mostrar.
      *
      * @param porPagar   los resúmenes cerrados que todavía no se debitaron, del más viejo al más nuevo
-     * @param proximo    el resumen abierto: en el que entran las compras de hoy
+     * @param proximo    el resumen abierto: en el que entran las compras de hoy; null si la tarjeta todavía no tiene
+     *                   ningún cierre cargado (no hay de dónde estimar)
      * @param siguientes los resúmenes que siguen al próximo con cuotas ya comprometidas
      * @param comprometidoSiguientes lo que suman esas cuotas
      * @param pagados    los últimos debitados, del más nuevo al más viejo
+     * @param color      el de la tarjeta en la web (#RRGGBB), o null
+     * @param inicial    la letra de la tarjeta en la web
      */
     public record Panel(String tarjeta, String cuentaDebito, List<VistaResumenTarjeta> porPagar,
             VistaResumenTarjeta proximo, List<VistaResumenTarjeta> siguientes, BigDecimal comprometidoSiguientes,
-            List<VistaResumenTarjeta> pagados) {
+            List<VistaResumenTarjeta> pagados, Long tarjetaId, String color, String inicial) {
+
+        public Panel(String tarjeta, String cuentaDebito, List<VistaResumenTarjeta> porPagar,
+                VistaResumenTarjeta proximo, List<VistaResumenTarjeta> siguientes, BigDecimal comprometidoSiguientes,
+                List<VistaResumenTarjeta> pagados) {
+            this(tarjeta, cuentaDebito, porPagar, proximo, siguientes, comprometidoSiguientes, pagados, null, null,
+                    null);
+        }
+
+        /** Ya tiene algún cierre cargado: hay próximo resumen. */
+        @JsonProperty
+        public boolean configurado() {
+            return proximo != null;
+        }
+
+        /** Lo que se va a debitar de los cerrados sin pagar. */
+        @JsonProperty
+        public BigDecimal totalPorPagar() {
+            return porPagar.stream().map(VistaResumenTarjeta::aDebitar).reduce(BigDecimal.ZERO, BigDecimal::add);
+        }
+    }
+
+    /**
+     * Todas las tarjetas activas, y los totales entre todas.
+     *
+     * @param proximos lo que se lleva en los próximos resúmenes de todas
+     * @param porPagar lo que se va a debitar de los cerrados sin pagar de todas
+     */
+    public record Paneles(List<Panel> tarjetas, BigDecimal proximos, BigDecimal porPagar) {
     }
 
     /** Cuántos resúmenes pagados se muestran. */
     static final int PAGADOS_A_MOSTRAR = 3;
 
-    /** Vacío si no hay tarjeta o todavía no se cargó ningún cierre (no hay de dónde estimar). */
+    /** Un panel por tarjeta activa (en el orden en que se dieron de alta), con los totales entre todas. */
     @Transactional
-    public Optional<Panel> panel() {
-        return asegurar().map(c -> {
+    public Paneles paneles() {
+        List<Panel> paneles = tarjetasActivas().stream().map(this::panel).toList();
+        return new Paneles(paneles, paneles.stream().filter(Panel::configurado).map(p -> p.proximo().cargado())
+                .reduce(BigDecimal.ZERO, BigDecimal::add), paneles.stream().map(Panel::totalPorPagar)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add));
+    }
+
+    /** El panel de una tarjeta activa; vacío si no existe o está dada de baja. */
+    @Transactional
+    public Optional<Panel> panel(long tarjetaId) {
+        return tarjetasActivas().stream().filter(t -> t.getId() == tarjetaId).findFirst().map(this::panel);
+    }
+
+    private Panel panel(TarjetaCredito tarjeta) {
+        return asegurar(tarjeta).map(c -> {
             Map<YearMonth, List<VistaResumenTarjeta.Linea>> cuotasPorResumen = cuotasPorResumen(c);
             Function<ResumenTarjeta, VistaResumenTarjeta> vista = r -> vista(c, r.fechas(), r, cuotasPorResumen);
             ResumenTarjeta abierto = c.abierto();
@@ -124,8 +175,9 @@ public class CicloTarjetaService {
             return new Panel(c.tarjeta().getNombre(), cuentaDebito(c.tarjeta()),
                     c.porPagar().stream().map(vista).toList(), vista.apply(abierto), siguientes,
                     siguientes.stream().map(VistaResumenTarjeta::cuotas).reduce(BigDecimal.ZERO, BigDecimal::add),
-                    pagados);
-        });
+                    pagados, tarjeta.getId(), tarjeta.getColor(), tarjeta.getInicial());
+        }).orElseGet(() -> new Panel(tarjeta.getNombre(), cuentaDebito(tarjeta), List.of(), null, List.of(),
+                BigDecimal.ZERO, List.of(), tarjeta.getId(), tarjeta.getColor(), tarjeta.getInicial()));
     }
 
     /**
@@ -168,7 +220,7 @@ public class CicloTarjetaService {
     }
 
     @Transactional
-    public FechasCargadas cargarFechas(LocalDate cierre, LocalDate vencimiento) {
+    public FechasCargadas cargarFechas(long tarjetaId, LocalDate cierre, LocalDate vencimiento) {
         if (!vencimiento.isAfter(cierre)) {
             throw new IllegalArgumentException("El vencimiento tiene que ser después del cierre");
         }
@@ -176,7 +228,7 @@ public class CicloTarjetaService {
             throw new IllegalArgumentException("Entre el cierre y el vencimiento no puede haber más de "
                     + MAXIMO_DIAS_HASTA_VENCIMIENTO + " días");
         }
-        TarjetaCredito tarjeta = tarjeta().orElseThrow(() -> new IllegalStateException("No hay una tarjeta activa"));
+        TarjetaCredito tarjeta = activa(tarjetaId);
         LocalDate hoy = LocalDate.now(clock);
         List<ResumenTarjeta> guardados = resumenes.findByTarjetaIdOrderByPeriodo(tarjeta.getId());
         CalendarioTarjeta calendario = new CalendarioTarjeta(guardados.stream().map(ResumenTarjeta::fechas).toList());
@@ -198,7 +250,7 @@ public class CicloTarjetaService {
                 new ResumenTarjeta(tarjeta, nuevas, hoy, LocalDateTime.now(clock))));
         resumen.cambiarFechas(nuevas, hoy);
         resumenes.flush();
-        Ciclo c = asegurar().orElseThrow();
+        Ciclo c = asegurar(tarjeta).orElseThrow();
         ResumenTarjeta actualizado = c.guardado(periodo).orElseThrow();
         return new FechasCargadas(vista(c, actualizado.fechas(), actualizado, cuotasPorResumen(c)), antes);
     }
@@ -212,16 +264,19 @@ public class CicloTarjetaService {
     public record TotalCargado(VistaResumenTarjeta resumen, BigDecimal total, BigDecimal cargado,
             BigDecimal diferencia) {
 
-        @com.fasterxml.jackson.annotation.JsonProperty
+        @JsonProperty
         public boolean coincide() {
             return diferencia.signum() == 0;
         }
     }
 
-    /** @param resumenId cuál, o null para el cerrado más viejo sin debitar */
+    /**
+     * @param tarjetaId de qué tarjeta (sin resumen, el cerrado más viejo sin debitar de esa); null si va el resumen
+     * @param resumenId cuál, o null para el cerrado más viejo sin debitar de la tarjeta
+     */
     @Transactional
-    public TotalCargado cargarTotal(Long resumenId, BigDecimal total) {
-        Ciclo c = asegurar().orElseThrow(() -> new NoSuchElementException("Todavía no cargaste ningún cierre"));
+    public TotalCargado cargarTotal(Long tarjetaId, Long resumenId, BigDecimal total) {
+        Ciclo c = ciclo(tarjetaId, resumenId);
         ResumenTarjeta r = resumenId != null ? buscar(c, resumenId) : porPagar(c);
         r.cargarTotal(total);
         VistaResumenTarjeta v = vista(c, r.fechas(), r, cuotasPorResumen(c));
@@ -239,14 +294,15 @@ public class CicloTarjetaService {
     }
 
     /**
-     * Se debitó el resumen: un PAGO_TARJETA (no cuenta como gasto) desde la cuenta de débito de la tarjeta, y el
+     * Se debitó el resumen: un PAGO_TARJETA (no cuenta como gasto) desde la cuenta de débito de su tarjeta, y el
      * resumen queda pagado. Sin monto, el total del resumen si se cargó o, si no, lo cargado en Gastito.
      *
-     * @param resumenId cuál, o null para el cerrado más viejo sin debitar
+     * @param tarjetaId de qué tarjeta; null si va el resumen
+     * @param resumenId cuál, o null para el cerrado más viejo sin debitar de la tarjeta
      */
     @Transactional
-    public Pago pagar(Long resumenId, BigDecimal monto, Origen origen, String textoOriginal) {
-        Ciclo c = asegurar().orElseThrow(() -> new NoSuchElementException("Todavía no cargaste ningún cierre"));
+    public Pago pagar(Long tarjetaId, Long resumenId, BigDecimal monto, Origen origen, String textoOriginal) {
+        Ciclo c = ciclo(tarjetaId, resumenId);
         ResumenTarjeta r = resumenId != null ? buscar(c, resumenId) : porPagar(c);
         if (r.getEstado() != EstadoResumenTarjeta.CERRADO) {
             throw new IllegalStateException(r.getEstado() == EstadoResumenTarjeta.PAGADO
@@ -269,55 +325,113 @@ public class CicloTarjetaService {
         return new Pago(pago, vista(c, r.fechas(), r, cuotasPorResumen(c)));
     }
 
+    /**
+     * "Pagué la tarjeta de mercado pago, 85.000" sin un resumen cerrado de esa tarjeta (todavía no tiene fechas): el
+     * PAGO_TARJETA igual, desde su cuenta.
+     */
+    @Transactional
+    public Movimiento pagarSinResumen(long tarjetaId, BigDecimal monto, Origen origen, String textoOriginal) {
+        TarjetaCredito tarjeta = activa(tarjetaId);
+        LocalDateTime ahora = LocalDateTime.now(clock);
+        return movimientos.save(Movimiento.pagoTarjeta(monto, "Pago " + tarjeta.getNombre(), tarjeta,
+                tarjeta.getCuentaDebito(), ahora.truncatedTo(ChronoUnit.MINUTES), origen, textoOriginal, ahora));
+    }
+
     // --- Recordatorios ---
 
     /**
-     * El próximo resumen sigue con las fechas estimadas, ya pasaron los días desde el cierre anterior, hoy no se
-     * preguntó y no está pospuesto: hay que preguntar por las fechas.
+     * Hay que preguntar por las fechas del próximo resumen de una tarjeta.
+     *
+     * @param proximo el resumen abierto con fechas estimadas, o null si la tarjeta todavía no tiene ningún cierre
+     */
+    public record PreguntaFechas(long tarjetaId, String tarjeta, VistaResumenTarjeta proximo) {
+
+        /** Lo que identifica la pregunta en el botón: el resumen, o −tarjeta si todavía no tiene ninguno. */
+        public long clave() {
+            return proximo != null ? proximo.id() : -tarjetaId;
+        }
+    }
+
+    /**
+     * Las tarjetas a las que hay que preguntarles las fechas: el próximo resumen sigue estimado y ya pasaron los días
+     * desde el cierre anterior, o todavía no tienen ningún cierre. Hoy no se preguntó y no está pospuesto.
      */
     @Transactional
-    public Optional<VistaResumenTarjeta> preguntaDeFechas() {
+    public List<PreguntaFechas> preguntasDeFechas() {
         if (antesDeHora()) {
-            return Optional.empty();
+            return List.of();
         }
         LocalDate hoy = LocalDate.now(clock);
-        return asegurar().flatMap(c -> {
+        List<PreguntaFechas> preguntas = new ArrayList<>();
+        for (TarjetaCredito t : tarjetasActivas()) {
+            Optional<Ciclo> ciclo = asegurar(t);
+            if (ciclo.isEmpty()) {
+                if (tocaPreguntar(hoy, t.getPreguntaFechasEn(), t.getFechasPospuestasHasta())) {
+                    preguntas.add(new PreguntaFechas(t.getId(), t.getNombre(), null));
+                }
+                continue;
+            }
+            Ciclo c = ciclo.get();
             ResumenTarjeta proximo = c.abierto();
             LocalDate cierreAnterior = c.calendario().fechas(proximo.getPeriodo().minusMonths(1)).cierre();
-            boolean toca = !proximo.isFechasConfirmadas()
+            if (!proximo.isFechasConfirmadas()
                     && !hoy.isBefore(cierreAnterior.plusDays(properties.diasParaPreguntarFechas()))
-                    && !hoy.equals(proximo.getPreguntaFechasEn())
-                    && (proximo.getFechasPospuestasHasta() == null || !hoy.isBefore(proximo.getFechasPospuestasHasta()));
-            return toca ? Optional.of(vista(c, proximo.fechas(), proximo, cuotasPorResumen(c))) : Optional.empty();
-        });
+                    && tocaPreguntar(hoy, proximo.getPreguntaFechasEn(), proximo.getFechasPospuestasHasta())) {
+                preguntas.add(new PreguntaFechas(t.getId(), t.getNombre(),
+                        vista(c, proximo.fechas(), proximo, cuotasPorResumen(c))));
+            }
+        }
+        return preguntas;
     }
 
-    /** Se preguntó (Telegram recibió el mensaje): hoy no se vuelve a preguntar. */
-    @Transactional
-    public void preguntoFechas(Long resumenId) {
-        resumenes.findById(resumenId).ifPresent(r -> r.preguntoFechas(LocalDate.now(clock)));
+    private static boolean tocaPreguntar(LocalDate hoy, LocalDate preguntado, LocalDate pospuestoHasta) {
+        return !hoy.equals(preguntado) && (pospuestoHasta == null || !hoy.isBefore(pospuestoHasta));
     }
 
-    /** "Todavía no": se vuelve a preguntar en unos días. */
+    /**
+     * Se preguntó (Telegram recibió el mensaje): hoy no se vuelve a preguntar.
+     *
+     * @param clave el resumen, o −tarjeta si no tiene ninguno ({@link PreguntaFechas#clave()})
+     */
     @Transactional
-    public LocalDate posponerFechas(Long resumenId) {
+    public void preguntoFechas(long clave) {
+        LocalDate hoy = LocalDate.now(clock);
+        if (clave < 0) {
+            tarjetas.findById(-clave).ifPresent(t -> t.preguntoFechas(hoy));
+        } else {
+            resumenes.findById(clave).ifPresent(r -> r.preguntoFechas(hoy));
+        }
+    }
+
+    /**
+     * "Todavía no": se vuelve a preguntar en unos días.
+     *
+     * @param clave el resumen, o −tarjeta si no tiene ninguno
+     */
+    @Transactional
+    public LocalDate posponerFechas(long clave) {
         LocalDate hasta = LocalDate.now(clock).plusDays(properties.diasAlPosponerFechas());
-        resumenes.findById(resumenId).orElseThrow(() -> new NoSuchElementException("No existe el resumen " + resumenId))
-                .posponerFechas(hasta);
+        if (clave < 0) {
+            tarjetas.findById(-clave).orElseThrow(() -> new NoSuchElementException("No existe la tarjeta " + -clave))
+                    .posponerFechas(hasta);
+        } else {
+            resumenes.findById(clave).orElseThrow(() -> new NoSuchElementException("No existe el resumen " + clave))
+                    .posponerFechas(hasta);
+        }
         return hasta;
     }
 
-    /** Faltan pocos días para el vencimiento de un resumen sin debitar y todavía no se avisó. */
+    /** Por tarjeta, el resumen sin debitar al que le faltan pocos días y todavía no se avisó. */
     @Transactional
-    public Optional<VistaResumenTarjeta> avisoDeVencimiento() {
+    public List<VistaResumenTarjeta> avisosDeVencimiento() {
         if (antesDeHora()) {
-            return Optional.empty();
+            return List.of();
         }
         LocalDate hoy = LocalDate.now(clock);
-        return asegurar().flatMap(c -> c.porPagar().stream()
+        return ciclos().flatMap(c -> c.porPagar().stream()
                 .filter(r -> r.getAvisoVencimientoEn() == null && hoy.isBefore(r.getVencimiento())
                         && !hoy.isBefore(r.getVencimiento().minusDays(properties.diasAvisoVencimiento())))
-                .findFirst().map(r -> vista(c, r.fechas(), r, cuotasPorResumen(c))));
+                .findFirst().map(r -> vista(c, r.fechas(), r, cuotasPorResumen(c))).stream()).toList();
     }
 
     @Transactional
@@ -325,16 +439,16 @@ public class CicloTarjetaService {
         resumenes.findById(resumenId).ifPresent(r -> r.avisoVencimiento(LocalDate.now(clock)));
     }
 
-    /** Llegó el vencimiento de un resumen sin debitar y hoy no se preguntó: "¿Se debitó?" (una vez por día). */
+    /** Por tarjeta, el resumen sin debitar que ya venció y hoy no se preguntó: "¿Se debitó?" (una vez por día). */
     @Transactional
-    public Optional<VistaResumenTarjeta> preguntaDeDebito() {
+    public List<VistaResumenTarjeta> preguntasDeDebito() {
         if (antesDeHora()) {
-            return Optional.empty();
+            return List.of();
         }
         LocalDate hoy = LocalDate.now(clock);
-        return asegurar().flatMap(c -> c.porPagar().stream()
+        return ciclos().flatMap(c -> c.porPagar().stream()
                 .filter(r -> !hoy.isBefore(r.getVencimiento()) && !hoy.equals(r.getPreguntaDebitoEn()))
-                .findFirst().map(r -> vista(c, r.fechas(), r, cuotasPorResumen(c))));
+                .findFirst().map(r -> vista(c, r.fechas(), r, cuotasPorResumen(c))).stream()).toList();
     }
 
     @Transactional
@@ -348,20 +462,38 @@ public class CicloTarjetaService {
 
     // --- Calendario ---
 
-    private Optional<TarjetaCredito> tarjeta() {
-        return catalogos.cargar().tarjetaCredito();
+    /** Las tarjetas activas, en el orden en que se dieron de alta. */
+    private List<TarjetaCredito> tarjetasActivas() {
+        return catalogos.cargar().tarjetas().stream().sorted(Comparator.comparing(TarjetaCredito::getId)).toList();
+    }
+
+    private TarjetaCredito activa(long tarjetaId) {
+        return catalogos.cargar().tarjeta(tarjetaId)
+                .orElseThrow(() -> new NoSuchElementException("No existe esa tarjeta o está dada de baja"));
+    }
+
+    /** Los ciclos de las tarjetas activas que ya tienen algún cierre. */
+    private Stream<Ciclo> ciclos() {
+        return tarjetasActivas().stream().map(this::asegurar).flatMap(Optional::stream);
+    }
+
+    /** El ciclo del resumen, si se dice cuál; si no, el de la tarjeta. */
+    private Ciclo ciclo(Long tarjetaId, Long resumenId) {
+        TarjetaCredito tarjeta = resumenId != null
+                ? resumenes.findById(resumenId).map(ResumenTarjeta::getTarjeta)
+                        .orElseThrow(() -> new NoSuchElementException("No existe el resumen " + resumenId))
+                : activa(Objects.requireNonNull(tarjetaId, "Falta la tarjeta"));
+        return asegurar(tarjeta).orElseThrow(() -> new NoSuchElementException(
+                "Todavía no cargaste ningún cierre de la " + tarjeta.getNombre()));
     }
 
     /**
-     * Pone al día los resúmenes guardados: vuelve a estimar los que no tienen fechas confirmadas, actualiza su
-     * estado y crea, estimados, los que faltan hasta el que está abierto hoy. Vacío si no hay tarjeta o ningún
-     * cierre cargado.
+     * Pone al día los resúmenes guardados de una tarjeta: vuelve a estimar los que no tienen fechas confirmadas,
+     * actualiza su estado y crea, estimados, los que faltan hasta el que está abierto hoy. Vacío si la tarjeta no
+     * tiene ningún cierre cargado.
      */
-    private Optional<Ciclo> asegurar() {
-        Optional<TarjetaCredito> tarjeta = tarjeta();
-        if (tarjeta.isEmpty()) {
-            return Optional.empty();
-        }
+    private Optional<Ciclo> asegurar(TarjetaCredito tarjetaCredito) {
+        Optional<TarjetaCredito> tarjeta = Optional.of(tarjetaCredito);
         List<ResumenTarjeta> guardados = new ArrayList<>(
                 resumenes.findByTarjetaIdOrderByPeriodo(tarjeta.get().getId()));
         CalendarioTarjeta calendario = new CalendarioTarjeta(guardados.stream().map(ResumenTarjeta::fechas).toList());
@@ -428,7 +560,7 @@ public class CicloTarjetaService {
                 fechas.cierre(), fechas.vencimiento(), fechas.estimadas(),
                 guardado == null ? EstadoResumenTarjeta.ABIERTO : guardado.getEstado(), compras, enCuotas, cargado,
                 totalReal, totalReal == null ? null : diferencia(totalReal, cargado), c.tarjeta().getNombre(),
-                cuentaDebito(c.tarjeta()), detalle);
+                cuentaDebito(c.tarjeta()), detalle, c.tarjeta().getId());
     }
 
     private static VistaResumenTarjeta.Linea linea(Movimiento m, BigDecimal monto) {

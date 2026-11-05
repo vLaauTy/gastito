@@ -26,16 +26,14 @@ public class TarjetaController {
         this.ciclo = ciclo;
     }
 
-    /** @param panel null si todavía no se cargó ningún cierre (configurada false) */
-    public record Tarjeta(boolean configurada, CicloTarjetaService.Panel panel) {
-    }
-
+    /** Un panel por tarjeta activa (una sin cierres viene con configurado false) y los totales entre todas. */
     @GetMapping
-    public Tarjeta tarjeta() {
-        return ciclo.panel().map(p -> new Tarjeta(true, p)).orElseGet(() -> new Tarjeta(false, null));
+    public CicloTarjetaService.Paneles tarjetas() {
+        return ciclo.paneles();
     }
 
-    public record FechasRequest(LocalDate cierre, LocalDate vencimiento) {
+    /** @param tarjetaId de qué tarjeta son las fechas */
+    public record FechasRequest(Long tarjetaId, LocalDate cierre, LocalDate vencimiento) {
     }
 
     @PostMapping("/fechas")
@@ -43,7 +41,10 @@ public class TarjetaController {
         if (pedido == null || pedido.cierre() == null || pedido.vencimiento() == null) {
             throw new IllegalArgumentException("Faltan el cierre o el vencimiento");
         }
-        return ciclo.cargarFechas(pedido.cierre(), pedido.vencimiento());
+        if (pedido.tarjetaId() == null) {
+            throw new IllegalArgumentException("Falta la tarjeta");
+        }
+        return ciclo.cargarFechas(pedido.tarjetaId(), pedido.cierre(), pedido.vencimiento());
     }
 
     public record TotalRequest(BigDecimal total) {
@@ -55,6 +56,6 @@ public class TarjetaController {
         if (pedido == null || pedido.total() == null || pedido.total().signum() < 0) {
             throw new IllegalArgumentException("El total tiene que ser un número positivo");
         }
-        return ciclo.cargarTotal(id, pedido.total());
+        return ciclo.cargarTotal(null, id, pedido.total());
     }
 }

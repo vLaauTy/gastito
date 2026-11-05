@@ -123,7 +123,8 @@ class ProcesadorMensajesTest {
                 tarjetas, formato, new GraficoMes(formato), comandosIngreso, transcripciones, tickets, resumenes,
                 new FormatoResumen(formato, new GraficoMes(formato), dashboard), consultas, new FormatoConsulta(formato),
                 repetidos, juntadas, fijos, altaFijo, naturales, disponible, gastosFijos, varios, cuotas,
-                new ConversacionTarjeta(ciclo, formato), new ConversacionDolares(compras, movimientos, formato),
+                new ConversacionTarjeta(ciclo, catalogos, formato),
+                new ConversacionDolares(compras, movimientos, formato),
                 recibos,
                 escalas,
                 comandosSueldo,
@@ -309,18 +310,37 @@ class ProcesadorMensajesTest {
     }
 
     @Test
+    void elegirLaTarjetaConUnBotonLaPoneEnElGasto() {
+        when(movimientos.elegirTarjeta(ID, 2L)).thenReturn(conCategoria("3700", KIOSCO));
+
+        List<Accion> acciones = tocar("tj:15:2");
+
+        verify(movimientos).elegirTarjeta(ID, 2L);
+        assertThat(acciones).anyMatch(a -> a instanceof Accion.Editar);
+    }
+
+    @Test
+    void dineroEnCuentaNoCambiaElMedio() {
+        when(movimientos.buscar(ID)).thenReturn(conCategoria("3700", KIOSCO));
+
+        tocar("tj:15:0");
+
+        verify(movimientos, never()).elegirTarjeta(any(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
     void editarElMedioDePagoConBotones() {
         when(movimientos.buscar(ID)).thenReturn(conCategoria("3700", KIOSCO));
         assertThat(edicion(tocar("mp:15")).teclado().botones()).extracting(Teclado.Boton::texto)
                 .containsExactly("Efectivo", "Débito", "Sin medio de pago", "↩ Volver");
 
-        when(movimientos.cambiarMedioPago(ID, null)).thenReturn(conCategoria("3700", KIOSCO));
+        when(movimientos.cambiarMedioPago(ID, null, null)).thenReturn(conCategoria("3700", KIOSCO));
         tocar("p:15:0");
-        verify(movimientos).cambiarMedioPago(ID, null);
+        verify(movimientos).cambiarMedioPago(ID, null, null);
 
-        when(movimientos.cambiarMedioPago(ID, 2L)).thenReturn(conCategoria("3700", KIOSCO));
+        when(movimientos.cambiarMedioPago(ID, 2L, null)).thenReturn(conCategoria("3700", KIOSCO));
         tocar("p:15:2");
-        verify(movimientos).cambiarMedioPago(ID, 2L);
+        verify(movimientos).cambiarMedioPago(ID, 2L, null);
     }
 
     @Test
@@ -934,7 +954,9 @@ class ProcesadorMensajesTest {
         when(disponible.responder()).thenReturn("💰 Te queda $10");
         when(fijos.lista()).thenReturn(List.of(Accion.Enviar.texto("📋 Fijos")));
         when(juntadas.abiertas()).thenReturn(List.of(Accion.Enviar.texto("👥 Te deben")));
-        when(ciclo.panel()).thenReturn(Optional.empty());
+        when(ciclo.paneles()).thenReturn(new ar.gastito.tarjeta.CicloTarjetaService.Paneles(List.of(
+                new ar.gastito.tarjeta.CicloTarjetaService.Panel("MasterCard Gold", "Galicia", List.of(), null,
+                        List.of(), BigDecimal.ZERO, List.of(), 1L, null, "M")), BigDecimal.ZERO, BigDecimal.ZERO));
 
         assertThat(texto(MenuFijo.DISPONIBLE)).isEqualTo("💰 Te queda $10");
         assertThat(texto(MenuFijo.FIJOS)).isEqualTo("📋 Fijos");
@@ -945,7 +967,7 @@ class ProcesadorMensajesTest {
 
     @Test
     void elTotalDelResumenQueSeEsperabaNoPasaPorLaIa() {
-        when(ciclo.cargarTotal(7L, new BigDecimal("250000"))).thenReturn(new ar.gastito.tarjeta.CicloTarjetaService
+        when(ciclo.cargarTotal(null, 7L, new BigDecimal("250000"))).thenReturn(new ar.gastito.tarjeta.CicloTarjetaService
                 .TotalCargado(ConversacionTarjetaTest.cerrado("250000"), new BigDecimal("250000"),
                         new BigDecimal("200000"), new BigDecimal("50000")));
         procesador.procesarBoton(CHAT, TARJETA, "tt:7");
@@ -959,12 +981,15 @@ class ProcesadorMensajesTest {
         when(interpretador.interpretar(any(), any())).thenReturn(new InterpretadorService.Orden(
                 new ValidadorInterpretacion.FechasTarjeta(java.time.LocalDate.of(2026, 11, 26),
                         java.time.LocalDate.of(2026, 12, 11)), null));
-        when(ciclo.cargarFechas(any(), any())).thenReturn(new ar.gastito.tarjeta.CicloTarjetaService.FechasCargadas(
-                ConversacionTarjetaTest.proximo(), null));
+        when(catalogos.cargar()).thenReturn(new Catalogo(CATEGORIAS, MEDIOS, List.of(),
+                List.of(ConversacionTarjetaTest.MASTERCARD)));
+        when(ciclo.cargarFechas(org.mockito.ArgumentMatchers.anyLong(), any(), any())).thenReturn(
+                new ar.gastito.tarjeta.CicloTarjetaService.FechasCargadas(ConversacionTarjetaTest.proximo(), null));
 
         texto("la tarjeta cierra el 26/11 y vence el 11/12");
 
-        verify(ciclo).cargarFechas(java.time.LocalDate.of(2026, 11, 26), java.time.LocalDate.of(2026, 12, 11));
+        verify(ciclo).cargarFechas(ConversacionTarjetaTest.GOLD, java.time.LocalDate.of(2026, 11, 26),
+                java.time.LocalDate.of(2026, 12, 11));
     }
 
     @Test

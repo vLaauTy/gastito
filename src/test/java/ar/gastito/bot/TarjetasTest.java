@@ -43,17 +43,50 @@ class TarjetasTest {
                 📅 Hoy 16:42""");
     }
 
+    static final ar.gastito.catalogo.MedioPago CREDITO = DatosDePrueba.conId(new ar.gastito.catalogo.MedioPago(
+            ar.gastito.catalogo.MedioPago.TARJETA_DE_CREDITO, "tarjeta,credito"), 3L);
+
+    @Test
+    void unaCompraConCreditoSinTarjetaPideCualConUnBotonPorTarjeta() {
+        Movimiento m = DatosDePrueba.conId(Movimiento.pendiente(MovimientoInterpretado.conCategoria(
+                new BigDecimal("2500"), "Remera", KIOSCO, CREDITO, null, null, DatosDePrueba.AHORA),
+                ar.gastito.movimiento.Origen.TEXTO, "remera 2500 con tarjeta", DatosDePrueba.AHORA), ID);
+        ar.gastito.catalogo.CatalogoService catalogos = org.mockito.Mockito.mock(
+                ar.gastito.catalogo.CatalogoService.class);
+        org.mockito.Mockito.when(catalogos.cargar()).thenReturn(new ar.gastito.catalogo.Catalogo(List.of(),
+                List.of(CREDITO), List.of(), List.of(ConversacionTarjetaTest.TARJETA_MP,
+                        ConversacionTarjetaTest.MASTERCARD)));
+        tarjetas.usarCatalogo(catalogos);
+
+        assertThat(tarjetas.pendiente(m)).contains("💳 Tarjeta de crédito · <b>¿cuál?</b>");
+        assertThat(tarjetas.principal(m).botones()).extracting(Teclado.Boton::datos)
+                .containsExactly("tj:15:2", "tj:15:1", "e:15", "c:15");
+        assertThat(tarjetas.medios(ID, catalogos.cargar()).botones()).extracting(Teclado.Boton::texto)
+                .startsWith("💳 Mercado Pago", "💳 MasterCard Gold");
+    }
+
+    @Test
+    void conMercadoPagoSoloPreguntaSiFuePlataDeLaCuentaOLaTarjeta() {
+        Movimiento m = conCategoria("3700", KIOSCO);
+
+        assertThat(tarjetas.cuentaOTarjeta(m, ConversacionTarjetaTest.TARJETA_MP).botones())
+                .extracting(Teclado.Boton::texto, Teclado.Boton::datos).startsWith(
+                        org.assertj.core.groups.Tuple.tuple("💰 Dinero en cuenta", "tj:15:0"),
+                        org.assertj.core.groups.Tuple.tuple("💳 Tarjeta de crédito Mercado Pago", "tj:15:2"));
+    }
+
     @Test
     void unaCompraConLaTarjetaDiceEnQueResumenEntra() {
         Movimiento m = Movimiento.pendiente(new MovimientoInterpretado(new BigDecimal("2500"), "Remera", KIOSCO,
-                List.of(), null, null, org.mockito.Mockito.mock(ar.gastito.catalogo.TarjetaCredito.class),
+                List.of(), CREDITO, null, ConversacionTarjetaTest.MASTERCARD,
                 DatosDePrueba.AHORA), ar.gastito.movimiento.Origen.TEXTO, "remera 2500 con tarjeta",
                 DatosDePrueba.AHORA);
         tarjetas.usarCicloTarjeta(g -> java.util.Optional.of(new ar.gastito.tarjeta.CalendarioTarjeta.Fechas(
                 java.time.YearMonth.of(2026, 11), java.time.LocalDate.of(2026, 11, 30),
                 java.time.LocalDate.of(2026, 12, 14), false)));
 
-        assertThat(tarjetas.pendiente(m)).endsWith("📅 Hoy 16:42\n🗓 Entra en el resumen que vence ≈ 14/12");
+        assertThat(tarjetas.pendiente(m))
+                .endsWith("💳 MasterCard Gold · entra en el resumen que vence ≈ 14/12\n📅 Hoy 16:42");
         assertThat(tarjetas.pendiente(conCategoria("3700", KIOSCO))).doesNotContain("resumen");
     }
 

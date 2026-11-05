@@ -142,7 +142,7 @@ public class PedidosNaturales {
             case CATEGORIA -> "🏷 " + (m.getCategoria() == null ? "sin categoría"
                     : html(m.getCategoria().getNombreConEmoji())) + " → <b>"
                     + html(c.categoria().getNombreConEmoji()) + "</b>";
-            case MEDIO -> "💳 " + html(FormatoMensajes.medio(m.getMedioPago(), m.getCuenta())) + " → <b>"
+            case MEDIO -> "💳 " + html(FormatoMensajes.medio(m)) + " → <b>"
                     + html(c.medio().getNombre()) + "</b>";
         };
     }

@@ -111,7 +111,7 @@ public class ConversacionFijos {
         return "📌 <b>Se cobró " + html(minuscula(m.getDescripcion())) + ": " + formato.pesos(m.getMonto())
                 + ".</b> ¿Confirmás?\n📅 " + formato.fecha(m.getFechaHora()) + " · 💳 "
                 + html(m.getTarjeta() != null ? m.getTarjeta().getNombre()
-                        : FormatoMensajes.medio(m.getMedioPago(), m.getCuenta()))
+                        : FormatoMensajes.medio(m))
                 + (f.montoVariable() ? "\n📈 Es el promedio de los últimos cobros: si fue otro, tocá Cambió el monto."
                         : "");
     }

@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
 import ar.gastito.catalogo.Catalogo;
 import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.catalogo.Categoria;
-import ar.gastito.catalogo.MedioPago;
+import ar.gastito.catalogo.MedioElegido;
 import ar.gastito.fijo.Frecuencia;
 import ar.gastito.fijo.GastoFijoService;
 import ar.gastito.fijo.VistaFijo;
@@ -220,8 +220,8 @@ public class ConversacionAltaFijo {
                     .map(c -> alta.con(p.conCategoria(c))).orElse(alta);
             case MEDIO -> elegido == null || elegido == NO_SE
                     ? new Alta(p.conMedio(null, null), alta.sinDia(), alta.sinMonto(), true, alta.parecidoVisto())
-                    : catalogo.mediosPago().stream().filter(m -> m.getId() == elegido.longValue()).findFirst()
-                            .map(m -> alta.con(p.conMedio(m, catalogo.tarjetaCredito().orElse(null))))
+                    : MedioElegido.de(elegido, catalogo)
+                            .map(e -> alta.con(p.conMedio(e.medio(), e.tarjeta())))
                             .orElse(alta);
             case DIA -> {
                 if (elegido != null && elegido == OTRO) {
@@ -338,7 +338,8 @@ public class ConversacionAltaFijo {
         if (p.categoria() == null) {
             return pregunta(chatId, id, alta, Dato.CATEGORIA, false);
         }
-        if (p.medioPago() == null && p.tarjeta() == null && p.cuenta() == null && !alta.sinMedio()) {
+        boolean faltaTarjeta = p.medioPago() != null && p.medioPago().esTarjetaDeCredito() && p.tarjeta() == null;
+        if ((p.medioPago() == null && p.tarjeta() == null && p.cuenta() == null && !alta.sinMedio()) || faltaTarjeta) {
             return pregunta(chatId, id, alta, Dato.MEDIO, false);
         }
         if (p.diaDelMes() == null && !alta.sinDia()) {
@@ -389,8 +390,9 @@ public class ConversacionAltaFijo {
             case MEDIO -> {
                 pregunta = "💳 <b>¿Cómo se paga?</b>";
                 List<Teclado.Boton> botones = new ArrayList<>();
-                for (MedioPago m : catalogos.cargar().mediosPago()) {
-                    botones.add(new Teclado.Boton(m.getNombre(), MEDIO + ":" + id + ":" + m.getId()));
+                for (MedioElegido.Opcion o : MedioElegido.opciones(catalogos.cargar())) {
+                    botones.add(new Teclado.Boton((o.esTarjeta() ? "💳 " : "") + o.nombre(),
+                            MEDIO + ":" + id + ":" + o.valor()));
                 }
                 botones.add(new Teclado.Boton("🤷 No sé", MEDIO + ":" + id + ":" + NO_SE));
                 t.grilla(botones, 3);
