@@ -51,7 +51,7 @@ Cómo completar cada dato:
   - Si solo dice "Tarjeta", sin aclarar si es débito o crédito ni la marca, dejalo vacío: lo elige el usuario.
   - "Mercado Pago", "QR", "Modo" o "Pago con billetera" es "QR".
   - "Efectivo" o "Contado" es "Efectivo". "Transferencia" es "Transferencia".
-- cuenta: "Mercado Pago" si se pagó con Mercado Pago. Si el usuario nombra la cuenta ("con la de Galicia"), esa. Si no, vacío.
+- cuenta: "Mercado Pago" si se pagó con Mercado Pago. Si el usuario nombra la cuenta ("desde la cuenta de Galicia"), esa. Si no, vacío. Si el usuario nombra una tarjeta de crédito ("con la master", "con la de mercado pago"), medioPago es "Tarjeta de crédito" y la cuenta va vacía.
 - categorias y confianza: para la compra entera, igual que con un gasto escrito. Un supermercado es "Supermercado"; una farmacia, "Salud / farmacia". Si dudás entre alta y media, elegí media.
 - lineasIlegibles: si el ticket está arrugado, doblado, gastado o tapado y alguna línea no se lee bien, decí cuál es (por su posición o el producto de al lado) y qué no se lee. Si se lee todo, vacía.
 

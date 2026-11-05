@@ -227,8 +227,22 @@ public class Movimiento {
     }
 
     /** Tiene monto y, si es un gasto, categoría: se puede guardar. */
+    /** Un gasto sin monto, sin categoría o con crédito y sin tarjeta no se puede guardar todavía. */
     public boolean isCompleto() {
-        return monto != null && (tipo != TipoMovimiento.GASTO || categoria != null);
+        return monto != null && (tipo != TipoMovimiento.GASTO || (categoria != null && !isFaltaTarjeta()));
+    }
+
+    /** Es con tarjeta de crédito pero no se sabe con cuál: hay que elegirla antes de guardar. */
+    public boolean isFaltaTarjeta() {
+        return medioPago != null && medioPago.esTarjetaDeCredito() && tarjeta == null;
+    }
+
+    /** Un gasto ya guardado no puede quedar con crédito y sin tarjeta (uno pendiente sí: se pregunta cuál). */
+    private void exigirCualTarjeta(MedioPago nuevoMedio, TarjetaCredito tarjetaCredito) {
+        if (estado == EstadoMovimiento.CONFIRMADO && tipo == TipoMovimiento.GASTO && nuevoMedio != null
+                && nuevoMedio.esTarjetaDeCredito() && tarjetaCredito == null) {
+            throw new IllegalArgumentException("Elegí con qué tarjeta de crédito");
+        }
     }
 
     public boolean isIngreso() {
@@ -318,6 +332,7 @@ public class Movimiento {
         }
         if (nuevoMedio != null) {
             exigirTarjetaSiEsEnDolares(nuevoMedio);
+            exigirCualTarjeta(nuevoMedio, tarjetaCredito);
             this.medioPago = nuevoMedio;
             if (nuevoMedio.esTarjetaDeCredito()) {
                 this.tarjeta = tarjetaCredito;
@@ -363,6 +378,7 @@ public class Movimiento {
                     : "El monto de una cuota sale del plan de cuotas: no se cambia suelto");
         }
         exigirTarjetaSiEsEnDolares(nuevoMedio);
+        exigirCualTarjeta(nuevoMedio, tarjetaCredito);
         if (cambiaMonto && gastoFijoId != null) {
             montoEstimado = false;
         }

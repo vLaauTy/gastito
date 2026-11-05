@@ -25,6 +25,7 @@ import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.Cuenta;
 import ar.gastito.catalogo.MedioPago;
+import ar.gastito.catalogo.TarjetaCredito;
 import ar.gastito.fijo.Frecuencia;
 import ar.gastito.fijo.GastoFijoService;
 import ar.gastito.fijo.PagoFijoService;
@@ -138,7 +139,7 @@ public class FijosController {
     // --- ABM ---
 
     public record FijoAbm(long id, String nombre, BigDecimal montoEsperado, Long categoriaId, String categoria,
-            Long medioPagoId, Long cuentaId, boolean tarjeta, Integer diaDelMes, String frecuencia,
+            Long medioPagoId, Long cuentaId, boolean tarjeta, Long tarjetaId, Integer diaDelMes, String frecuencia,
             boolean montoVariable, String alias, boolean proponerMonto, boolean activo) {
     }
 
@@ -150,13 +151,18 @@ public class FijosController {
     private static FijoAbm aAbm(GastoFijoService.VistaAbm f) {
         return new FijoAbm(f.id(), f.nombre(), f.montoEsperado(), f.categoria().getId(), f.categoria().getNombre(),
                 f.medioPago() == null ? null : f.medioPago().getId(), f.cuenta() == null ? null : f.cuenta().getId(),
-                f.tarjeta() != null, f.diaDelMes(), f.frecuencia().name(), f.montoVariable(), f.alias(),
+                f.tarjeta() != null, f.tarjeta() == null ? null : f.tarjeta().getId(), f.diaDelMes(),
+                f.frecuencia().name(), f.montoVariable(), f.alias(),
                 f.proponerMonto(), f.activo());
     }
 
+    /**
+     * @param tarjeta   con tarjeta de crédito (si no se dice cuál, la única activa)
+     * @param tarjetaId cuál tarjeta; alcanza solo, sin {@code tarjeta}
+     */
     public record NuevoFijoRequest(String nombre, BigDecimal monto, Long categoriaId, Long medioPagoId,
-            Long cuentaId, boolean tarjeta, Integer diaDelMes, String frecuencia, boolean montoVariable, String alias,
-            boolean proponerMonto) {
+            Long cuentaId, boolean tarjeta, Long tarjetaId, Integer diaDelMes, String frecuencia,
+            boolean montoVariable, String alias, boolean proponerMonto) {
     }
 
     @PostMapping
@@ -187,9 +193,16 @@ public class FijosController {
                 : catalogo.cuentas().stream().filter(c -> c.getId() == p.cuentaId()).findFirst()
                         .orElseThrow(() -> new NoSuchElementException("No existe la cuenta " + p.cuentaId()));
         Frecuencia frecuencia = frecuencia(p.frecuencia());
-        return new GastoFijoService.NuevoFijo(p.nombre(), p.monto(), categoria, medioPago, cuenta,
-                p.tarjeta() ? catalogo.tarjetaCredito().orElse(null) : null, p.diaDelMes(), frecuencia,
-                p.montoVariable(), p.alias(), p.proponerMonto());
+        boolean credito = p.tarjeta() || p.tarjetaId() != null || (medioPago != null && medioPago.esTarjetaDeCredito());
+        TarjetaCredito tarjeta = null;
+        if (credito) {
+            tarjeta = (p.tarjetaId() != null ? catalogo.tarjeta(p.tarjetaId()) : catalogo.tarjetaUnica())
+                    .orElseThrow(() -> new IllegalArgumentException("Elegí con qué tarjeta de crédito se paga"));
+            medioPago = catalogo.medioCredito().orElse(medioPago);
+            cuenta = null;
+        }
+        return new GastoFijoService.NuevoFijo(p.nombre(), p.monto(), categoria, medioPago, cuenta, tarjeta,
+                p.diaDelMes(), frecuencia, p.montoVariable(), p.alias(), p.proponerMonto());
     }
 
     private static Frecuencia frecuencia(String valor) {

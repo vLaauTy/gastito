@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.unit.DataSize;
 
 import ar.gastito.catalogo.Catalogo;
+import ar.gastito.catalogo.ReconocedorTarjeta;
 import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.config.GastitoProperties;
 import ar.gastito.ia.ClienteIa;
@@ -120,6 +121,12 @@ public class TicketService {
             interpretado = interpretado.conCategoriaElegida(aprendido.get().categoria());
         }
         String texto = pista == null || pista.isBlank() ? null : pista.strip();
+        // "Con la master": la tarjeta que nombra el usuario manda sobre la pista del ticket.
+        ReconocedorTarjeta.Mencion mencion = ReconocedorTarjeta.reconocer(texto, interpretado.medioPago(), catalogo);
+        if (mencion.clara()) {
+            interpretado = interpretado.conMedio(catalogo.medioCredito().orElse(interpretado.medioPago()), null,
+                    mencion.tarjeta());
+        }
         Movimiento m = movimientos.crearPendienteDeTicket(interpretado, v.ticket(), texto);
         if (usoIaId != null) {
             usoIa.asociarMovimiento(usoIaId, m.getId());

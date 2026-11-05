@@ -104,7 +104,7 @@ public class ParserFijo {
         String nombreFijo = Textos.capitalizar(String.join(" ", nombre));
         TarjetaCredito tarjeta = null;
         if (medio != null && medio.esTarjetaDeCredito()) {
-            tarjeta = catalogo.tarjetaCredito().orElse(null);
+            tarjeta = catalogo.tarjetaUnica().orElse(null);
             cuenta = null;
         }
         Categoria categoria = nombre.stream()

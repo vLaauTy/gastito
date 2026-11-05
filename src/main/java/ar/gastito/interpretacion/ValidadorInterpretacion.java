@@ -308,7 +308,7 @@ public class ValidadorInterpretacion {
         Cuenta cuenta = buscar(ia.cuenta(), catalogo.cuentas()).orElse(null);
         TarjetaCredito tarjeta = null;
         if (medio != null && medio.esTarjetaDeCredito()) {
-            tarjeta = catalogo.tarjetaCredito().orElse(null);
+            tarjeta = catalogo.tarjetaUnica().orElse(null);
             cuenta = null;
         }
         String descripcion = descripcion(ia.descripcion(), candidatas.get(0));
@@ -322,7 +322,7 @@ public class ValidadorInterpretacion {
         if (cuotas != null) {
             monto = cuotas.total();
             if (tarjeta == null) {
-                tarjeta = catalogo.tarjetaCredito().orElse(null);
+                tarjeta = catalogo.tarjetaUnica().orElse(null);
                 medio = catalogo.mediosPago().stream().filter(MedioPago::esTarjetaDeCredito).findFirst()
                         .orElse(medio);
                 cuenta = null;

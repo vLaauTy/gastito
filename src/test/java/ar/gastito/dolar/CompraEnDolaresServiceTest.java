@@ -112,6 +112,9 @@ class CompraEnDolaresServiceTest {
 
     private Movimiento compraGuardada(String dolares, String descripcion) {
         Movimiento m = compras.pasarADolares(pendiente(dolares, descripcion, null).getId(), new BigDecimal(dolares));
+        // Con dos tarjetas activas, cuál lo elige el usuario con un botón (sin elegir, no se guarda).
+        assertThat(m.isFaltaTarjeta()).isTrue();
+        movimientos.elegirTarjeta(m.getId(), gold());
         movimientos.confirmar(m.getId());
         repositorio.flush();
         return m;
@@ -156,6 +159,7 @@ class CompraEnDolaresServiceTest {
         Movimiento conCotizacion = compraGuardada("10", "Netflix");
         Movimiento sinEstimar = compras.pasarADolares(pendiente("20", "Steam", null).getId(), new BigDecimal("20"));
         sinEstimar.estimarPesos(null);
+        movimientos.elegirTarjeta(sinEstimar.getId(), gold());
         movimientos.confirmar(sinEstimar.getId());
 
         CompraEnDolaresService.CotizacionCargada cargada = compras.cargarCotizacion(new BigDecimal("1500"));
@@ -248,15 +252,16 @@ class CompraEnDolaresServiceTest {
 
     @Test
     void elProximoResumenMuestraAparteLasComprasEnDolares() {
-        ciclo.cargarFechas(LocalDate.of(2026, 10, 29), LocalDate.of(2026, 11, 11));
+        cargarFechas(LocalDate.of(2026, 10, 29), LocalDate.of(2026, 11, 11));
         compras.cargarCotizacion(new BigDecimal("1500"));
         compraGuardada("20", "Steam");
         Movimiento sinEstimar = compras.pasarADolares(pendiente("5", "iCloud", null).getId(), new BigDecimal("5"));
         sinEstimar.estimarPesos(null);
+        movimientos.elegirTarjeta(sinEstimar.getId(), gold());
         movimientos.confirmar(sinEstimar.getId());
         repositorio.flush();
 
-        VistaResumenTarjeta proximo = ciclo.panel().orElseThrow().proximo();
+        VistaResumenTarjeta proximo = panel().orElseThrow().proximo();
 
         assertThat(proximo.dolares()).isEqualByComparingTo("25");
         assertThat(proximo.dolaresEnPesos()).isEqualByComparingTo("30000");
@@ -268,16 +273,33 @@ class CompraEnDolaresServiceTest {
 
     @Test
     void corregidaYaNoCuentaComoEstimadaEnElResumen() {
-        ciclo.cargarFechas(LocalDate.of(2026, 10, 29), LocalDate.of(2026, 11, 11));
+        cargarFechas(LocalDate.of(2026, 10, 29), LocalDate.of(2026, 11, 11));
         compras.cargarCotizacion(new BigDecimal("1500"));
         Movimiento m = compraGuardada("20", "Steam");
         compras.corregirPesos(m.getId(), new BigDecimal("31200"));
         repositorio.flush();
 
-        VistaResumenTarjeta proximo = ciclo.panel().orElseThrow().proximo();
+        VistaResumenTarjeta proximo = panel().orElseThrow().proximo();
 
         assertThat(proximo.dolaresEstimados()).isFalse();
         assertThat(proximo.dolaresEnPesos()).isEqualByComparingTo("31200");
         assertThat(proximo.cargado()).isEqualByComparingTo("31200");
+    }
+
+    // La MasterCard Gold (la de siempre).
+
+    @Autowired
+    ar.gastito.catalogo.TarjetaCreditoRepository tarjetas;
+
+    private long gold() {
+        return tarjetas.findFirstByActivaTrueOrderById().orElseThrow().getId();
+    }
+
+    private java.util.Optional<CicloTarjetaService.Panel> panel() {
+        return ciclo.panel(gold()).filter(CicloTarjetaService.Panel::configurado);
+    }
+
+    private void cargarFechas(LocalDate cierre, LocalDate vencimiento) {
+        ciclo.cargarFechas(gold(), cierre, vencimiento);
     }
 }

@@ -32,7 +32,7 @@ public final class ParserTarjeta {
     private static final Pattern DE_LA_TARJETA = Pattern.compile("\\b(tarjeta|resumen|visa|master|mastercard)\\b");
     private static final Pattern PAGO = Pattern.compile(
             "\\b(?:se debito|me debitaron|debitaron|ya se debito|debito|pague|ya pague|se pago|pagamos)\\s+"
-                    + "(?:el resumen|la tarjeta)\\b"
+                    + "(?:el resumen|la tarjeta|la master|la mastercard|la visa)\\b"
                     + "|\\b(?:tarjeta|resumen)\\b.*\\b(?:se debito|ya se debito|debitado|debitada|ya esta pagad[oa])\\b");
     private static final Pattern TOTAL = Pattern.compile(
             "\\bresumen\\b.*\\b(?:es de|son|vino de|vino|llego de|llego|dice|da|salio|sale|de)\\b"
@@ -40,6 +40,8 @@ public final class ParserTarjeta {
     private static final Pattern CONSULTA_CON_TARJETA = Pattern.compile(
             "\\b(cuanto|cuando|llevo|llevamos|debo|vence|vencimiento|cierra|cierre|resumen|ver|mostrame|como viene"
                     + "|como va|que dia)\\b");
+    /** "¿Cuánto llevo de la master?": la tarjeta por su nombre (las demás, por la IA o el texto con "tarjeta"). */
+    private static final Pattern NOMBRA_TARJETA = Pattern.compile("\\b(tarjeta|master|mastercard|visa)\\b");
     private static final Pattern CONSULTA_SIN_TARJETA = Pattern.compile("^(cuanto|cuando|que dia) (vence|cierra)\\b");
     /** Lo que se gastó con la tarjeta es una pregunta sobre gastos, no sobre el resumen. */
     private static final Pattern GASTOS = Pattern.compile(
@@ -103,7 +105,7 @@ public final class ParserTarjeta {
             return Optional.empty();
         }
         boolean consulta = t.equals("tarjeta") || t.equals("la tarjeta") || CONSULTA_SIN_TARJETA.matcher(t).find()
-                || (t.contains("tarjeta") && CONSULTA_CON_TARJETA.matcher(t).find());
+                || (NOMBRA_TARJETA.matcher(t).find() && CONSULTA_CON_TARJETA.matcher(t).find());
         return consulta ? Optional.of(new ValidadorInterpretacion.Ver(ValidadorInterpretacion.Lista.TARJETA))
                 : Optional.empty();
     }

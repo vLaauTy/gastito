@@ -19,6 +19,7 @@ import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.Cuenta;
 import ar.gastito.catalogo.MedioPago;
 import ar.gastito.catalogo.TarjetaCredito;
+import ar.gastito.catalogo.ReconocedorTarjeta;
 import ar.gastito.interpretacion.ResolvedorFechas;
 import ar.gastito.interpretacion.ValidadorInterpretacion;
 import ar.gastito.movimiento.Confianza;
@@ -181,7 +182,9 @@ public class ValidadorTicket {
         Cuenta cuenta = ValidadorInterpretacion.buscar(ia.cuenta(), catalogo.cuentas()).orElse(null);
         TarjetaCredito tarjeta = null;
         if (medio != null && medio.esTarjetaDeCredito()) {
-            tarjeta = catalogo.tarjetaCredito().orElse(null);
+            // Si el ticket muestra la marca de la tarjeta, es una pista; si no, la única activa o se pregunta.
+            tarjeta = java.util.Optional.ofNullable(ReconocedorTarjeta.reconocer(ia.medioPagoImpreso(), medio, catalogo)
+                    .tarjeta()).or(catalogo::tarjetaUnica).orElse(null);
             cuenta = null; // la cuenta es la que paga el resumen
         }
 

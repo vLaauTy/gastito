@@ -81,7 +81,7 @@ public class CompraEnDolaresService {
             Catalogo catalogo = catalogos.cargar();
             MedioPago credito = catalogo.mediosPago().stream().filter(MedioPago::esTarjetaDeCredito).findFirst()
                     .orElseThrow(() -> new MovimientoEspecialException("No hay una tarjeta de crédito cargada"));
-            m.cambiarMedioPago(credito, catalogo.tarjetaCredito().orElse(null));
+            m.cambiarMedioPago(credito, catalogo.tarjetaUnica().orElse(null));
         }
         m.pasarADolares(dolares, referencia().map(CotizacionDolar::getValor).orElse(null));
         return m;

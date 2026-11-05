@@ -223,8 +223,13 @@ class HerramientasConsultaTest {
         Cuenta c = cuenta == null ? null
                 : cuentas.findAll().stream().filter(x -> x.getNombre().equals(cuenta)).findFirst().orElseThrow();
         return MovimientoInterpretado.conCategoria(new BigDecimal(monto), descripcion,
-                categorias.findByNombre(categoria).orElseThrow(), m, c, null, dia.atTime(12, 0));
+                categorias.findByNombre(categoria).orElseThrow(), m, c,
+                m != null && m.esTarjetaDeCredito() ? tarjetas.findFirstByActivaTrueOrderById().orElseThrow() : null,
+                dia.atTime(12, 0));
     }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    ar.gastito.catalogo.TarjetaCreditoRepository tarjetas;
 
     private void gasto(String categoria, String descripcion, String monto, LocalDate dia, String medio,
             String cuenta) {

@@ -15,6 +15,7 @@ import ar.gastito.catalogo.Catalogo;
 import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.catalogo.Cuenta;
 import ar.gastito.catalogo.MedioPago;
+import ar.gastito.catalogo.ReconocedorTarjeta;
 import ar.gastito.catalogo.TarjetaCredito;
 import ar.gastito.ia.ClienteIa;
 import ar.gastito.ia.Prompts;
@@ -71,11 +72,38 @@ public class InterpretadorService {
      * @param cuotas  si es una compra en cuotas (el monto es el total), o null
      * @param dolares si es una compra en dólares: cuántos (el movimiento trae el mismo número), o null
      */
+    /**
+     * @param tarjetaDudosa se nombró una tarjeta con un alias que también es una cuenta ("con mercado pago"): no se
+     *                      sabe si fue esa tarjeta o plata en la cuenta, y se pregunta; null si no hay duda
+     */
     public record Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId,
-            PedidoJuntada juntada, PedidoCuotas cuotas, BigDecimal dolares) implements Resultado {
+            PedidoJuntada juntada, PedidoCuotas cuotas, BigDecimal dolares, TarjetaCredito tarjetaDudosa)
+            implements Resultado {
+
+        public Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId,
+                PedidoJuntada juntada, PedidoCuotas cuotas, BigDecimal dolares) {
+            this(movimiento, confianza, usoIaId, juntada, cuotas, dolares, null);
+        }
 
         public Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId) {
             this(movimiento, confianza, usoIaId, null, null, null);
+        }
+
+        /**
+         * La tarjeta que nombra el texto ("con la master"): con un alias claro, pasa a ser con crédito y esa tarjeta;
+         * con uno dudoso, queda anotada para preguntar.
+         */
+        Interpretado conTarjetaDelTexto(String texto, Catalogo catalogo) {
+            ReconocedorTarjeta.Mencion mencion = ReconocedorTarjeta.reconocer(texto, movimiento.medioPago(), catalogo);
+            if (mencion.tarjeta() == null) {
+                return this;
+            }
+            if (mencion.dudosa()) {
+                return new Interpretado(movimiento, confianza, usoIaId, juntada, cuotas, dolares, mencion.tarjeta());
+            }
+            MedioPago credito = catalogo.medioCredito().orElse(movimiento.medioPago());
+            return new Interpretado(movimiento.conMedio(credito, null, mencion.tarjeta()), confianza, usoIaId,
+                    juntada, cuotas, dolares, null);
         }
 
         public Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId,
@@ -165,7 +193,7 @@ public class InterpretadorService {
             ParserSimple.Resultado r = simple.get();
             return new Interpretado(MovimientoInterpretado.conCategoria(r.monto(), r.descripcion(), r.categoria(),
                     r.medioPago(), cuenta(r.medioPago(), r.cuenta()), tarjeta(r.medioPago(), catalogo), ahora),
-                    Confianza.ALTA, null);
+                    Confianza.ALTA, null).conTarjetaDelTexto(texto, catalogo);
         }
 
         // 2. Historial: el resto del mensaje coincide con gastos que el usuario ya confirmó en una sola categoría.
@@ -177,7 +205,7 @@ public class InterpretadorService {
                 return new Interpretado(MovimientoInterpretado.conCategoria(s.monto(), aprendido.get().descripcion(),
                         aprendido.get().categoria(), s.medioPago(), cuenta(s.medioPago(), s.cuenta()),
                         tarjeta(s.medioPago(), catalogo), fechas.resolver(s.fecha(), "", ahora)),
-                        Confianza.ALTA, null);
+                        Confianza.ALTA, null).conTarjetaDelTexto(texto, catalogo);
             }
         }
 
@@ -212,11 +240,13 @@ public class InterpretadorService {
     private Resultado resultado(ValidadorInterpretacion.Resultado validado, InterpretacionIa ia, String texto,
             Catalogo catalogo, Long usoIaId) {
         return switch (validado) {
-            case ValidadorInterpretacion.Valida v -> conHistorial(v, catalogo, usoIaId);
+            case ValidadorInterpretacion.Valida v -> conHistorial(v, catalogo, usoIaId).conTarjetaDelTexto(texto,
+                    catalogo);
             case ValidadorInterpretacion.NoEsGasto n -> new NoEsGasto();
             case ValidadorInterpretacion.Pregunta p -> new Pregunta(texto, usoIaId);
             case ValidadorInterpretacion.Dudosa d ->
-                    new Dudoso(conHistorial(d.comoGasto(), catalogo, usoIaId), d.opciones(), ia, usoIaId);
+                    new Dudoso(conHistorial(d.comoGasto(), catalogo, usoIaId).conTarjetaDelTexto(texto, catalogo),
+                            d.opciones(), ia, usoIaId);
             case ValidadorInterpretacion.Devolucion d -> new Devolucion(d, usoIaId);
             case ValidadorInterpretacion.AltaFijo a -> new AltaFijo(a.pedido(), usoIaId);
             default -> new Orden(validado, usoIaId);
@@ -237,6 +267,6 @@ public class InterpretadorService {
     }
 
     private static TarjetaCredito tarjeta(MedioPago medio, Catalogo catalogo) {
-        return medio != null && medio.esTarjetaDeCredito() ? catalogo.tarjetaCredito().orElse(null) : null;
+        return medio != null && medio.esTarjetaDeCredito() ? catalogo.tarjetaUnica().orElse(null) : null;
     }
 }

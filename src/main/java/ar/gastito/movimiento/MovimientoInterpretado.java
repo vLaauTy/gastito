@@ -42,6 +42,12 @@ public record MovimientoInterpretado(
                 fechaHora);
     }
 
+    /** Con otro medio de pago (con crédito, la tarjeta; la cuenta es la que paga el resumen). */
+    public MovimientoInterpretado conMedio(MedioPago medio, Cuenta nuevaCuenta, TarjetaCredito nuevaTarjeta) {
+        return new MovimientoInterpretado(monto, descripcion, categoria, candidatas, medio, nuevaCuenta, nuevaTarjeta,
+                fechaHora);
+    }
+
     public MovimientoInterpretado conCategoriaElegida(Categoria elegida) {
         return new MovimientoInterpretado(monto, descripcion, elegida, List.of(), medioPago, cuenta, tarjeta,
                 fechaHora);

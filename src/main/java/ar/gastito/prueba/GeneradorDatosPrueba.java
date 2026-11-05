@@ -39,6 +39,7 @@ import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.Cuenta;
 import ar.gastito.catalogo.MedioPago;
+import ar.gastito.catalogo.TarjetaCredito;
 import ar.gastito.config.GastitoProperties;
 import ar.gastito.fijo.Frecuencia;
 import ar.gastito.fijo.GastoFijoService;
@@ -195,13 +196,18 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
         Map<String, MedioPago> medios = porNombre(catalogo.mediosPago(), MedioPago::getNombre);
         Map<String, Cuenta> cuentas = porNombre(catalogo.cuentas(), Cuenta::getNombre);
 
+        // Las compras con crédito se reparten entre las tarjetas, así cada una tiene su ciclo con datos.
+        List<TarjetaCredito> tarjetas = catalogo.tarjetas().stream()
+                .sorted(java.util.Comparator.comparing(TarjetaCredito::getId)).toList();
+        int conCredito = 0;
         for (PlanDatosPrueba.Gasto g : plan.gastos()) {
             Categoria categoria = buscar(categorias, g.categoria());
             MedioPago medio = buscar(medios, g.medio());
             Cuenta cuenta = g.cuenta() == null ? null : buscar(cuentas, g.cuenta());
             MovimientoInterpretado interpretado = MovimientoInterpretado.conCategoria(g.monto(), g.descripcion(),
                     categoria, medio, cuenta,
-                    PlanDatosPrueba.TARJETA.equals(g.medio()) ? catalogo.tarjetaCredito().orElse(null) : null,
+                    PlanDatosPrueba.TARJETA.equals(g.medio()) && !tarjetas.isEmpty()
+                            ? tarjetas.get(conCredito++ % tarjetas.size()) : null,
                     g.fechaHora());
             Movimiento m = g.ticket() == null
                     ? movimientos.crearPendiente(interpretado, g.origen(), g.descripcion() + " " + g.monto())
@@ -221,7 +227,7 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
         // En una transacción: el recibo de cada mes se arma desde las líneas del cálculo guardado.
         transaccion.executeWithoutResult(estado -> cargarSueldos());
         cargarUsoIa();
-        cargarFijos(categorias, catalogo.tarjetaCredito().orElse(null));
+        cargarFijos(categorias, tarjetas.isEmpty() ? null : tarjetas.getFirst());
     }
 
     /** Llamadas a la IA de los últimos meses, marcadas como de prueba, con el costo que tendrían con los precios de hoy. */

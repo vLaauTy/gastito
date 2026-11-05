@@ -177,6 +177,75 @@ class InterpretadorServiceTest {
         verifyNoInteractions(ia);
     }
 
+    // --- Varias tarjetas ---
+
+    static final TarjetaCredito GOLD = new TarjetaCredito("MasterCard Gold", "Galicia", CatalogoDePrueba.GALICIA,
+            null, "M", "master,mastercard,gold,la de galicia,galicia");
+    static final TarjetaCredito MP = new TarjetaCredito("Mercado Pago", "Mercado Pago",
+            CatalogoDePrueba.MERCADO_PAGO, null, "P", "la de mercado pago,tarjeta de mercado pago,mercado pago,mp");
+
+    private void conDosTarjetas() {
+        Catalogo base = CatalogoDePrueba.crear();
+        when(catalogos.cargar()).thenReturn(new Catalogo(base.categorias(), base.mediosPago(), base.cuentas(),
+                List.of(MP, GOLD)));
+    }
+
+    private InterpretadorService.Interpretado conIa(String texto, String medio, String cuenta) {
+        iaResponde(new InterpretacionIa("GASTO", "9000", "Remera", List.of("Ropa"), "alta", medio, cuenta, "", ""),
+                3L);
+        return (InterpretadorService.Interpretado) interpretador.interpretar(texto);
+    }
+
+    @Test
+    void conLaMasterEsCreditoConEsaTarjeta() {
+        conDosTarjetas();
+
+        InterpretadorService.Interpretado i = conIa("remera 9000 con la master", "Tarjeta de crédito", "");
+
+        assertThat(i.movimiento().medioPago()).isSameAs(CatalogoDePrueba.CREDITO);
+        assertThat(i.movimiento().tarjeta()).isSameAs(GOLD);
+        assertThat(i.tarjetaDudosa()).isNull();
+    }
+
+    @Test
+    void conLaDeMercadoPagoEsEsaTarjetaAunqueLaIaNoDigaCredito() {
+        conDosTarjetas();
+
+        InterpretadorService.Interpretado i = conIa("remera 9000 con la de mercado pago", "", "Mercado Pago");
+
+        assertThat(i.movimiento().medioPago()).isSameAs(CatalogoDePrueba.CREDITO);
+        assertThat(i.movimiento().tarjeta()).isSameAs(MP);
+        assertThat(i.movimiento().cuenta()).isNull();
+    }
+
+    @Test
+    void conCreditoSinDecirCualYDosTarjetasQuedaSinTarjetaParaPreguntar() {
+        conDosTarjetas();
+
+        InterpretadorService.Interpretado i = conIa("remera 9000 con crédito", "Tarjeta de crédito", "");
+
+        assertThat(i.movimiento().medioPago()).isSameAs(CatalogoDePrueba.CREDITO);
+        assertThat(i.movimiento().tarjeta()).isNull();
+    }
+
+    @Test
+    void conMercadoPagoSoloQuedaLaDudaEntreLaCuentaYLaTarjeta() {
+        conDosTarjetas();
+
+        InterpretadorService.Interpretado i = conIa("remera 9000 con mercado pago", "", "Mercado Pago");
+
+        assertThat(i.tarjetaDudosa()).isSameAs(MP);
+        assertThat(i.movimiento().tarjeta()).isNull();
+        assertThat(i.movimiento().cuenta()).isSameAs(CatalogoDePrueba.MERCADO_PAGO);
+    }
+
+    @Test
+    void conUnaSolaTarjetaCreditoEsEsa() {
+        InterpretadorService.Interpretado i = conIa("remera 9000 con crédito", "Tarjeta de crédito", "");
+
+        assertThat(i.movimiento().tarjeta()).isSameAs(tarjeta);
+    }
+
     private void iaResponde(InterpretacionIa respuesta, long usoIaId) {
         when(ia.extraer(anyString(), anyString(), eq(InterpretacionIa.class), eq(PropositoIa.TEXTO)))
                 .thenReturn(new ClienteIa.Respuesta<>(respuesta, usoIaId));

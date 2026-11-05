@@ -52,6 +52,13 @@ class MovimientoServiceTest {
     MedioPagoRepository medios;
 
     @Autowired
+    ar.gastito.catalogo.TarjetaCreditoRepository tarjetas;
+
+    private long gold() {
+        return tarjetas.findFirstByActivaTrueOrderById().orElseThrow().getId();
+    }
+
+    @Autowired
     TestEntityManager entityManager;
 
     @Test
@@ -176,8 +183,15 @@ class MovimientoServiceTest {
                 .filter(MedioPago::esTarjetaDeCredito).findFirst().orElseThrow().getId();
         Long efectivo = medios.findByActivoTrueOrderById().get(0).getId();
 
-        Movimiento conTarjeta = service.cambiarMedioPago(m.getId(), credito);
+        // Con dos tarjetas activas y sin decir cuál, queda sin tarjeta: hay que elegirla antes de guardar.
+        Movimiento sinCual = service.cambiarMedioPago(m.getId(), credito);
+        assertThat(sinCual.isFaltaTarjeta()).isTrue();
+        assertThat(sinCual.isCompleto()).isFalse();
+        assertThatThrownBy(() -> service.confirmar(m.getId())).isInstanceOf(MovimientoIncompletoException.class);
+
+        Movimiento conTarjeta = service.cambiarMedioPago(m.getId(), credito, gold());
         assertThat(conTarjeta.getTarjeta().getNombre()).isEqualTo("MasterCard Gold");
+        assertThat(conTarjeta.isCompleto()).isTrue();
 
         Movimiento conEfectivo = service.cambiarMedioPago(m.getId(), efectivo);
         assertThat(conEfectivo.getMedioPago().getNombre()).isEqualTo("Efectivo");
@@ -308,8 +322,12 @@ class MovimientoServiceTest {
         Long galicia = entityManager.getEntityManager()
                 .createQuery("select c.id from Cuenta c where c.nombre = 'Galicia'", Long.class).getSingleResult();
 
+        assertThatThrownBy(() -> service.editar(m.getId(), new BigDecimal("1800"), "Alfajor", AHORA.minusDays(1),
+                categoria("Salidas").getId(), credito.getId(), galicia))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Elegí con qué tarjeta");
+
         Movimiento editado = service.editar(m.getId(), new BigDecimal("1800"), "  Alfajor  ", AHORA.minusDays(1),
-                categoria("Salidas").getId(), credito.getId(), galicia);
+                categoria("Salidas").getId(), credito.getId(), galicia, gold());
 
         assertThat(editado.getEstado()).isEqualTo(EstadoMovimiento.CONFIRMADO);
         assertThat(editado.getMonto()).isEqualByComparingTo("1800");
