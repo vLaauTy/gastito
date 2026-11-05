@@ -45,3 +45,9 @@ Buscá en el código todo lo que hoy asume una sola tarjeta (por ejemplo búsque
 ## Tests
 
 Reconocimiento de cada tarjeta por sus alias, la pregunta cuando no se dice cuál, la ambigüedad "con mercado pago", la migración de lo existente a MasterCard Gold, el ciclo y las cuotas separados por tarjeta, y el pago de cada resumen desde su cuenta.
+
+## Hecho (04/11/2026)
+
+**Inventario de lo que asumía una sola tarjeta:** `catalogo.Catalogo` / `CatalogoService` / `TarjetaCreditoRepository.findFirstByActivaTrueOrderById` (la única fuente de "la" tarjeta), `movimiento.MovimientoService` (cambiar medio, corregir, editar), `interpretacion.ValidadorInterpretacion`, `InterpretadorService`, `ParserFijo`, `ParserTarjeta`, `ticket.ValidadorTicket`, `dolar.CompraEnDolaresService`, `tarjeta.CicloTarjetaService` (todo el ciclo), `bot.ConversacionTarjeta`, `TarjetaProgramada`, `ConversacionAltaFijo`, `Tarjetas`, `GuardadoAutomatico`, `dashboard.TarjetaController`, `FijosController`, `static/js/tarjeta.js` y `app.js` (checkbox "Se paga con la tarjeta"), `prueba.GeneradorDatosPrueba`, los prompts `interpretar-gasto.txt` y `leer-ticket.txt`. Ya estaban por tarjeta: `resumen_tarjeta.tarjeta_id`, `movimiento`/`gasto_fijo`/`plan_cuotas`/`juntada.tarjeta_id`, las billeteras del dashboard y la columna Medio de Movimientos.
+
+**Decisiones:** la tarjeta de Mercado Pago se llama "Mercado Pago" (emisor Mercado Pago, se paga desde la cuenta Mercado Pago). Un alias que también es una cuenta es dudoso solo si no se dice "tarjeta" ni "crédito" (y no hay QR, transferencia o débito); vale igual para "galicia". El pago de una tarjeta sin resumen cerrado (por ejemplo, la de Mercado Pago antes de cargar sus fechas) se registra igual, como `PAGO_TARJETA` desde su cuenta, con confirmación.
