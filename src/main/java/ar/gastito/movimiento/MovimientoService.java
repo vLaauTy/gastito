@@ -45,6 +45,31 @@ public class MovimientoService {
         this.clock = clock;
     }
 
+    /** El modo viaje: lo que se carga con la fecha de un viaje se asocia solo. Sin viajes, nada. */
+    private ViajeActivo viajes = dia -> Optional.empty();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void usarViajes(ViajeActivo viajes) {
+        this.viajes = viajes;
+    }
+
+    /** Un gasto que cargó el usuario (texto, audio o ticket) con la fecha de un viaje es de ese viaje. */
+    private Movimiento conViaje(Movimiento m) {
+        if (m.getTipo() == TipoMovimiento.GASTO && m.getFechaHora() != null && (m.getOrigen() == Origen.TEXTO
+                || m.getOrigen() == Origen.AUDIO || m.getOrigen() == Origen.TICKET)) {
+            viajes.viajeDe(m.getFechaHora().toLocalDate()).ifPresent(m::asociarViaje);
+        }
+        return m;
+    }
+
+    /** "No es del viaje" (o de otro): se puede cambiar aunque ya esté guardado. */
+    @Transactional
+    public Movimiento asociarViaje(Long id, Long viajeId) {
+        Movimiento m = buscar(id);
+        m.asociarViaje(viajeId);
+        return m;
+    }
+
     /** Los paquetes que referencian un gasto y tienen que enterarse antes de que se borre. */
     private List<AntesDeBorrar> antesDeBorrar = List.of();
 
@@ -64,14 +89,16 @@ public class MovimientoService {
 
     @Transactional
     public Movimiento crearPendiente(MovimientoInterpretado interpretado, Origen origen, String textoOriginal) {
-        return movimientos.save(Movimiento.pendiente(interpretado, origen, textoOriginal, LocalDateTime.now(clock)));
+        return movimientos.save(conViaje(Movimiento.pendiente(interpretado, origen, textoOriginal,
+                LocalDateTime.now(clock))));
     }
 
     /** Un gasto leído de un ticket, con sus productos. */
     @Transactional
     public Movimiento crearPendienteDeTicket(MovimientoInterpretado interpretado, DatosTicket ticket,
             String textoOriginal) {
-        return movimientos.save(Movimiento.deTicket(interpretado, ticket, textoOriginal, LocalDateTime.now(clock)));
+        return movimientos.save(conViaje(Movimiento.deTicket(interpretado, ticket, textoOriginal,
+                LocalDateTime.now(clock))));
     }
 
     @Transactional

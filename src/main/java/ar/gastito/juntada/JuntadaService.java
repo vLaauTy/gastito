@@ -232,6 +232,7 @@ public class JuntadaService {
                 original.getMedioPago(), original.getCuenta(), original.getTarjeta(), original.getFechaHora()),
                 Origen.AUTOMATICO, null);
         gasto.prepararJuntada(perdido);
+        gasto.asociarViaje(original.getViajeId());
         gasto.confirmar();
         p.perdido(gasto.getId());
         return vista(j);
@@ -268,6 +269,12 @@ public class JuntadaService {
     @Transactional(readOnly = true)
     public List<VistaJuntada> conDeudasPendientes() {
         return juntadas.conDeudasPendientes().stream().map(this::vista).toList();
+    }
+
+    /** Las juntadas guardadas de un viaje. */
+    @Transactional(readOnly = true)
+    public List<VistaJuntada> delViaje(Long viajeId) {
+        return juntadas.delViaje(viajeId).stream().map(this::vista).toList();
     }
 
     /** Todas las juntadas guardadas (abiertas y cerradas), de la más nueva a la más vieja. */

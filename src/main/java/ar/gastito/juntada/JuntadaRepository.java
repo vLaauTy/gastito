@@ -6,6 +6,7 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface JuntadaRepository extends JpaRepository<Juntada, Long> {
 
@@ -27,4 +28,11 @@ public interface JuntadaRepository extends JpaRepository<Juntada, Long> {
                           and p.estado = ar.gastito.juntada.EstadoParticipante.PENDIENTE)
             order by m.fechaHora desc""")
     List<Juntada> conDeudasPendientes();
+
+    /** Las juntadas guardadas de un viaje. */
+    @Query("""
+            select distinct j from Juntada j join fetch j.movimiento m
+            where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO and m.viajeId = :viajeId
+            order by m.fechaHora""")
+    List<Juntada> delViaje(@Param("viajeId") Long viajeId);
 }

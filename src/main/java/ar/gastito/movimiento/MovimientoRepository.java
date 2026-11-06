@@ -165,6 +165,34 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
             order by m.fechaHora""")
     List<Movimiento> gastosConfirmados(@Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta);
 
+    // --- Viajes ---
+
+    /** Los gastos guardados de un viaje, del más viejo al más nuevo. */
+    @EntityGraph(attributePaths = {"categoria", "medioPago"})
+    @Query("""
+            select m from Movimiento m
+            where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
+              and m.tipo = ar.gastito.movimiento.TipoMovimiento.GASTO
+              and m.viajeId = :viajeId
+            order by m.fechaHora""")
+    List<Movimiento> gastosDelViaje(@Param("viajeId") Long viajeId);
+
+    /** Los gastos guardados de cualquier viaje entre las dos fechas (para los resúmenes "sin el viaje"). */
+    @EntityGraph(attributePaths = {"categoria"})
+    @Query("""
+            select m from Movimiento m
+            where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
+              and m.tipo = ar.gastito.movimiento.TipoMovimiento.GASTO
+              and m.viajeId is not null
+              and m.fechaHora >= :desde and m.fechaHora < :hasta
+            order by m.fechaHora""")
+    List<Movimiento> gastosDeViajes(@Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta);
+
+    /** Se borró un viaje: sus movimientos quedan sin viaje. */
+    @Modifying
+    @Query("update Movimiento m set m.viajeId = null where m.viajeId = :viajeId")
+    int desasociarViaje(@Param("viajeId") Long viajeId);
+
     // --- Ciclo de la tarjeta ---
 
     /** Las compras con la tarjeta (sin las cuotas) confirmadas entre las dos fechas, de la más vieja a la más nueva. */

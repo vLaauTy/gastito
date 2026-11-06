@@ -54,6 +54,14 @@ public class PrestamoService implements AntesDeBorrar {
             Integer dia) {
     }
 
+    /** El modo viaje: un préstamo cargado con la fecha de un viaje es de ese viaje. */
+    private ar.gastito.movimiento.ViajeActivo viajes = dia -> Optional.empty();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void usarViajes(ar.gastito.movimiento.ViajeActivo viajes) {
+        this.viajes = viajes;
+    }
+
     // --- Crear ---
 
     /**
@@ -84,6 +92,9 @@ public class PrestamoService implements AntesDeBorrar {
     @Transactional
     public VistaPrestamo crearSolo(Datos datos, String descripcion, Cuenta cuenta, MedioPago medio, LocalDate fecha,
             Long viajeId, String textoOriginal) {
+        if (viajeId == null) {
+            viajeId = viajes.viajeDe(fecha).orElse(null);
+        }
         PlanPrestamo.Plan plan = PlanPrestamo.de(datos.monto(), datos.cuotas(), datos.valorCuota());
         Prestamo p = prestamos.save(new Prestamo(datos.persona(), descripcion, plan, primerMes(datos, fecha),
                 dia(datos, fecha), fecha, cuenta, medio, null, viajeId, EstadoPrestamo.PENDIENTE, textoOriginal,
@@ -309,6 +320,12 @@ public class PrestamoService implements AntesDeBorrar {
     @Transactional
     public void asociarViaje(Long prestamoId, Long viajeId) {
         prestamo(prestamoId).asociarViaje(viajeId);
+    }
+
+    /** Se borró un viaje: sus préstamos quedan sin viaje. */
+    @Transactional
+    public void desasociarViaje(Long viajeId) {
+        prestamos.desasociarViaje(viajeId);
     }
 
     /** El gasto del que salió el préstamo cambió de viaje: el préstamo lo sigue. */

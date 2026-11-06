@@ -38,4 +38,9 @@ public interface PrestamoRepository extends JpaRepository<Prestamo, Long> {
               and (m is null or m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO)
             order by p.fecha, p.id""")
     List<Prestamo> delViaje(@Param("viajeId") Long viajeId);
+
+    /** Se borró un viaje: sus préstamos quedan sin viaje. */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("update Prestamo p set p.viajeId = null where p.viajeId = :viajeId")
+    int desasociarViaje(@Param("viajeId") Long viajeId);
 }
