@@ -144,6 +144,10 @@ gastito:
     # por cuenta en el dashboard, o con "No preguntar más" en el recordatorio.
     dias-recordatorio: 7
     hora-recordatorio: 10           # antes de esta hora no se pregunta
+  prestamos:
+    # Cuántos días después de la fecha de una cuota se espera antes de avisar (una vez) que está atrasada.
+    dias-de-gracia: 3
+    hora-aviso: 10                  # antes de esta hora no se avisa
   fijos:
     # Como máximo, cada cuánto se manda el recordatorio agrupado de fijos vencidos sin cargar.
     intervalo-recordatorio: 3d

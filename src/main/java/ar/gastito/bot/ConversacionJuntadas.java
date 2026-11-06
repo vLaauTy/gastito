@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import ar.gastito.interpretacion.Montos;
@@ -22,6 +23,7 @@ import ar.gastito.juntada.VistaJuntada;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoService;
 import ar.gastito.movimiento.Origen;
+import ar.gastito.prestamo.VistaPrestamo;
 
 /**
  * Las juntadas en el chat: la tarjeta con Pagaste / Tu gasto real / A cobrar y las personas, los nombres, la parte
@@ -50,12 +52,22 @@ public class ConversacionJuntadas {
 
     private final Map<Long, Espera> esperas = new ConcurrentHashMap<>();
 
+    /** Los préstamos a personas, que también son plata a cobrar; sin préstamos (en los tests), ninguno. */
+    private final ConversacionPrestamos prestamos;
+
     public ConversacionJuntadas(JuntadaService juntadas, MovimientoService movimientos, Tarjetas tarjetas,
             FormatoMensajes formato) {
+        this(juntadas, movimientos, tarjetas, formato, null);
+    }
+
+    @Autowired
+    public ConversacionJuntadas(JuntadaService juntadas, MovimientoService movimientos, Tarjetas tarjetas,
+            FormatoMensajes formato, ConversacionPrestamos prestamos) {
         this.juntadas = juntadas;
         this.movimientos = movimientos;
         this.tarjetas = tarjetas;
         this.formato = formato;
+        this.prestamos = prestamos;
     }
 
     // --- Crear y guardar ---
@@ -181,21 +193,69 @@ public class ConversacionJuntadas {
                 m.isPendiente() ? tarjetas.principal(m) : tarjetas.juntadaGuardada(vista(movimientoId)));
     }
 
-    /** "/juntadas": las que tienen plata a cobrar, cada una con su tarjeta. */
+    /**
+     * "/juntadas", "/prestamos", "¿quién me debe?": las juntadas y los préstamos con plata a cobrar, cada uno con su
+     * tarjeta.
+     */
     public List<Accion> abiertas() {
         List<VistaJuntada> abiertas = juntadas.conDeudasPendientes();
-        if (abiertas.isEmpty()) {
-            return List.of(Accion.Enviar.texto("👥 No tenés juntadas con plata a cobrar."));
+        List<VistaPrestamo> deudas = prestamos == null ? List.of() : prestamos.conDeuda();
+        if (abiertas.isEmpty() && deudas.isEmpty()) {
+            return List.of(Accion.Enviar.texto(prestamos == null ? "👥 No tenés juntadas con plata a cobrar."
+                    : "👥 Nadie te debe plata: no tenés juntadas ni préstamos a cobrar."));
         }
-        BigDecimal total = abiertas.stream().map(VistaJuntada::aCobrar).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal total = abiertas.stream().map(VistaJuntada::aCobrar).reduce(BigDecimal.ZERO, BigDecimal::add)
+                .add(deudas.stream().map(VistaPrestamo::restante).reduce(BigDecimal.ZERO, BigDecimal::add));
+        List<String> en = new ArrayList<>();
+        if (!abiertas.isEmpty()) {
+            en.add(abiertas.size() + (abiertas.size() == 1 ? " juntada" : " juntadas"));
+        }
+        if (!deudas.isEmpty()) {
+            en.add(deudas.size() + (deudas.size() == 1 ? " préstamo" : " préstamos"));
+        }
         List<Accion> acciones = new ArrayList<>();
-        acciones.add(Accion.Enviar.texto("👥 Te deben <b>" + formato.pesos(total) + "</b> en " + abiertas.size()
-                + (abiertas.size() == 1 ? " juntada:" : " juntadas:")));
+        acciones.add(Accion.Enviar.texto("👥 Te deben <b>" + formato.pesos(total) + "</b> en "
+                + String.join(" y ", en) + ":"));
         for (VistaJuntada j : abiertas) {
             Movimiento m = movimientos.buscar(j.movimientoId());
             acciones.add(Accion.Enviar.conBotones(tarjetas.terminadoOPendiente(m), tarjetas.juntadaGuardada(j)));
         }
+        deudas.forEach(p -> acciones.add(prestamos.abierto(p)));
         return acciones;
+    }
+
+    // --- Préstamos ---
+
+    /**
+     * El gasto recién creado (con el total pagado) lleva un préstamo: queda con mi parte. Si el préstamo no cierra, el
+     * gasto queda como estaba.
+     */
+    public Movimiento crearPrestamoConGasto(Movimiento m, ar.gastito.interpretacion.PedidoPrestamo pedido) {
+        if (prestamos == null || !prestamos.crearConGasto(m, pedido)) {
+            return m;
+        }
+        return movimientos.buscar(m.getId());
+    }
+
+    /** "Le presté 30 mil a Martín…": un préstamo sin gasto mío, para confirmar. */
+    public Accion nuevoPrestamo(ValidadorInterpretacion.Prestamo p, String texto, Long viajeId, String prefijo) {
+        return prestamos == null ? Accion.Enviar.texto(prefijo + "🤔 No puedo anotar préstamos todavía.")
+                : prestamos.nuevo(p, texto, viajeId, prefijo);
+    }
+
+    /** El gasto tiene un préstamo que salió del mismo pago. */
+    public boolean tienePrestamo(long movimientoId) {
+        return prestamos != null && prestamos.deMovimiento(movimientoId).isPresent();
+    }
+
+    /** Se cambió el monto en la tarjeta de un gasto con préstamo: es el total pagado. */
+    public Movimiento cambiarTotalConPrestamo(long movimientoId, BigDecimal total) {
+        return prestamos.cambiarTotal(movimientoId, total);
+    }
+
+    public List<Accion> botonDePrestamo(int mensajeId, String accion, long id, Long elegido) {
+        return prestamos == null ? List.of(new Accion.Avisar("Botón inválido"))
+                : prestamos.boton(mensajeId, accion, id, elegido);
     }
 
     /** Un texto para copiar y mandar al grupo, con quién debe cuánto. El bot no les escribe a otras personas. */
@@ -221,34 +281,67 @@ public class ConversacionJuntadas {
      * pregunta de cuál con botones. Si no hay juntadas con plata a cobrar, no se guarda nada.
      */
     public Accion devolucion(ValidadorInterpretacion.Devolucion d, Origen origen, String texto, String prefijo) {
-        if (d.monto() == null) {
+        // Los préstamos de esa persona (o todos, si no se dijo quién y no es de una juntada nombrada).
+        List<VistaPrestamo> prestados = prestamos == null || d.de() != null ? List.of()
+                : prestamos.deudores(d.persona(), d.monto());
+        BigDecimal monto = d.monto();
+        // "Martín me pasó la cuota": sin monto, si es un solo préstamo, la próxima cuota.
+        if (monto == null && prestados.size() == 1 && d.persona() != null) {
+            monto = prestados.get(0).proxima().monto();
+        }
+        if (monto == null) {
             return Accion.Enviar.texto(prefijo + "↩️ ¿Cuánto te devolvi" + (d.persona() == null ? "eron?"
                     : "ó " + html(d.persona()) + "?") + " Contámelo con el monto y lo anoto.");
         }
-        List<JuntadaService.Deudor> deudores = juntadas.deudores(d.persona(), d.de(), d.monto());
-        if (deudores.isEmpty()) {
-            return Accion.Enviar.texto(prefijo + "↩️ Te pasaron " + formato.pesos(d.monto()) + ", pero no tenés "
-                    + "juntadas con plata a cobrar, así que no lo guardé.");
+        List<JuntadaService.Deudor> deudores = juntadas.deudores(d.persona(), d.de(), monto);
+        // Si dijo quién y esa persona solo tiene préstamos, las juntadas de otros no se ofrecen.
+        if (d.persona() != null && !prestados.isEmpty()
+                && deudores.stream().noneMatch(x -> mismoNombre(x.nombre(), d.persona()))) {
+            deudores = List.of();
         }
-        Movimiento devolucion = juntadas.devolucionPendiente(d.monto(), d.cuenta(), d.medio(), d.fechaHora(), origen,
+        if (deudores.isEmpty() && prestados.isEmpty()) {
+            return Accion.Enviar.texto(prefijo + "↩️ Te pasaron " + formato.pesos(monto) + ", pero no tenés "
+                    + (prestamos == null ? "juntadas" : "juntadas ni préstamos")
+                    + " con plata a cobrar, así que no lo guardé.");
+        }
+        Movimiento devolucion = juntadas.devolucionPendiente(monto, d.cuenta(), d.medio(), d.fechaHora(), origen,
                 texto);
         long id = devolucion.getId();
         StringBuilder html = new StringBuilder(prefijo + "↩️ <b>Te devolvieron plata</b>\n💰 <b>"
-                + formato.pesos(d.monto()) + "</b>" + (d.persona() == null ? "" : " · " + html(d.persona())));
+                + formato.pesos(monto) + "</b>" + (d.persona() == null ? "" : " · " + html(d.persona())));
         Teclado.Constructor t = Teclado.constructor();
-        if (deudores.size() == 1) {
-            JuntadaService.Deudor uno = deudores.get(0);
-            html.append("\n👥 ").append(deQuien(uno));
-            t.fila(new Teclado.Boton("✅ Guardar", Tarjetas.DEVOLUCION_DE + ":" + id + ":" + uno.participanteId()),
-                    new Teclado.Boton("❌ Cancelar", Tarjetas.CANCELAR + ":" + id));
+        if (deudores.size() + prestados.size() == 1) {
+            String datos;
+            if (deudores.isEmpty()) {
+                html.append("\n").append(prestamos.deQuien(prestados.get(0)));
+                datos = ConversacionPrestamos.COBRAR + ":" + id + ":" + prestados.get(0).id();
+            } else {
+                html.append("\n👥 ").append(deQuien(deudores.get(0)));
+                datos = Tarjetas.DEVOLUCION_DE + ":" + id + ":" + deudores.get(0).participanteId();
+            }
+            t.fila(new Teclado.Boton("✅ Guardar", datos), new Teclado.Boton("❌ Cancelar", Tarjetas.CANCELAR + ":" + id));
         } else {
             html.append("\n\n¿De quién es?");
-            deudores.stream().limit(MAXIMO_OPCIONES).forEach(deudor -> t.fila(new Teclado.Boton(
-                    deudor.nombre() + " · " + deudor.juntada().descripcion() + " · " + formato.pesos(deudor.monto()),
-                    Tarjetas.DEVOLUCION_DE + ":" + id + ":" + deudor.participanteId())));
+            prestados.stream().limit(MAXIMO_OPCIONES).forEach(p -> t.fila(prestamos.opcion(id, p)));
+            deudores.stream().limit(Math.max(0, MAXIMO_OPCIONES - prestados.size())).forEach(deudor -> t.fila(
+                    new Teclado.Boton(deudor.nombre() + " · " + deudor.juntada().descripcion() + " · "
+                            + formato.pesos(deudor.monto()),
+                            Tarjetas.DEVOLUCION_DE + ":" + id + ":" + deudor.participanteId())));
             t.fila(new Teclado.Boton("❌ Cancelar", Tarjetas.CANCELAR + ":" + id));
         }
         return Accion.Enviar.tarjeta(html.toString(), t.build(), id);
+    }
+
+    /** Alguna palabra en común ("Martín" con "martin g"), sin tildes ni mayúsculas. */
+    private static boolean mismoNombre(String a, String b) {
+        String x = normalizar(a);
+        List<String> palabras = List.of(normalizar(b).split(" "));
+        return java.util.Arrays.stream(x.split(" ")).anyMatch(p -> p.length() > 1 && palabras.contains(p));
+    }
+
+    private static String normalizar(String texto) {
+        return java.text.Normalizer.normalize(texto, java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "")
+                .toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9 ]", " ").replaceAll("\\s+", " ").strip();
     }
 
     private String deQuien(JuntadaService.Deudor d) {

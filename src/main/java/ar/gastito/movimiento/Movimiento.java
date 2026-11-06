@@ -147,6 +147,9 @@ public class Movimiento {
     /** Una cuota de una compra en cuotas, o null. */
     private Long planCuotasId;
 
+    /** El viaje del que es (una etiqueta: la fecha sigue siendo la real), o null. */
+    private Long viajeId;
+
     /** Solo en ENTRE_CUENTAS: la cuenta a la que fue la plata (cuenta es la de origen). */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cuenta_destino_id")
@@ -957,6 +960,15 @@ public class Movimiento {
 
     public boolean isMontoEstimado() {
         return montoEstimado;
+    }
+
+    public Long getViajeId() {
+        return viajeId;
+    }
+
+    /** Es de este viaje (o de ninguno, con null): se puede cambiar aunque ya esté guardado. */
+    public void asociarViaje(Long viajeId) {
+        this.viajeId = viajeId;
     }
 
     public Long getPlanCuotasId() {

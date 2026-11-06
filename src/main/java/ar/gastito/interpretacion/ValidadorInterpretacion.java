@@ -55,7 +55,12 @@ public class ValidadorInterpretacion {
      * @param dolares si el monto es en dólares: cuántos (el movimiento trae el mismo número), o null si es en pesos
      */
     public record Valida(MovimientoInterpretado movimiento, Confianza confianza, PedidoJuntada juntada,
-            PedidoCuotas cuotas, BigDecimal dolares) implements Resultado {
+            PedidoCuotas cuotas, BigDecimal dolares, PedidoPrestamo prestamo) implements Resultado {
+
+        public Valida(MovimientoInterpretado movimiento, Confianza confianza, PedidoJuntada juntada,
+                PedidoCuotas cuotas, BigDecimal dolares) {
+            this(movimiento, confianza, juntada, cuotas, dolares, null);
+        }
 
         public Valida(MovimientoInterpretado movimiento, Confianza confianza) {
             this(movimiento, confianza, null, null, null);
@@ -76,6 +81,16 @@ public class ValidadorInterpretacion {
      * @param cuenta  dónde entró, o null
      */
     public record Devolucion(BigDecimal monto, String persona, String de, Cuenta cuenta, MedioPago medio,
+            LocalDateTime fechaHora) implements Resultado {
+    }
+
+    /**
+     * "Le presté 30 mil a Martín, me lo devuelve en 6 cuotas": un préstamo sin un gasto mío.
+     *
+     * @param pedido null si no se entendió a quién o cuánto
+     * @param cuenta de dónde salió la plata, o null
+     */
+    public record Prestamo(PedidoPrestamo pedido, String descripcion, Cuenta cuenta, MedioPago medio,
             LocalDateTime fechaHora) implements Resultado {
     }
 
@@ -216,7 +231,19 @@ public class ValidadorInterpretacion {
             case TARJETA -> comoTarjeta(ia, ahora.toLocalDate());
             case DOLAR -> new Dolar(monto(ia.monto()).orElse(null));
             case INVERSION -> new Inversion();
+            case PRESTAMO -> comoPrestamo(ia, catalogo, ahora);
         };
+    }
+
+    /** Lo prestado puede venir en monto o en prestamoMonto. */
+    private Prestamo comoPrestamo(InterpretacionIa ia, Catalogo catalogo, LocalDateTime ahora) {
+        String monto = texto(ia.prestamoMonto()) != null ? ia.prestamoMonto() : ia.monto();
+        String persona = texto(ia.prestamoPersona()) != null ? ia.prestamoPersona() : ia.devolucionPersona();
+        PedidoPrestamo pedido = PedidoPrestamo.de(persona, monto, ia.prestamoCuotas(), ia.prestamoValorCuota(),
+                ia.prestamoDesde(), ia.prestamoDia(), ahora.toLocalDate());
+        MedioPago medio = buscar(ia.medioPago(), catalogo.mediosPago()).orElse(null);
+        return new Prestamo(pedido, texto(ia.descripcion()), buscar(ia.cuenta(), catalogo.cuentas()).orElse(null),
+                medio, fechas.resolver(ia.fecha(), ia.hora(), ahora));
     }
 
     /** Las que propuso la IA que sirven para preguntar (sin repetir, hasta 3); si son menos de 2, las de siempre. */
@@ -338,8 +365,12 @@ public class ValidadorInterpretacion {
                 ? MovimientoInterpretado.conCategoria(monto, descripcion, candidatas.get(0), medio, cuenta, tarjeta,
                         fechaHora)
                 : new MovimientoInterpretado(monto, descripcion, null, candidatas, medio, cuenta, tarjeta, fechaHora);
+        // Un préstamo sale del mismo pago, en pesos y sin cuotas de tarjeta.
+        PedidoPrestamo prestamo = dolares != null || cuotas != null ? null
+                : PedidoPrestamo.de(ia.prestamoPersona(), ia.prestamoMonto(), ia.prestamoCuotas(),
+                        ia.prestamoValorCuota(), ia.prestamoDesde(), ia.prestamoDia(), ahora.toLocalDate());
         return new Valida(movimiento, confianza, dolares != null ? null
-                : PedidoJuntada.de(ia.juntadaPersonas(), ia.juntadaNombres()), cuotas, dolares);
+                : PedidoJuntada.de(ia.juntadaPersonas(), ia.juntadaNombres()), cuotas, dolares, prestamo);
     }
 
     /**

@@ -30,6 +30,8 @@ final class TextosBot {
             • "cobré el sueldo, 980 mil en Galicia", "cobré el aguinaldo"
             • "me pagaron 25 mil por arreglar una PC"
             • "Pablo me pasó 8000 del asado" (te devuelven plata de una juntada)
+            • "pagué 293.000 de vuelos; 30.000 son de Martín, que me los devuelve en 6 cuotas desde diciembre": tu gasto es la diferencia y Martín queda debiendo
+            • "Martín me pasó la cuota" (marca la cuota y te dice cuánto falta)
 
             <b>📌 Gastos fijos</b>
             • "agregá un fijo: el seguro de la moto, unos 32 mil por mes con la tarjeta"
@@ -68,7 +70,7 @@ final class TextosBot {
             El domingo a las 21 te mando cómo fue tu semana y el día 1 a las 9, cómo fue el mes. Si la PC estaba apagada, te llega apenas la prendés.
 
             <b>Atajos</b> (si preferís comandos)
-            /hoy · /mes · /disponible · /resumen · /tarjeta · /dolar · /juntadas · /fijos · /cuotas · /calculo · /costos · /dashboard""";
+            /hoy · /mes · /disponible · /resumen · /tarjeta · /dolar · /juntadas · /prestamos · /fijos · /cuotas · /calculo · /costos · /dashboard""";
 
     private TextosBot() {
     }

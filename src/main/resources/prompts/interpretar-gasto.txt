@@ -29,6 +29,7 @@ intencion:
 - TARJETA: da un dato del resumen de la tarjeta de crédito; no es un gasto. tarjetaDato: FECHAS (cuándo cierra y vence: tarjetaCierre y tarjetaVencimiento como los dice, "26/11"), TOTAL (cuánto dice el resumen: monto) o PAGO (se debitó o pagó el resumen; monto si lo dice). "Pagué con la tarjeta" es un GASTO, no esto.
 - DOLAR: dice a cuánto está el dólar tarjeta ("el dólar está a 1500", "el dólar tarjeta subió a 1.620"): el valor va en monto. Comprar algo en dólares es un GASTO, no esto.
 - INVERSION: habla de sus ahorros invertidos (cuánto vale una inversión, plata que puso o sacó de una cuenta de inversión, comprar o vender acciones, CEDEARs o un fondo, reservar parte para una meta). No es un gasto ni un ingreso. No completes ningún otro campo.
+- PRESTAMO: le prestó plata a alguien, sin pagar nada propio ("le presté 30 mil a Martín, me lo devuelve en 6 cuotas"). Los datos van en los campos prestamo… (ver Préstamo, abajo); prestamoMonto: cuánto le prestó. Si además pagó algo suyo en el mismo pago, es un GASTO con préstamo.
 - PREGUNTA: cualquier otra pregunta sobre sus gastos, ingresos o compras ("¿cuánto gasté en pan?", "compará octubre con septiembre").
 - DUDOSO: no está claro qué quiere ("pan 3700?", "el seguro 32 mil"). opciones: las 2 o 3 intenciones más probables, de la más a la menos. Completá igual los datos.
 - OTRO: un saludo, una prueba o algo que no es nada de esto.
@@ -42,3 +43,5 @@ Datos:
 - fecha: como la dice ("hoy", "ayer", "anteayer", "sábado", "12/10"); no la calcules. hora: HH:mm, solo si la dice.
 - Juntada (pagó por un grupo: "pagué 48000 el asado, éramos 6"): monto es el TOTAL que pagó, sin dividir; juntadaPersonas: cuántos eran contándolo a él ("éramos 6" → 6; "con Martín, Sofi y Pablo" → 4); juntadaNombres: los nombres de los demás, si los dice.
 - Cuotas ("zapatillas 84000 en 6 cuotas"): cuotasCantidad en dígitos; si dice el total va en monto; si solo dice el valor de cada cuota ("6 cuotas de 14000") va en cuotasValorCuota y monto vacío.
+- Préstamo dentro de un gasto ("pagué 293.000 de vuelos; 30.000 son de Martín, que me los devuelve en 6 cuotas de 5.000 desde diciembre"): monto es el TOTAL que pagó, sin restar; prestamoPersona: a quién; prestamoMonto: cuánto le prestó; prestamoCuotas y prestamoValorCuota en dígitos si los dice; prestamoDesde: el mes de la primera cuota como lo dice ("diciembre"); prestamoDia: el día del mes en dígitos si lo dice. No es una juntada ni cuotas de tarjeta.
+- DEVOLUCION también es cuando alguien le paga una cuota de un préstamo ("Martín me pasó la cuota", "Martín me pasó 5000"): devolucionPersona; monto solo si lo dice.

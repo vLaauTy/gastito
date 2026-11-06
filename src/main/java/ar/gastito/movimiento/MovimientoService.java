@@ -45,6 +45,14 @@ public class MovimientoService {
         this.clock = clock;
     }
 
+    /** Los paquetes que referencian un gasto y tienen que enterarse antes de que se borre. */
+    private List<AntesDeBorrar> antesDeBorrar = List.of();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void usarAntesDeBorrar(List<AntesDeBorrar> guardias) {
+        this.antesDeBorrar = List.copyOf(guardias);
+    }
+
     public record Confirmacion(Movimiento movimiento, BigDecimal totalMesCategoria) {
     }
 
@@ -259,6 +267,7 @@ public class MovimientoService {
         if (m.getPlanCuotasId() != null) {
             throw new MovimientoEspecialException("Es una cuota: se cancela el plan desde esa cuota");
         }
+        antesDeBorrar.forEach(g -> g.antesDeBorrar(m));
         movimientos.desvincularUsoIa(id);
         movimientos.delete(m);
         movimientos.flush();

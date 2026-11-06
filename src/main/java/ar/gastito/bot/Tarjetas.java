@@ -22,6 +22,8 @@ import ar.gastito.catalogo.MedioPago;
 import ar.gastito.catalogo.TarjetaCredito;
 import ar.gastito.juntada.JuntadaService;
 import ar.gastito.juntada.VistaJuntada;
+import ar.gastito.prestamo.PrestamoService;
+import ar.gastito.prestamo.VistaPrestamo;
 import ar.gastito.movimiento.ClaseIngreso;
 import ar.gastito.movimiento.EstadoMovimiento;
 import ar.gastito.movimiento.Movimiento;
@@ -124,6 +126,28 @@ public class Tarjetas {
 
     void usarJuntadas(Function<Long, Optional<VistaJuntada>> fuente) {
         this.juntadas = fuente;
+    }
+
+    /** El préstamo que salió del mismo pago que un gasto; sin préstamos, ninguno. */
+    private Function<Long, Optional<VistaPrestamo>> prestamos = id -> Optional.empty();
+
+    @Autowired(required = false)
+    void usarPrestamos(PrestamoService servicio) {
+        usarPrestamos(servicio::deMovimiento);
+    }
+
+    void usarPrestamos(Function<Long, Optional<VistaPrestamo>> fuente) {
+        this.prestamos = fuente;
+    }
+
+    private Optional<VistaPrestamo> prestamo(Movimiento m) {
+        return m.getId() != null && m.getTipo() == TipoMovimiento.GASTO && !m.isJuntada()
+                ? prestamos.apply(m.getId()) : Optional.empty();
+    }
+
+    /** De este gasto salió un préstamo: no se guarda solo, se confirma con las dos partes a la vista. */
+    public boolean conPrestamo(Movimiento m) {
+        return prestamo(m).isPresent();
     }
 
     /** Cómo se compara un sueldo cobrado con el cálculo del mes; sin calculadora, no se compara. */
@@ -253,6 +277,9 @@ public class Tarjetas {
         }
         return escuchado(m) + linea + (detalle.isEmpty() ? "" : "\n" + detalle)
                 + resumenTarjeta(m).map(r -> "\n🗓 " + Character.toUpperCase(r.charAt(0)) + r.substring(1))
+                        .orElse("")
+                + prestamo(m).map(p -> "\n🤝 " + html(p.persona()) + (p.terminado() ? " ya te devolvió todo"
+                        : " te debe " + formato.pesos(p.restante()) + " · " + ConversacionPrestamos.cuotas(p, formato)))
                         .orElse("");
     }
 
@@ -379,6 +406,14 @@ public class Tarjetas {
             lineas.add("🙋 Tu gasto real <b>" + formato.pesos(j.miParte()) + "</b>");
             lineas.add(j.aCobrar().signum() > 0 ? "📥 A cobrar <b>" + formato.pesos(j.aCobrar()) + "</b>"
                     : "📥 Ya no te deben nada");
+        } else if (prestamo(m).isPresent() && m.getMonto() != null) {
+            VistaPrestamo p = prestamo(m).get();
+            String billetera = FormatoMensajes.medio(m);
+            lineas.add("💸 Pagaste <b>" + formato.pesos(m.getMonto().add(p.monto())) + "</b>"
+                    + (billetera == null || billetera.isBlank() ? "" : " · " + html(billetera)));
+            lineas.add("🙋 Tu gasto <b>" + formato.pesos(m.getMonto()) + "</b>");
+            lineas.add("🤝 Préstamo a <b>" + html(p.persona()) + "</b> " + formato.pesos(p.monto()) + " · "
+                    + ConversacionPrestamos.cuotas(p, formato));
         } else {
             lineas.add(m.getMonto() == null ? "💰 <i>Falta el monto</i>"
                     : "💰 <b>" + formato.monto(m) + "</b>");

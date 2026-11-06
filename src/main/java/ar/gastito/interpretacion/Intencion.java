@@ -40,7 +40,9 @@ public enum Intencion {
     /** "El dólar tarjeta está a 1500": la cotización de referencia para estimar las compras en dólares. */
     DOLAR,
     /** "Lo de Cocos subió", "invertí en un plazo fijo": algo de sus inversiones que Java no entendió solo. */
-    INVERSION;
+    INVERSION,
+    /** "Le presté 30 mil a Martín, me lo devuelve en 6 cuotas": un préstamo a alguien, sin un gasto mío. */
+    PRESTAMO;
 
     /** Lo que devolvió la IA; si no es ninguno de estos, OTRO. "FIJO" es el nombre viejo de ALTA_FIJO. */
     public static Intencion de(String texto) {

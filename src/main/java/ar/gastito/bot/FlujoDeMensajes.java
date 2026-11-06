@@ -161,6 +161,13 @@ class FlujoDeMensajes {
 
     private Accion gastoInterpretado(long chatId, InterpretadorService.Interpretado i, String texto, Origen origen,
             String prefijo) {
+        // "Le pagué 30.000 a Martín y me lo devuelve en cuotas": si lo prestado es todo el pago, es un préstamo solo.
+        if (i.prestamo() != null && i.movimiento().monto() != null && i.prestamo().monto() != null
+                && i.prestamo().monto().compareTo(i.movimiento().monto()) >= 0) {
+            return juntadas.nuevoPrestamo(new ValidadorInterpretacion.Prestamo(i.prestamo(),
+                    i.movimiento().descripcion(), i.movimiento().cuenta(), i.movimiento().medioPago(),
+                    i.movimiento().fechaHora()), texto, null, prefijo);
+        }
         Movimiento m = crearGasto(i, origen, texto);
         // En dólares: con la tarjeta y con los pesos estimados (si no hay cotización, la pide).
         if (i.dolares() != null && m.getMonto() != null && m.isPendiente()) {
@@ -221,6 +228,7 @@ class FlujoDeMensajes {
                 case TARJETA -> "💳 Datos de la tarjeta";
                 case DOLAR -> "💵 A cuánto está el dólar";
                 case INVERSION -> "📈 Algo de mis inversiones";
+                case PRESTAMO -> "🤝 Le presté plata";
                 default -> "📋 Ver una lista";
             }, ES_OTRA + ":" + id + ":" + opcion.ordinal());
         };
@@ -258,6 +266,7 @@ class FlujoDeMensajes {
             case ValidadorInterpretacion.Dolar d -> dolares.cotizacion(chatId, d.cotizacion(), prefijo,
                     this::tarjetaNueva);
             case ValidadorInterpretacion.Inversion _ -> inversiones.queHacer(prefijo);
+            case ValidadorInterpretacion.Prestamo p -> List.of(juntadas.nuevoPrestamo(p, texto, null, prefijo));
             default -> List.of(Accion.Enviar.texto(prefijo + "🤔 No entendí qué querés hacer. ¿Me lo contás de otra forma?"));
         };
     }
@@ -317,6 +326,10 @@ class FlujoDeMensajes {
         }
         if (i.cuotas() != null && m.getMonto() != null) {
             return cuotas.crear(m, i.cuotas());
+        }
+        // "30.000 son de Martín, que me los devuelve en cuotas": el gasto queda con mi parte y el préstamo aparte.
+        if (i.prestamo() != null && m.getMonto() != null) {
+            return juntadas.crearPrestamoConGasto(m, i.prestamo());
         }
         return m;
     }

@@ -167,7 +167,10 @@ class EdicionDeCampos {
                 // En una juntada, el monto de la tarjeta es el total pagado: se reparte de nuevo.
                 case Valor.Monto v -> juntadas.esJuntada(movimientoId)
                         ? juntadas.cambiarTotal(movimientoId, v.monto())
-                        : movimientos.cambiarMonto(movimientoId, v.monto());
+                        // Con un préstamo del mismo pago, también es el total: mi parte es el resto.
+                        : juntadas.tienePrestamo(movimientoId)
+                                ? juntadas.cambiarTotalConPrestamo(movimientoId, v.monto())
+                                : movimientos.cambiarMonto(movimientoId, v.monto());
                 case Valor.Fecha v -> movimientos.cambiarFechaHora(movimientoId, v.fechaHora());
                 case Valor.Descripcion v -> movimientos.cambiarDescripcion(movimientoId, v.descripcion());
             };

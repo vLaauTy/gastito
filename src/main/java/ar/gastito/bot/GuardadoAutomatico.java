@@ -50,6 +50,10 @@ class GuardadoAutomatico {
         if (m.isJuntada() || m.getPlanCuotasId() != null || m.getGastoFijoId() != null) {
             return false;
         }
+        // De este pago salió un préstamo: se confirma con las dos partes a la vista.
+        if (tarjetas != null && tarjetas.conPrestamo(m)) {
+            return false;
+        }
         // Con crédito y varias tarjetas, sin decir cuál: se pregunta (sin tarjeta no se guarda).
         if (m.isFaltaTarjeta()) {
             return false;

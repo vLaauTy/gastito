@@ -77,8 +77,13 @@ public class InterpretadorService {
      *                      sabe si fue esa tarjeta o plata en la cuenta, y se pregunta; null si no hay duda
      */
     public record Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId,
-            PedidoJuntada juntada, PedidoCuotas cuotas, BigDecimal dolares, TarjetaCredito tarjetaDudosa)
-            implements Resultado {
+            PedidoJuntada juntada, PedidoCuotas cuotas, BigDecimal dolares, TarjetaCredito tarjetaDudosa,
+            PedidoPrestamo prestamo) implements Resultado {
+
+        public Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId,
+                PedidoJuntada juntada, PedidoCuotas cuotas, BigDecimal dolares, TarjetaCredito tarjetaDudosa) {
+            this(movimiento, confianza, usoIaId, juntada, cuotas, dolares, tarjetaDudosa, null);
+        }
 
         public Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId,
                 PedidoJuntada juntada, PedidoCuotas cuotas, BigDecimal dolares) {
@@ -99,11 +104,12 @@ public class InterpretadorService {
                 return this;
             }
             if (mencion.dudosa()) {
-                return new Interpretado(movimiento, confianza, usoIaId, juntada, cuotas, dolares, mencion.tarjeta());
+                return new Interpretado(movimiento, confianza, usoIaId, juntada, cuotas, dolares, mencion.tarjeta(),
+                        prestamo);
             }
             MedioPago credito = catalogo.medioCredito().orElse(movimiento.medioPago());
             return new Interpretado(movimiento.conMedio(credito, null, mencion.tarjeta()), confianza, usoIaId,
-                    juntada, cuotas, dolares, null);
+                    juntada, cuotas, dolares, null, prestamo);
         }
 
         public Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId,
@@ -258,8 +264,9 @@ public class InterpretadorService {
         Optional<HistorialCategorias.Aprendido> aprendido = historial.buscar(v.movimiento().descripcion(), catalogo);
         return aprendido.isPresent()
                 ? new Interpretado(v.movimiento().conCategoriaElegida(aprendido.get().categoria()), Confianza.ALTA,
-                        usoIaId, v.juntada(), v.cuotas(), v.dolares())
-                : new Interpretado(v.movimiento(), v.confianza(), usoIaId, v.juntada(), v.cuotas(), v.dolares());
+                        usoIaId, v.juntada(), v.cuotas(), v.dolares(), null, v.prestamo())
+                : new Interpretado(v.movimiento(), v.confianza(), usoIaId, v.juntada(), v.cuotas(), v.dolares(), null,
+                        v.prestamo());
     }
 
     private static Cuenta cuenta(MedioPago medio, Cuenta cuenta) {

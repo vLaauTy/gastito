@@ -53,7 +53,27 @@ public record InterpretacionIa(
         String tarjetaCierre,
         String tarjetaVencimiento,
         @JsonPropertyDescription("ARS o USD")
-        String moneda) {
+        String moneda,
+        String prestamoPersona,
+        String prestamoMonto,
+        String prestamoCuotas,
+        String prestamoValorCuota,
+        @JsonPropertyDescription("Mes de la primera cuota, como lo dice")
+        String prestamoDesde,
+        String prestamoDia) {
+
+    /** Sin préstamo. */
+    public InterpretacionIa(String intencion, String monto, String descripcion, List<String> categorias,
+            String confianza, String medioPago, String cuenta, String fecha, String hora, String juntadaPersonas,
+            List<String> juntadaNombres, String devolucionPersona, String devolucionDe, String fijoDia,
+            String fijoFrecuencia, String fijoVariable, String cuotasCantidad, String cuotasValorCuota,
+            String fijoAlias, String claseIngreso, String campo, String ver, String horas, List<String> opciones,
+            String tarjetaDato, String tarjetaCierre, String tarjetaVencimiento, String moneda) {
+        this(intencion, monto, descripcion, categorias, confianza, medioPago, cuenta, fecha, hora, juntadaPersonas,
+                juntadaNombres, devolucionPersona, devolucionDe, fijoDia, fijoFrecuencia, fijoVariable, cuotasCantidad,
+                cuotasValorCuota, fijoAlias, claseIngreso, campo, ver, horas, opciones, tarjetaDato, tarjetaCierre,
+                tarjetaVencimiento, moneda, "", "", "", "", "", "");
+    }
 
     /** En pesos (sin decir la moneda). */
     public InterpretacionIa(String intencion, String monto, String descripcion, List<String> categorias,
@@ -109,7 +129,8 @@ public record InterpretacionIa(
         return new InterpretacionIa(elegida.name(), monto, descripcion, categorias, confianza, medioPago, cuenta,
                 fecha, hora, juntadaPersonas, juntadaNombres, devolucionPersona, devolucionDe, fijoDia, fijoFrecuencia,
                 fijoVariable, cuotasCantidad, cuotasValorCuota, fijoAlias, claseIngreso, campo, ver, horas, opciones,
-                tarjetaDato, tarjetaCierre, tarjetaVencimiento, moneda);
+                tarjetaDato, tarjetaCierre, tarjetaVencimiento, moneda, prestamoPersona, prestamoMonto,
+                prestamoCuotas, prestamoValorCuota, prestamoDesde, prestamoDia);
     }
 
     /** Si dijo que el monto es en dólares. */

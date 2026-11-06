@@ -89,7 +89,7 @@ class ComandosBot {
         String argumentos = limpio.replaceFirst("^/\\S+\\s*", "");
         return switch (comando) {
             case "/resumen" -> List.of(resumen(limpio));
-            case "/juntadas" -> juntadas.abiertas();
+            case "/juntadas", "/prestamos" -> juntadas.abiertas();
             case "/fijo" -> argumentos.isBlank() ? List.of(Accion.Enviar.texto(ConversacionAltaFijo.preguntaInicial()))
                     : altaFijo.desdeComando(chatId, argumentos).<List<Accion>>map(List::of)
                             .orElseGet(() -> interpretar.interpretar(chatId, "agregá un gasto fijo: " + argumentos));

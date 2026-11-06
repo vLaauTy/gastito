@@ -377,6 +377,9 @@ public class ProcesadorMensajes {
                     fijos.botonDePago(mensajeId, accion, id);
             case ConversacionFijos.OTRO_PAGO -> List.of(edicion.principal(chatId, mensajeId, edicion.pendiente(id)));
             case ConversacionCuotas.CANCELAR_PLAN -> cuotas.boton(mensajeId, id);
+            case ConversacionPrestamos.GUARDAR, ConversacionPrestamos.CANCELAR, ConversacionPrestamos.COBRAR,
+                    ConversacionPrestamos.COBRAR_PROXIMA, ConversacionPrestamos.MENSAJE ->
+                    juntadas.botonDePrestamo(mensajeId, accion, id, elegido);
             case ConversacionTarjeta.TODAVIA_NO_FECHAS, ConversacionTarjeta.CARGAR_TOTAL, ConversacionTarjeta.DEBITADO,
                     ConversacionTarjeta.TODAVIA_NO_DEBITO, ConversacionTarjeta.CONFIRMAR_PAGO,
                     ConversacionTarjeta.CANCELAR_PAGO, ConversacionTarjeta.ELEGIR_TARJETA ->
