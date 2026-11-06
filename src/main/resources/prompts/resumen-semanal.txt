@@ -11,6 +11,7 @@ Qué hay en el JSON:
 - hormiga: compras chicas (por debajo de "umbral") en kiosco y comida: cuántas, cuánto suman, el promedio y cuántas por semana.
 - productos: los más comprados según los tickets, por unidades y por plata.
 - escenariosAhorro: ahorros posibles, ya calculados por Gastito. ahorroPeriodo es lo que se ahorraría en la semana. ahorroMensual es lo mismo llevado a un mes, y es null cuando todavía no hay 2 semanas de datos en esa categoría.
+- viajes (si viene): lo gastado en viajes. totalGastado lo incluye, pero comparacion, porCategoria, hormiga y escenariosAhorro ya son sin el viaje (viajes.sinViaje): no compares el viaje con nada ni des consejos sobre él.
 - pocosDatos: true si todavía hay muy pocos gastos para dar un consejo.
 
 Lo que ya se muestra arriba de tu texto, con sus números: el total gastado, la cantidad de gastos, la variación contra la semana anterior, los días sin gastos y los gastos hormiga (cuántos y cuánto suman). No los repitas, ni con otras palabras.

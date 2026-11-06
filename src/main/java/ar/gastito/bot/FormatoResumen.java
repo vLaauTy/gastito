@@ -85,8 +85,16 @@ public class FormatoResumen {
             encabezado.append("\nNo registraste gastos ").append(semanal ? "esta semana." : "este mes.");
         } else {
             encabezado.append("\nGastaste <b>").append(formato.pesos(d.totalGastado())).append("</b> en ")
-                    .append(d.cantidadGastos()).append(d.cantidadGastos() == 1 ? " gasto" : " gastos")
-                    .append(registroParcial ? "" : comparacion(d, semanal, r));
+                    .append(d.cantidadGastos()).append(d.cantidadGastos() == 1 ? " gasto" : " gastos");
+            // Con un viaje: el total lo incluye, pero la comparación es sin el viaje.
+            if (d.viajes() != null) {
+                encabezado.append("\n🧳 ").append(d.viajes().viajes().stream()
+                        .map(v -> html(v.nombre()) + " " + formato.pesos(v.total()))
+                        .collect(java.util.stream.Collectors.joining(" · ")))
+                        .append("\nSin el viaje gastaste <b>").append(formato.pesos(d.viajes().sinViaje()))
+                        .append("</b>");
+            }
+            encabezado.append(registroParcial ? "" : comparacion(d, semanal, r));
         }
         partes.add(encabezado.toString());
 
@@ -123,6 +131,9 @@ public class FormatoResumen {
         }
         if (d.notas() != null) {
             d.notas().forEach(n -> datos.add("<i>ℹ️ " + html(n) + "</i>"));
+        }
+        if (d.viajes() != null) {
+            datos.add("<i>ℹ️ Las categorías, la comparación y los consejos son sin el viaje.</i>");
         }
         if (!datos.isEmpty()) {
             partes.add(String.join("\n", datos));

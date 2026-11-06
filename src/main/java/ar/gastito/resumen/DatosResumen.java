@@ -30,7 +30,29 @@ public record DatosResumen(
         Ingresos ingresos,
         BigDecimal costoIaUsd,
         boolean pocosDatos,
-        List<String> notas) {
+        List<String> notas,
+        Viajes viajes) {
+
+    /** Sin gastos de viajes en el período. */
+    public DatosResumen(Periodo periodo, BigDecimal totalGastado, int cantidadGastos, Comparacion comparacion,
+            List<Categoria> porCategoria, GastoGrande gastoMasGrande, Hormiga hormiga, int diasSinGastos,
+            SinEspecificar sinEspecificar, Productos productos, List<Escenario> escenariosAhorro, Ingresos ingresos,
+            BigDecimal costoIaUsd, boolean pocosDatos, List<String> notas) {
+        this(periodo, totalGastado, cantidadGastos, comparacion, porCategoria, gastoMasGrande, hormiga, diasSinGastos,
+                sinEspecificar, productos, escenariosAhorro, ingresos, costoIaUsd, pocosDatos, notas, null);
+    }
+
+    /**
+     * El período tiene gastos de viajes: el total los incluye, pero las categorías, la comparación, los gastos
+     * hormiga y los escenarios se calculan sin ellos.
+     *
+     * @param sinViaje lo gastado sin los viajes
+     */
+    public record Viajes(BigDecimal total, BigDecimal sinViaje, List<Viaje> viajes) {
+    }
+
+    public record Viaje(String nombre, BigDecimal total) {
+    }
 
     /** Lo que va en lugar del consejo cuando hay pocos datos. */
     public static final String POCOS_DATOS = "Todavía hay pocos datos para darte un consejo. Seguí cargando tus gastos.";
@@ -42,7 +64,8 @@ public record DatosResumen(
      */
     public static final List<String> MOSTRADOS = List.of("/totalGastado", "/cantidadGastos", "/comparacion/total",
             "/comparacion/variacionPorcentaje", "/diasSinGastos", "/hormiga/cantidad", "/hormiga/total",
-            "/ingresos/total", "/ingresos/disponible", "/ingresos/porcentajeGastado", "/costoIaUsd");
+            "/ingresos/total", "/ingresos/disponible", "/ingresos/porcentajeGastado", "/costoIaUsd",
+            "/viajes/total", "/viajes/sinViaje");
 
     /**
      * @param hasta último día con datos: en un resumen parcial, hoy

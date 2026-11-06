@@ -143,6 +143,25 @@ class FormatoResumenTest {
     }
 
     @Test
+    void unMesConViajeMuestraElTotalYSinElViajeYComparaSinElViaje() {
+        DatosResumen base = datos("MENSUAL", LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31), false, null,
+                null);
+        DatosResumen d = new DatosResumen(base.periodo(), new BigDecimal("352300.00"), 30, base.comparacion(),
+                base.porCategoria(), base.gastoMasGrande(), base.hormiga(), base.diasSinGastos(),
+                base.sinEspecificar(), base.productos(), List.of(), null, null, false, List.of(),
+                new DatosResumen.Viajes(new BigDecimal("352300.00"), new BigDecimal("52300.00"),
+                        List.of(new DatosResumen.Viaje("🏔 Bariloche", new BigDecimal("300000.00")))));
+        Resumen r = new Resumen(TipoResumen.MENSUAL, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31), false,
+                true, "{}", List.of(), null, false, null, LocalDateTime.now());
+
+        String html = formatoResumen.mensaje(new ResumenService.Armado(r, d), 0);
+
+        assertThat(html).contains("Gastaste <b>$352.300</b> en 30 gastos\n🧳 🏔 Bariloche $300.000\n"
+                + "Sin el viaje gastaste <b>$52.300</b> (+12% que septiembre)")
+                .contains("Las categorías, la comparación y los consejos son sin el viaje.");
+    }
+
+    @Test
     void sinDatosDelMesAnteriorLoDiceEnVezDeCompararContraCero() {
         DatosResumen conDatos = datos("MENSUAL", LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31), false, null,
                 null);

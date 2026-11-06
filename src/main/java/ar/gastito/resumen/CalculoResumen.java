@@ -79,9 +79,15 @@ public class CalculoResumen {
         LocalDate registroDesde = inicio.primerDia()
                 .filter(d -> d.isAfter(periodo.desde()) && !d.isAfter(hasta)).orElse(null);
         BigDecimal total = suma(gastos);
-        BigDecimal totalAnterior = conDatos ? suma(gastosAnteriores) : null;
-        List<DatosResumen.Categoria> categorias = porCategoria(gastos, conDatos ? gastosAnteriores : null);
-        DatosResumen.Hormiga hormiga = hormiga(gastos, dias);
+        // Los gastos de un viaje cuentan en el total, pero las comparaciones y los consejos se hacen sin el viaje
+        // (de los dos períodos): un viaje no es un aumento del gasto de todos los días.
+        List<Movimiento> sinViaje = gastos.stream().filter(m -> m.getViajeId() == null).toList();
+        List<Movimiento> anterioresSinViaje = gastosAnteriores.stream().filter(m -> m.getViajeId() == null).toList();
+        DatosResumen.Viajes viajes = viajes(gastos, total, suma(sinViaje));
+        BigDecimal totalComparable = suma(sinViaje);
+        BigDecimal totalAnterior = conDatos ? suma(anterioresSinViaje) : null;
+        List<DatosResumen.Categoria> categorias = porCategoria(sinViaje, conDatos ? anterioresSinViaje : null);
+        DatosResumen.Hormiga hormiga = hormiga(sinViaje, dias);
         int diasSinGastos = diasSinGastos(gastos, periodo.desde(), hasta);
         boolean semanal = periodo.tipo() == TipoResumen.SEMANAL;
         boolean pocosDatos = pocosDatos(gastos.size(), dias - diasSinGastos, config.minimo(semanal));
@@ -109,9 +115,9 @@ public class CalculoResumen {
                 total,
                 gastos.size(),
                 new DatosResumen.Comparacion(anterior.desde(), hastaAnterior, conDatos, totalAnterior,
-                        conDatos ? variacion(total, totalAnterior) : null),
+                        conDatos ? variacion(totalComparable, totalAnterior) : null),
                 categorias,
-                gastoMasGrande(gastos),
+                gastoMasGrande(sinViaje.isEmpty() ? gastos : sinViaje),
                 hormiga,
                 diasSinGastos,
                 sinEspecificar(gastos),
@@ -120,7 +126,21 @@ public class CalculoResumen {
                 ingresosDelMes,
                 costoIa,
                 pocosDatos,
-                notas(gastos));
+                notas(gastos),
+                viajes);
+    }
+
+    /** Lo gastado en cada viaje del período, o null si no hay gastos de viajes. */
+    private DatosResumen.Viajes viajes(List<Movimiento> gastos, BigDecimal total, BigDecimal sinViaje) {
+        Map<Long, BigDecimal> porViaje = new java.util.LinkedHashMap<>();
+        gastos.stream().filter(m -> m.getViajeId() != null)
+                .forEach(m -> porViaje.merge(m.getViajeId(), m.getMonto(), BigDecimal::add));
+        if (porViaje.isEmpty()) {
+            return null;
+        }
+        List<DatosResumen.Viaje> viajes = consultas.viajes(porViaje.keySet()).stream()
+                .map(v -> new DatosResumen.Viaje(v.getNombreConEmoji(), pesos(porViaje.get(v.getId())))).toList();
+        return new DatosResumen.Viajes(total, sinViaje, viajes);
     }
 
     // --- Categorías y gasto más grande ---

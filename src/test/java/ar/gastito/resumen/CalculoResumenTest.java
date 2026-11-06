@@ -48,7 +48,7 @@ import ar.gastito.movimiento.Origen;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Import({CalculoResumen.class, MovimientoService.class, IngresoService.class, RegistroUsoIa.class, InicioRegistro.class,
-        CalculadoraCostoIa.class, CalculoResumenTest.Config.class})
+        CalculadoraCostoIa.class, ar.gastito.viaje.ModoViaje.class, CalculoResumenTest.Config.class})
 class CalculoResumenTest {
 
     static final ZoneId ARGENTINA = ZoneId.of("America/Argentina/Buenos_Aires");
@@ -151,6 +151,33 @@ class CalculoResumenTest {
         // 5 gastos en 3 días: justo el mínimo, así que hay escenarios.
         assertThat(d.pocosDatos()).isFalse();
         assertThat(d.escenariosAhorro()).isNotEmpty();
+    }
+
+    @Test
+    void conUnViajeElTotalLoIncluyePeroLaComparacionYLasCategoriasSonSinElViaje() {
+        jdbc.update("INSERT INTO viaje (nombre, emoji, desde, hasta, creado_en) VALUES ('Bariloche', '🏔', ?, ?, ?)",
+                LUNES.plusDays(3), LUNES.plusDays(5), LUNES.atStartOfDay());
+        Long viaje = jdbc.queryForObject("SELECT id FROM viaje WHERE nombre = 'Bariloche'", Long.class);
+        // El hotel del viaje: 50.000 en Salidas (el modo viaje lo asocia solo, por la fecha).
+        gasto("Salidas", "50000", LUNES.plusDays(4), true);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM movimiento WHERE viaje_id = ?", Integer.class, viaje))
+                .isEqualTo(1);
+
+        DatosResumen d = semana();
+
+        assertThat(d.totalGastado()).isEqualByComparingTo("81199");
+        assertThat(d.viajes().sinViaje()).isEqualByComparingTo("31199");
+        assertThat(d.viajes().viajes()).extracting(DatosResumen.Viaje::nombre).containsExactly("🏔 Bariloche");
+        assertThat(d.viajes().viajes().get(0).total()).isEqualByComparingTo("50000");
+        // La comparación, las categorías y el más grande, como si el viaje no estuviera.
+        assertThat(d.comparacion().variacionPorcentaje()).isEqualTo(1);
+        assertThat(d.porCategoria()).extracting(DatosResumen.Categoria::nombre).doesNotContain("Salidas");
+        assertThat(d.gastoMasGrande().monto()).isEqualByComparingTo("20000");
+    }
+
+    @Test
+    void sinViajesNoHayDatosDeViajes() {
+        assertThat(semana().viajes()).isNull();
     }
 
     @Test

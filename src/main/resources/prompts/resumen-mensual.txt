@@ -13,6 +13,7 @@ Qué hay en el JSON:
 - ingresos: sueldo, aguinaldo, extras, el total, lo disponible (ingresos menos gastos) y qué porcentaje de los ingresos se gastó (null si no hubo ingresos).
 - costoIaUsd: lo que costó la IA en el mes, en dólares.
 - escenariosAhorro: ahorros posibles, ya calculados por Gastito, con cuánto se ahorraría en el mes (ahorroPeriodo y ahorroMensual).
+- viajes (si viene): lo gastado en viajes. totalGastado lo incluye, pero comparacion, porCategoria, hormiga y escenariosAhorro ya son sin el viaje (viajes.sinViaje): no compares el viaje con nada ni des consejos sobre él.
 - pocosDatos: true si todavía hay muy pocos gastos para dar un consejo.
 
 Lo que ya se muestra arriba de tu texto, con sus números: el total gastado, la cantidad de gastos, la variación contra el mes anterior, los días sin gastos, los gastos hormiga (cuántos y cuánto suman), los ingresos con lo disponible y qué parte se gastó, y el costo de la IA. No los repitas, ni con otras palabras.

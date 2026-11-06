@@ -33,6 +33,10 @@ interface ResumenConsultas extends Repository<Movimiento, Long> {
               and lower(m.categoria.nombre) in :categorias""")
     boolean hayGastosAntes(@Param("categorias") Collection<String> categorias, @Param("antes") LocalDateTime antes);
 
+    /** Los viajes de esos ids (para nombrarlos en el resumen). */
+    @Query("select v from Viaje v where v.id in :ids order by v.desde")
+    List<ar.gastito.viaje.Viaje> viajes(@Param("ids") Collection<Long> ids);
+
     /** Los productos (no los descuentos) de los tickets de gastos confirmados. */
     @Query("""
             select i from MovimientoItem i join i.movimiento m
