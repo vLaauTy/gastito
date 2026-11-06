@@ -162,6 +162,16 @@ class ConversacionInversionesTest {
     }
 
     @Test
+    void dosCuentasEnUnMensajeSeConfirmanJuntas() {
+        Accion.Enviar tarjeta = enviar(conversacion.intentar(CHAT,
+                "Tengo 505.133 invertidos en la reserva de Mercado Pago y 680.000 en acciones en Cocos", Origen.TEXTO,
+                "").orElseThrow());
+
+        assertThat(tarjeta.html()).contains("Saldo inicial de Reserva de Mercado Pago", "$505.133",
+                "Saldo inicial de Cocos", "Acciones: $680.000").doesNotContain("suman más");
+    }
+
+    @Test
     void unGastoNoEsDeInversiones() {
         assertThat(conversacion.intentar(CHAT, "kiosco 1500", Origen.TEXTO, "")).isEmpty();
     }

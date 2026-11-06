@@ -173,6 +173,19 @@ public class InversionService {
         return new CargaInicial(c, saldos, reemplazados, nueva);
     }
 
+    /** El saldo inicial de una cuenta (existente por id, o por nombre: se busca o se crea). */
+    public record SaldoDeCuenta(Long cuentaId, String nombreCuenta, BigDecimal total, List<SaldoPedido> posiciones) {
+    }
+
+    /**
+     * Los saldos iniciales de varias cuentas dichos en un mismo mensaje ("505.133 en la reserva de Mercado Pago y
+     * 680.000 en acciones en Cocos"): todos o ninguno.
+     */
+    public List<CargaInicial> cargarSaldosIniciales(List<SaldoDeCuenta> cuentas, LocalDate fecha, String texto) {
+        return cuentas.stream().map(s -> cargarSaldoInicial(s.cuentaId(), s.nombreCuenta(), s.total(),
+                s.posiciones(), fecha, texto)).toList();
+    }
+
     /** Desde el dashboard: el saldo inicial de la bolsa (posicionId null) o de una posición; reemplaza al anterior. */
     public CargaInicial cargarSaldo(long cuentaId, Long posicionId, BigDecimal monto, LocalDate fecha) {
         if (monto == null || monto.signum() <= 0) {

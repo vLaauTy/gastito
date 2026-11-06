@@ -120,6 +120,23 @@ class InversionServiceTest {
     }
 
     @Test
+    void dosCuentasEnUnMensaje() {
+        ParserInversion.Contexto ctx = new ParserInversion.Contexto(inversiones.cuentas(), inversiones.posiciones(),
+                cuentas.findByActivaTrueAndTipoOrderById(ar.gastito.catalogo.TipoCuenta.BANCARIA));
+        ParserInversion.SaldosIniciales v = (ParserInversion.SaldosIniciales) ParserInversion
+                .parsear(ParserInversionTest.DOS_CUENTAS, ctx).orElseThrow();
+
+        List<InversionService.CargaInicial> cargas = inversiones.cargarSaldosIniciales(v.cuentas().stream()
+                .map(s -> new InversionService.SaldoDeCuenta(s.cuenta() == null ? null : s.cuenta().getId(),
+                        s.nombreCuenta(), s.total(), s.posiciones())).toList(), HOY.toLocalDate(), "texto");
+
+        assertThat(cargas).extracting(c -> c.cuenta().getNombre()).containsExactly("Reserva de Mercado Pago", "Cocos");
+        assertThat(panel.cuenta(cargas.get(0).cuenta().getId()).valor()).isEqualByComparingTo("505133");
+        assertThat(estado().tenencias()).filteredOn(t -> t.nombre().equals("Acciones")).singleElement()
+                .satisfies(t -> assertThat(t.aportado()).isEqualByComparingTo("680000"));
+    }
+
+    @Test
     void laCuentaDeInversionNoEsUnMedioDePago() {
         assertThat(inversiones.cuentas()).extracting(Cuenta::getNombre).containsExactly("Cocos");
         assertThat(cuentas.findByActivaTrueAndTipoOrderById(ar.gastito.catalogo.TipoCuenta.BANCARIA))

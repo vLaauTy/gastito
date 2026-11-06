@@ -48,6 +48,10 @@ public final class ParserInversion {
             List<InversionService.SaldoPedido> posiciones) implements Pedido {
     }
 
+    /** El ahorro previo de varias cuentas en un mismo mensaje: se confirman y se guardan juntas. */
+    public record SaldosIniciales(List<SaldoInicial> cuentas) implements Pedido {
+    }
+
     /**
      * Plata que entra a una cuenta de inversión (y, si dijo una posición, a esa posición).
      *
@@ -270,50 +274,125 @@ public final class ParserInversion {
             int hasta = i + 1 < montos.size() ? montos.get(i + 1).inicio() : n.length();
             etiquetas.add(etiqueta(recorte(original, n, desde, hasta)));
         }
-        Cuenta existente = null;
-        String nombreCuenta = null;
-        BigDecimal total = null;
-        int primeraPosicion = 0;
+        // Cada tramo es: una cuenta con su total ("505.133 invertidos en la reserva de Mercado Pago"), una posición de
+        // una cuenta dicha ("680.000 en acciones en Cocos") o una posición de la última cuenta ("500.000 en SPY").
+        List<Grupo> grupos = new ArrayList<>();
         Mencion<Cuenta> antes = inversiones.stream().filter(m -> m.fin() <= montos.getFirst().inicio()).findFirst()
                 .orElse(null);
         if (antes != null) {
             // "Tengo invertidos en Cocos 500.000 en SPY y 350.000 en el FCI": sin total.
-            existente = antes.cosa();
-        } else {
-            String primera = etiquetas.getFirst();
-            existente = ctx.inversiones().stream()
-                    .filter(c -> terminos(c).contains(NombresInversion.normalizar(primera))).findFirst().orElse(null);
-            nombreCuenta = existente == null ? primera : null;
-            total = montos.getFirst().valor();
-            primeraPosicion = 1;
-            // Una cuenta nueva, solo si dijo que es una inversión ("tengo 500.000 ahorrados en el banco" no lo es).
-            if (existente == null && (primera.isEmpty() || primera.length() > 50 || !n.contains("invertid"))) {
-                return Optional.empty();
-            }
+            grupos.add(new Grupo(antes.cosa(), null));
         }
-        List<InversionService.SaldoPedido> pedidos = new ArrayList<>();
-        Cuenta cuenta = existente;
-        for (int i = primeraPosicion; i < montos.size(); i++) {
+        for (int i = 0; i < montos.size(); i++) {
             String etiqueta = etiquetas.get(i);
+            BigDecimal monto = montos.get(i).valor();
             if (etiqueta.isEmpty()) {
                 return Optional.empty();
             }
-            String nombre = etiqueta;
-            if (cuenta != null) {
-                List<PosicionInversion> deLaCuenta = ctx.posiciones().stream()
-                        .filter(p -> p.getCuenta().getId().equals(cuenta.getId())).toList();
-                List<Mencion<PosicionInversion>> nombradas = menciones(base(etiqueta), deLaCuenta,
-                        p -> terminosPosicion(p, ctx));
-                nombre = deLaCuenta.stream().filter(p -> NombresInversion.mismaPosicion(p, etiqueta)).findFirst()
-                        .or(() -> nombradas.size() == 1 ? Optional.of(nombradas.getFirst().cosa()) : Optional.empty())
-                        .map(PosicionInversion::getNombre).orElse(etiqueta);
+            Optional<String[]> posicionYCuenta = posicionEnCuenta(etiqueta, ctx);
+            if (posicionYCuenta.isPresent()) {
+                Grupo g = grupo(grupos, posicionYCuenta.get()[1], ctx);
+                g.pedidos.add(new InversionService.SaldoPedido(nombrePosicion(posicionYCuenta.get()[0], g, ctx), monto));
+            } else if (grupos.isEmpty() || existente(etiqueta, ctx).filter(c -> !esDelUltimo(grupos, c)).isPresent()) {
+                Grupo g = grupo(grupos, etiqueta, ctx);
+                if (g.total != null) {
+                    return Optional.empty();
+                }
+                g.total = monto;
+            } else {
+                Grupo g = grupos.getLast();
+                g.pedidos.add(new InversionService.SaldoPedido(nombrePosicion(etiqueta, g, ctx), monto));
             }
-            pedidos.add(new InversionService.SaldoPedido(nombre, montos.get(i).valor()));
         }
-        if (total == null && pedidos.isEmpty()) {
+        List<SaldoInicial> saldos = new ArrayList<>();
+        for (Grupo g : grupos) {
+            // Una cuenta nueva, solo si dijo que es una inversión ("tengo 500.000 ahorrados en el banco" no lo es).
+            if (g.cuenta == null && (g.nombre.isEmpty() || g.nombre.length() > 50 || !n.contains("invertid"))) {
+                return Optional.empty();
+            }
+            if (g.total == null && g.pedidos.isEmpty()) {
+                continue;
+            }
+            saldos.add(new SaldoInicial(g.cuenta, g.cuenta == null ? g.nombre : null, g.total, List.copyOf(g.pedidos)));
+        }
+        if (saldos.isEmpty()) {
             return Optional.empty();
         }
-        return Optional.of(new SaldoInicial(existente, nombreCuenta, total, pedidos));
+        return Optional.of(saldos.size() == 1 ? saldos.getFirst() : new SaldosIniciales(saldos));
+    }
+
+    /** Lo que va después de "en" y no es una cuenta: "plazo fijo en dólares", "un FCI en pesos". */
+    private static final Set<String> NO_SON_CUENTAS = Set.of("dolares", "dolar", "pesos", "usd", "efectivo",
+            "total", "cuotas", "acciones", "cedears", "bonos", "cripto");
+
+    /** Una cuenta del saldo inicial mientras se arma: existente o nueva (por nombre), su total y sus posiciones. */
+    private static final class Grupo {
+        final Cuenta cuenta;
+        final String nombre;
+        BigDecimal total;
+        final List<InversionService.SaldoPedido> pedidos = new ArrayList<>();
+
+        Grupo(Cuenta cuenta, String nombre) {
+            this.cuenta = cuenta;
+            this.nombre = cuenta != null ? cuenta.getNombre() : nombre;
+        }
+    }
+
+    /** El grupo de esa cuenta (por nombre o alias), o uno nuevo al final. */
+    private static Grupo grupo(List<Grupo> grupos, String nombre, Contexto ctx) {
+        Cuenta c = existente(nombre, ctx).orElse(null);
+        String buscado = NombresInversion.normalizar(c != null ? c.getNombre() : nombre);
+        for (Grupo g : grupos) {
+            if (NombresInversion.normalizar(g.nombre).equals(buscado)) {
+                return g;
+            }
+        }
+        Grupo nuevo = new Grupo(c, nombre);
+        grupos.add(nuevo);
+        return nuevo;
+    }
+
+    private static Optional<Cuenta> existente(String nombre, Contexto ctx) {
+        String n = NombresInversion.normalizar(nombre);
+        return ctx.inversiones().stream().filter(c -> terminos(c).contains(n)).findFirst();
+    }
+
+    private static boolean esDelUltimo(List<Grupo> grupos, Cuenta c) {
+        Grupo ultimo = grupos.getLast();
+        return ultimo.cuenta != null && ultimo.cuenta.getId().equals(c.getId());
+    }
+
+    /**
+     * "Acciones en Cocos" → posición "Acciones" de la cuenta "Cocos": cuando lo que va después del último "en" es una
+     * cuenta de inversión que ya existe o un nombre propio (con mayúscula). "Plazo fijo en dólares" no se separa.
+     */
+    static Optional<String[]> posicionEnCuenta(String etiqueta, Contexto ctx) {
+        Matcher m = Pattern.compile("(?iu)^(.+?)\\s+en\\s+(?:la\\s+|el\\s+)?(\\S.*)$").matcher(etiqueta);
+        if (!m.matches()) {
+            return Optional.empty();
+        }
+        String posicion = NombresInversion.limpiar(m.group(1));
+        String cuenta = NombresInversion.limpiar(m.group(2));
+        String palabra = NombresInversion.normalizar(cuenta);
+        boolean unaPalabra = !palabra.contains(" ") && !NO_SON_CUENTAS.contains(palabra);
+        boolean esCuenta = existente(cuenta, ctx).isPresent() || Character.isUpperCase(m.group(2).charAt(0))
+                || unaPalabra;
+        return esCuenta && !posicion.isEmpty() && !cuenta.isEmpty()
+                ? Optional.of(new String[] {posicion, cuenta}) : Optional.empty();
+    }
+
+    /** El nombre de una posición que ya existe en la cuenta ("SPY" → "CEDEAR SPY"), o el dicho. */
+    private static String nombrePosicion(String etiqueta, Grupo g, Contexto ctx) {
+        if (g.cuenta == null) {
+            return etiqueta;
+        }
+        List<PosicionInversion> deLaCuenta = ctx.posiciones().stream()
+                .filter(p -> p.getCuenta().getId().equals(g.cuenta.getId())).toList();
+        List<Mencion<PosicionInversion>> nombradas = menciones(base(etiqueta), deLaCuenta,
+                p -> terminosPosicion(p, ctx));
+        return deLaCuenta.stream().filter(p -> NombresInversion.mismaPosicion(p, etiqueta)).findFirst()
+                .or(() -> nombradas.size() == 1 ? Optional.of(nombradas.getFirst().cosa()) : Optional.empty())
+                .map(PosicionInversion::getNombre).orElse(etiqueta);
     }
 
     /** "invertidos en Cocos, " → "Cocos"; " en un FCI" → "FCI". */

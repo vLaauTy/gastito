@@ -213,18 +213,11 @@ public class ConversacionInversiones {
 
     private String propuesta(ParserInversion.Pedido pedido) {
         return switch (pedido) {
-            case ParserInversion.SaldoInicial s -> {
-                StringBuilder sb = new StringBuilder("📈 <b>Saldo inicial de ")
-                        .append(html(s.cuenta() != null ? s.cuenta().getNombre() : s.nombreCuenta())).append("</b>")
-                        .append(s.cuenta() == null ? " (cuenta de inversión nueva)" : "").append("\n");
-                if (s.total() != null) {
-                    sb.append("Total: <b>").append(formato.pesos(s.total())).append("</b>\n");
-                }
-                s.posiciones().forEach(p -> sb.append("• ").append(html(p.posicion())).append(": ")
-                        .append(formato.pesos(p.monto())).append("\n"));
-                yield sb.append("Al ").append(dia(hoy()))
-                        .append(". Es plata que ya tenías ahorrada: no cuenta como ingreso.").toString();
-            }
+            case ParserInversion.SaldoInicial s -> saldoPropuesto(s) + "Al " + dia(hoy())
+                    + ". Es plata que ya tenías ahorrada: no cuenta como ingreso.";
+            case ParserInversion.SaldosIniciales v -> String.join("\n", v.cuentas().stream()
+                    .map(this::saldoPropuesto).toList()) + "Al " + dia(hoy())
+                    + ". Es plata que ya tenías ahorrada: no cuenta como ingreso.";
             case ParserInversion.Aporte a -> "📥 <b>Aporte a " + html(a.cuenta().getNombre()) + "</b>: "
                     + formato.pesos(a.monto()) + (a.origenDicho() ? " desde " + lado(a.desde()) : "")
                     + (a.posicion() == null ? "" : " → " + html(a.posicion().getNombre()))
@@ -253,6 +246,35 @@ public class ConversacionInversiones {
                             .map(r -> "• " + html(r.cuenta()) + ": " + formato.pesos(r.monto())).toList());
             default -> "";
         };
+    }
+
+    /** "📈 Saldo inicial de Cocos (cuenta nueva)", el total y una línea por posición. */
+    private String saldoPropuesto(ParserInversion.SaldoInicial s) {
+        StringBuilder sb = new StringBuilder("📈 <b>Saldo inicial de ")
+                .append(html(s.cuenta() != null ? s.cuenta().getNombre() : s.nombreCuenta())).append("</b>")
+                .append(s.cuenta() == null ? " (cuenta de inversión nueva)" : "").append("\n");
+        if (s.total() != null) {
+            sb.append("Total: <b>").append(formato.pesos(s.total())).append("</b>\n");
+        }
+        s.posiciones().forEach(p -> sb.append("• ").append(html(p.posicion())).append(": ")
+                .append(formato.pesos(p.monto())).append("\n"));
+        return sb.toString();
+    }
+
+    /** Lo guardado de una cuenta: dónde, si reemplazó un saldo anterior, y cómo quedó. */
+    private String saldoGuardado(InversionService.CargaInicial carga) {
+        StringBuilder sb = new StringBuilder("✅ <b>Saldo inicial guardado</b> en ")
+                .append(html(carga.cuenta().getNombre()))
+                .append(carga.cuentaNueva() ? " (cuenta de inversión nueva)" : "").append(".");
+        carga.reemplazados().forEach(r -> sb.append("\nReemplazó el anterior")
+                .append(r.posicion() == null ? "" : " de " + html(r.posicion())).append(" (")
+                .append(formato.pesos(r.monto())).append(")."));
+        return sb.append("\n").append(formato.cuenta(panel.cuenta(carga.cuenta().getId()))).toString();
+    }
+
+    private static InversionService.SaldoDeCuenta deCuenta(ParserInversion.SaldoInicial s) {
+        return new InversionService.SaldoDeCuenta(s.cuenta() == null ? null : s.cuenta().getId(), s.nombreCuenta(),
+                s.total(), s.posiciones());
     }
 
     private Teclado teclado(long id, ParserInversion.Pedido pedido) {
@@ -378,18 +400,11 @@ public class ConversacionInversiones {
         // Un aporte o un retiro guardado se puede deshacer: el botón que va en la tarjeta.
         String[] deshacer = {null};
         String texto = switch (pedido) {
-            case ParserInversion.SaldoInicial s -> {
-                InversionService.CargaInicial carga = inversiones.cargarSaldoInicial(
-                        s.cuenta() == null ? null : s.cuenta().getId(), s.nombreCuenta(), s.total(), s.posiciones(),
-                        hoy(), p.texto());
-                StringBuilder sb = new StringBuilder("✅ <b>Saldo inicial guardado</b> en ")
-                        .append(html(carga.cuenta().getNombre()))
-                        .append(carga.cuentaNueva() ? " (cuenta de inversión nueva)" : "").append(".");
-                carga.reemplazados().forEach(r -> sb.append("\nReemplazó el anterior")
-                        .append(r.posicion() == null ? "" : " de " + html(r.posicion())).append(" (")
-                        .append(formato.pesos(r.monto())).append(")."));
-                yield sb.append("\n\n").append(formato.cuenta(panel.cuenta(carga.cuenta().getId()))).toString();
-            }
+            case ParserInversion.SaldoInicial s -> saldoGuardado(
+                    inversiones.cargarSaldosIniciales(List.of(deCuenta(s)), hoy(), p.texto()).getFirst());
+            case ParserInversion.SaldosIniciales v -> String.join("\n\n", inversiones.cargarSaldosIniciales(
+                    v.cuentas().stream().map(ConversacionInversiones::deCuenta).toList(), hoy(), p.texto())
+                    .stream().map(this::saldoGuardado).toList());
             case ParserInversion.Aporte a when elegido != null && elegido == BOLSA -> compra(a.cuenta().getId(),
                     a.posicion(), null, a.monto(), p.texto());
             case ParserInversion.Aporte a -> {

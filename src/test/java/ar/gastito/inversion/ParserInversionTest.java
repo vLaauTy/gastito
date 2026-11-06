@@ -58,6 +58,60 @@ class ParserInversionTest {
         });
     }
 
+    static final String DOS_CUENTAS =
+            "Tengo 505.133 invertidos en la reserva de Mercado Pago y 680.000 en acciones en Cocos";
+
+    @Test
+    void saldoInicialDeDosCuentasNuevasEnUnMensaje() {
+        ParserInversion.Contexto vacio = new ParserInversion.Contexto(List.of(), List.of(),
+                List.of(galicia, mercadoPago));
+
+        ParserInversion.Pedido p = ParserInversion.parsear(DOS_CUENTAS, vacio).orElseThrow();
+
+        assertThat(p).isInstanceOfSatisfying(ParserInversion.SaldosIniciales.class, v -> {
+            assertThat(v.cuentas()).hasSize(2);
+            ParserInversion.SaldoInicial reserva = v.cuentas().get(0);
+            assertThat(reserva.nombreCuenta()).isEqualTo("Reserva de Mercado Pago");
+            // El punto separa miles: 505.133 son quinientos cinco mil, no 505,13.
+            assertThat(reserva.total()).isEqualByComparingTo("505133");
+            assertThat(reserva.posiciones()).isEmpty();
+            ParserInversion.SaldoInicial cocos = v.cuentas().get(1);
+            assertThat(cocos.nombreCuenta()).isEqualTo("Cocos");
+            assertThat(cocos.total()).isNull();
+            assertThat(cocos.posiciones()).singleElement().satisfies(s -> {
+                assertThat(s.posicion()).isEqualTo("Acciones");
+                assertThat(s.monto()).isEqualByComparingTo("680000");
+            });
+        });
+    }
+
+    @Test
+    void saldoInicialDeDosCuentasConCocosYaCargadaYEnMinuscula() {
+        assertThat(parsear(DOS_CUENTAS.toLowerCase())).get()
+                .isInstanceOfSatisfying(ParserInversion.SaldosIniciales.class, v -> {
+                    assertThat(v.cuentas().get(0).total()).isEqualByComparingTo("505133");
+                    assertThat(v.cuentas().get(1).cuenta()).isSameAs(cocos);
+                    assertThat(v.cuentas().get(1).posiciones().getFirst().monto()).isEqualByComparingTo("680000");
+                });
+    }
+
+    @Test
+    void elMontoConPuntoDeMilesNoEsDecimal() {
+        assertThat(ParserInversion.montos("505.133")).singleElement()
+                .satisfies(m -> assertThat(m.valor()).isEqualByComparingTo("505133"));
+        assertThat(ParserInversion.montos("1.505.133,50")).singleElement()
+                .satisfies(m -> assertThat(m.valor()).isEqualByComparingTo("1505133.50"));
+    }
+
+    @Test
+    void unaPosicionEnDolaresNoEsOtraCuenta() {
+        ParserInversion.Contexto vacio = new ParserInversion.Contexto(List.of(), List.of(), List.of(galicia));
+        assertThat(ParserInversion.parsear("tengo 900.000 invertidos en Cocos y 300.000 en plazo fijo en dólares",
+                vacio)).get().isInstanceOfSatisfying(ParserInversion.SaldoInicial.class,
+                        s -> assertThat(s.posiciones()).extracting(InversionService.SaldoPedido::posicion)
+                                .containsExactly("Plazo fijo en dólares"));
+    }
+
     @Test
     void saldoInicialDeUnaCuentaExistente() {
         assertThat(parsear("tengo 900 mil invertidos en cocos")).get()
