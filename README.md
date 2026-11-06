@@ -656,6 +656,21 @@ el disponible. Va en su propia pestaña, **Inversiones**.
   lo que pasaste a las inversiones ese mes).
 - Las valuaciones salen de `inversion.FuenteDeValuaciones` (hoy, la carga manual), para sumar más adelante otra fuente.
 
+### Préstamos y viajes
+
+- **Préstamos en cuotas**: "pagué 293.000 de vuelos por transferencia; 30.000 son de Martín, que me los devuelve en 6
+  cuotas de 5.000 desde diciembre" → tu gasto es la diferencia y Martín queda debiendo (se confirma con las dos partes a
+  la vista). También solo: "le presté 30 mil a Martín, me lo devuelve en 6 cuotas". "Martín me pasó la cuota" (o un
+  monto) es una devolución, no un ingreso: marca la cuota y dice cuánto falta; si paga de más o de menos, se acomodan
+  las que siguen. Si una cuota pasa 3 días sin cobrarse (`gastito.prestamos.dias-de-gracia`), el bot avisa una vez y
+  ofrece **Armar mensaje**. `/prestamos` y "¿quién me debe?" muestran préstamos y juntadas.
+- **Viajes**: "me voy a Bariloche del 10/1 al 17/1, somos 2" (presupuesto opcional), "para Bariloche me falta el
+  hospedaje, ≈ 400.000", "¿cómo va Bariloche?" o `/viajes`: pagado, lo que falta y cuánto separar de cada sueldo hasta
+  el viaje (descontando lo reservado en inversiones para el viaje). Entre las fechas del viaje, lo que cargás queda en
+  el viaje solo ("No es del viaje" lo saca); `/hoy` dice cuánto llevás. El bot avisa al empezar y el último día, y
+  después manda el resumen final. Los resúmenes del mes muestran el total y "sin el viaje", y comparan sin el viaje.
+  En el dashboard, pestaña **Viajes**.
+
 ### Costos de la IA
 
 `/costos` muestra el total del mes en dólares, la proyección a fin de mes (lo gastado ÷ días transcurridos × días
