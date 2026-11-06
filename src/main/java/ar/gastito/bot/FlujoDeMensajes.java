@@ -75,6 +75,7 @@ class FlujoDeMensajes {
     private final ConversacionTarjeta tarjeta;
     private final ConversacionDolares dolares;
     private final ConversacionInversiones inversiones;
+    private final ConversacionViajes viajes;
     private final ComandosSueldo comandosSueldo;
     private final EdicionDeCampos edicion;
     private final ComandosBot comandos;
@@ -86,7 +87,7 @@ class FlujoDeMensajes {
             ConversacionFijos fijos, ConversacionAltaFijo altaFijo, PedidosNaturales naturales,
             GastoFijoService gastosFijos, ConversacionVarios varios, ConversacionCuotas cuotas,
             ConversacionTarjeta tarjeta, ConversacionDolares dolares, ConversacionInversiones inversiones,
-            ComandosSueldo comandosSueldo,
+            ConversacionViajes viajes, ComandosSueldo comandosSueldo,
             EdicionDeCampos edicion, ComandosBot comandos, GuardadoAutomatico guardado) {
         this.interpretador = interpretador;
         this.movimientos = movimientos;
@@ -107,6 +108,7 @@ class FlujoDeMensajes {
         this.tarjeta = tarjeta;
         this.dolares = dolares;
         this.inversiones = inversiones;
+        this.viajes = viajes;
         this.comandosSueldo = comandosSueldo;
         this.edicion = edicion;
         this.comandos = comandos;
@@ -121,6 +123,12 @@ class FlujoDeMensajes {
         Optional<List<Accion>> inversion = inversiones.intentar(chatId, texto, origen, audio ? escuche(texto) : "");
         if (inversion.isPresent()) {
             return inversion.get();
+        }
+        // Los viajes, también sin IA: "me voy a Bariloche del 10/1 al 17/1", "para Bariloche me falta el hospedaje".
+        Optional<List<Accion>> viaje = viajes == null ? Optional.empty()
+                : viajes.intentar(texto, audio ? escuche(texto) : "");
+        if (viaje.isPresent()) {
+            return viaje.get();
         }
         List<String> partes = DivisorDeGastos.separar(texto);
         if (partes.size() > 1) {

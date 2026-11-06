@@ -4,6 +4,7 @@ import static ar.gastito.bot.FormatoMensajes.html;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import ar.gastito.interpretacion.ParserHorasSueldo;
 import ar.gastito.interpretacion.ValidadorInterpretacion;
@@ -42,6 +43,9 @@ class ComandosBot {
     private final FormatoCostos formatoCostos;
     private final String urlDashboard;
     private final Interpretar interpretar;
+    /** "🏔 Bariloche: llevás $X en N días", mientras dura un viaje (para /hoy); vacío si no hay ninguno. */
+    private java.util.function.Supplier<Optional<String>> viajeEnCurso = Optional::empty;
+    private ConversacionViajes viajes;
 
     ComandosBot(MovimientoService movimientos, FormatoMensajes formato, GraficoMes grafico,
             ComandosIngreso comandosIngreso, ResumenService resumenes, FormatoResumen formatoResumen,
@@ -68,6 +72,12 @@ class ComandosBot {
         this.interpretar = interpretar;
     }
 
+    /** Los viajes: la línea del viaje en curso en /hoy y /viajes. */
+    void usarViajes(ConversacionViajes viajes) {
+        this.viajes = viajes;
+        this.viajeEnCurso = viajes == null ? Optional::empty : viajes::enCurso;
+    }
+
     /** "/hoy@gastito_bot extra" → "/hoy"; un botón del menú fijo → su comando. Null si no es un comando. */
     static String comando(String texto) {
         String delMenu = MenuFijo.comando(texto);
@@ -90,6 +100,7 @@ class ComandosBot {
         return switch (comando) {
             case "/resumen" -> List.of(resumen(limpio));
             case "/juntadas", "/prestamos" -> juntadas.abiertas();
+            case "/viaje", "/viajes" -> viajes == null ? List.of(responderComando(comando)) : viajes.consulta();
             case "/fijo" -> argumentos.isBlank() ? List.of(Accion.Enviar.texto(ConversacionAltaFijo.preguntaInicial()))
                     : altaFijo.desdeComando(chatId, argumentos).<List<Accion>>map(List::of)
                             .orElseGet(() -> interpretar.interpretar(chatId, "agregá un gasto fijo: " + argumentos));
@@ -185,14 +196,15 @@ class ComandosBot {
 
     private String hoy() {
         MovimientoService.ResumenDia hoy = movimientos.hoy();
+        String viaje = viajeEnCurso.get().map(l -> "\n\n" + l).orElse("");
         if (hoy.gastos().isEmpty()) {
-            return "Hoy no registraste gastos.";
+            return "Hoy no registraste gastos." + viaje;
         }
         StringBuilder sb = new StringBuilder("<b>Gastos de hoy</b>\n");
         for (Movimiento m : hoy.gastos()) {
             sb.append("• ").append(formato.linea(m)).append('\n');
         }
-        return sb.append("\nTotal: <b>").append(formato.pesos(hoy.total())).append("</b>").toString();
+        return sb.append("\nTotal: <b>").append(formato.pesos(hoy.total())).append("</b>").append(viaje).toString();
     }
 
     private String mes() {

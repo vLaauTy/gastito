@@ -106,6 +106,12 @@ public class ViajeService {
         return panel(viaje(id));
     }
 
+    /** Los viajes cargados, para reconocerlos por el nombre en un mensaje. */
+    @Transactional(readOnly = true)
+    public List<Viaje> lista() {
+        return viajes.findAllByOrderByDesdeDesc();
+    }
+
     /** Todos, del más reciente al más viejo. */
     @Transactional(readOnly = true)
     public List<PanelViaje> todos() {

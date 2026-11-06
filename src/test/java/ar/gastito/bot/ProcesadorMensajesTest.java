@@ -126,7 +126,7 @@ class ProcesadorMensajesTest {
                 new ConversacionTarjeta(ciclo, catalogos, formato),
                 new ConversacionDolares(compras, movimientos, formato),
                 recibos,
-                escalas, mock(ConversacionInversiones.class),
+                escalas, mock(ConversacionInversiones.class), mock(ConversacionViajes.class),
                 comandosSueldo,
                 new FormatoCostos(costosIa, formato, RELOJ), properties, dashboard,
                 new BotProperties(false, new BigDecimal("100000")),

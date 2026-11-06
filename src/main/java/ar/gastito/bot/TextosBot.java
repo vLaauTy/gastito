@@ -38,6 +38,11 @@ final class TextosBot {
             • "de luz pagué 87.500", "ya pagué el seguro"
             • "¿qué fijos me faltan pagar?", "sacá Netflix de los fijos"
 
+            <b>🧳 Viajes</b>
+            • "me voy a Bariloche del 10/1 al 17/1, somos 2" (el presupuesto es opcional)
+            • "para Bariloche me falta el hospedaje, ≈ 400.000": te digo cuánto separar de cada sueldo
+            • "¿cómo va Bariloche?" o /viajes. Durante el viaje, lo que cargues queda en el viaje solo
+
             <b>✏️ Corregir</b>
             • "el último era 3500, no 3700", "lo de recién fue con débito"
             • "borrá lo último que cargué"
@@ -70,7 +75,7 @@ final class TextosBot {
             El domingo a las 21 te mando cómo fue tu semana y el día 1 a las 9, cómo fue el mes. Si la PC estaba apagada, te llega apenas la prendés.
 
             <b>Atajos</b> (si preferís comandos)
-            /hoy · /mes · /disponible · /resumen · /tarjeta · /dolar · /juntadas · /prestamos · /fijos · /cuotas · /calculo · /costos · /dashboard""";
+            /hoy · /mes · /disponible · /resumen · /tarjeta · /dolar · /juntadas · /prestamos · /viajes · /fijos · /cuotas · /calculo · /costos · /dashboard""";
 
     private TextosBot() {
     }

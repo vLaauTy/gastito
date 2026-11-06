@@ -96,7 +96,7 @@ class GuardadoAutomaticoTest {
                 mock(ComandoDisponible.class), mock(ar.gastito.fijo.GastoFijoService.class), varios,
                 mock(ConversacionCuotas.class), mock(ConversacionTarjeta.class), mock(ConversacionDolares.class),
                 mock(ConversacionRecibos.class),
-                mock(ConversacionEscalas.class), mock(ConversacionInversiones.class),
+                mock(ConversacionEscalas.class), mock(ConversacionInversiones.class), mock(ConversacionViajes.class),
                 mock(ComandosSueldo.class),
                 new FormatoCostos(mock(ar.gastito.ia.CostosIaService.class), formato, RELOJ), properties, dashboard,
                 new BotProperties(true, TOPE), RELOJ);

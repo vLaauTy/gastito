@@ -62,6 +62,7 @@ public class ProcesadorMensajes {
     private final ConversacionRecibos recibos;
     private final ConversacionEscalas escalas;
     private final ConversacionInversiones inversiones;
+    private final ConversacionViajes viajes;
     private final ComandosSueldo comandosSueldo;
 
     private final GuardadoAutomatico guardado;
@@ -80,7 +81,7 @@ public class ProcesadorMensajes {
             GastoFijoService gastosFijos,
             ConversacionVarios varios, ConversacionCuotas cuotas, ConversacionTarjeta tarjeta,
             ConversacionDolares dolares, ConversacionRecibos recibos,
-            ConversacionEscalas escalas, ConversacionInversiones inversiones,
+            ConversacionEscalas escalas, ConversacionInversiones inversiones, ConversacionViajes viajes,
             ComandosSueldo comandosSueldo, FormatoCostos formatoCostos, GastitoProperties properties,
             DashboardProperties dashboard, BotProperties bot, Clock clock) {
         this.movimientos = movimientos;
@@ -100,6 +101,7 @@ public class ProcesadorMensajes {
         this.recibos = recibos;
         this.escalas = escalas;
         this.inversiones = inversiones;
+        this.viajes = viajes;
         this.comandosSueldo = comandosSueldo;
         this.guardado = new GuardadoAutomatico(bot, movimientos, catalogos, tarjetas, tickets);
         this.edicion = new EdicionDeCampos(movimientos, juntadas, tarjetas, formato, fechas, clock, guardado);
@@ -107,9 +109,10 @@ public class ProcesadorMensajes {
         this.comandos = new ComandosBot(movimientos, formato, grafico, comandosIngreso, resumenes, formatoResumen,
                 juntadas, fijos, altaFijo, cuotas, tarjeta, dolares, comandosSueldo, disponible, formatoCostos,
                 dashboard.url(), this::interpretarTexto);
+        this.comandos.usarViajes(viajes);
         this.flujo = new FlujoDeMensajes(interpretador, movimientos, usoIa, tarjetas, formato, comandosIngreso,
                 consultas, formatoConsulta, repetidos, juntadas, fijos, altaFijo, naturales, gastosFijos, varios,
-                cuotas, tarjeta, dolares, inversiones, comandosSueldo, edicion, comandos, guardado);
+                cuotas, tarjeta, dolares, inversiones, viajes, comandosSueldo, edicion, comandos, guardado);
         this.medios = new MediosRecibidos(transcripciones, tickets, recibos, escalas, altaFijo, comandosSueldo, edicion,
                 flujo, properties.audio().duracionMaxima());
     }
@@ -377,6 +380,14 @@ public class ProcesadorMensajes {
                     fijos.botonDePago(mensajeId, accion, id);
             case ConversacionFijos.OTRO_PAGO -> List.of(edicion.principal(chatId, mensajeId, edicion.pendiente(id)));
             case ConversacionCuotas.CANCELAR_PLAN -> cuotas.boton(mensajeId, id);
+            case ConversacionViajes.GUARDAR, ConversacionViajes.CANCELAR, ConversacionViajes.DESHACER_PENDIENTE,
+                    ConversacionViajes.VER -> viajes.boton(mensajeId, accion, id);
+            case ConversacionViajes.PAGAR -> List.of(pagarPendienteDeViaje(chatId, id));
+            case ConversacionViajes.NO_ES_DEL_VIAJE -> {
+                Movimiento m = viajes.noEsDelViaje(id);
+                yield List.of(m.isPendiente() ? edicion.principal(chatId, mensajeId, m) : guardado.tarjeta(mensajeId, m),
+                        new Accion.Avisar("🧳 Ya no es del viaje"));
+            }
             case ConversacionPrestamos.GUARDAR, ConversacionPrestamos.CANCELAR, ConversacionPrestamos.COBRAR,
                     ConversacionPrestamos.COBRAR_PROXIMA, ConversacionPrestamos.MENSAJE ->
                     juntadas.botonDePrestamo(mensajeId, accion, id, elegido);
@@ -402,6 +413,21 @@ public class ProcesadorMensajes {
             case FlujoDeMensajes.ES_PREGUNTA -> flujo.esUnaPregunta(mensajeId, id);
             default -> List.of(new Accion.Avisar("Botón inválido"));
         };
+    }
+
+    /** "✅ Pagué: Hospedaje": la tarjeta del gasto del viaje, para confirmar (si no tiene monto, lo pide). */
+    private Accion pagarPendienteDeViaje(long chatId, long pendienteId) {
+        Movimiento m;
+        try {
+            m = viajes.pendienteComoGasto(pendienteId);
+        } catch (ar.gastito.viaje.ViajeInvalidoException e) {
+            return new Accion.Avisar(e.getMessage());
+        }
+        if (m.getMonto() == null) {
+            edicion.esperarMonto(chatId, m.getId());
+            return Accion.Enviar.tarjeta(tarjetas.pidiendoMontoFaltante(m), tarjetas.principal(m), m.getId());
+        }
+        return Accion.Enviar.tarjeta(tarjetas.pendiente(m), tarjetas.principal(m), m.getId());
     }
 
     private static long requerido(Long elegido) {

@@ -144,6 +144,9 @@ gastito:
     # por cuenta en el dashboard, o con "No preguntar más" en el recordatorio.
     dias-recordatorio: 7
     hora-recordatorio: 10           # antes de esta hora no se pregunta
+  viajes:
+    dia-sueldo-por-defecto: 5       # para "cuánto ahorrar", si todavía no hay ningún sueldo cargado
+    hora-avisos: 9                  # antes de esta hora no se manda ningún aviso del modo viaje
   prestamos:
     # Cuántos días después de la fecha de una cuota se espera antes de avisar (una vez) que está atrasada.
     dias-de-gracia: 3

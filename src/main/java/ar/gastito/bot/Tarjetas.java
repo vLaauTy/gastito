@@ -145,6 +145,22 @@ public class Tarjetas {
                 ? prestamos.apply(m.getId()) : Optional.empty();
     }
 
+    /** El nombre (con emoji) del viaje de un movimiento; sin viajes, ninguno. */
+    private Function<Long, Optional<String>> viajes = id -> Optional.empty();
+
+    @Autowired(required = false)
+    void usarViajes(ar.gastito.viaje.ViajeService servicio) {
+        usarViajes(servicio::nombreConEmoji);
+    }
+
+    void usarViajes(Function<Long, Optional<String>> fuente) {
+        this.viajes = fuente;
+    }
+
+    private Optional<String> viaje(Movimiento m) {
+        return m.getViajeId() == null ? Optional.empty() : viajes.apply(m.getViajeId());
+    }
+
     /** De este gasto salió un préstamo: no se guarda solo, se confirma con las dos partes a la vista. */
     public boolean conPrestamo(Movimiento m) {
         return prestamo(m).isPresent();
@@ -269,7 +285,8 @@ public class Tarjetas {
     public String guardadoAutomatico(Movimiento m) {
         Categoria c = m.getCategoria();
         String linea = "✅ <b>Guardado</b> · <b>" + formato.monto(m) + "</b> · "
-                + (c == null ? "🏷 Sin categoría" : html(c.getNombreConEmoji())) + " · " + medioCorto(m);
+                + (c == null ? "🏷 Sin categoría" : html(c.getNombreConEmoji())) + " · " + medioCorto(m)
+                + viaje(m).map(v -> " · " + html(v)).orElse("");
         String detalle = m.getDescripcion() == null || m.getDescripcion().isBlank() ? "" : html(m.getDescripcion());
         long productos = m.getItems().stream().filter(i -> !i.isDescuento()).count();
         if (productos > 0) {
@@ -429,6 +446,7 @@ public class Tarjetas {
         lineas.add(c == null ? "🏷 <b>¿Qué categoría?</b>"
                 : (c.getEmoji() == null ? "🏷" : c.getEmoji()) + " " + html(c.getNombre()));
         lineas.add(lineaMedio(m));
+        viaje(m).ifPresent(v -> lineas.add(html(v)));
         lineas.add("📅 " + formato.fecha(m.getFechaHora()));
         juntada.ifPresent(j -> lineas.add("\n" + personas(j)));
         return String.join("\n", lineas);
@@ -617,6 +635,9 @@ public class Tarjetas {
         if (juntada(m).isPresent()) {
             t.fila(boton("👥 Nombres", JUNTADA_NOMBRES, id), boton("💲 La parte de alguien", JUNTADA_PARTE, id));
         }
+        if (!m.isIngreso() && viaje(m).isPresent()) {
+            t.fila(boton("🧳 No es del viaje", ConversacionViajes.NO_ES_DEL_VIAJE, id));
+        }
         return t.build();
     }
 
@@ -649,7 +670,11 @@ public class Tarjetas {
                         .toArray(Teclado.Boton[]::new));
             }
         }
-        return t.fila(boton("✏️ Editar", EDITAR, id), boton("↩️ Deshacer", DESHACER, id)).build();
+        t.fila(boton("✏️ Editar", EDITAR, id), boton("↩️ Deshacer", DESHACER, id));
+        if (viaje(m).isPresent()) {
+            t.fila(boton("🧳 No es del viaje", ConversacionViajes.NO_ES_DEL_VIAJE, id));
+        }
+        return t.build();
     }
 
     /** Un botón por tarjeta activa, la última usada primero. */
