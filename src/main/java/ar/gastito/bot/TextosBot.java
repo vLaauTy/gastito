@@ -47,6 +47,12 @@ final class TextosBot {
             • "el resumen de la tarjeta es de 250.000", "se debitó la tarjeta"
             • "pagué 20 dólares de Steam con la tarjeta": estimo los pesos con el dólar tarjeta ("el dólar está a 1500" o /dolar 1500) y, cuando llega el resumen, "lo de Steam salió 31.200"
 
+            <b>📈 Inversiones</b> (son ahorros: no cuentan como ingreso ni gasto)
+            • "tengo 850.000 invertidos en Cocos, 500.000 en CEDEAR SPY y 350.000 en un FCI"
+            • "pasé 200.000 de Galicia a Cocos", "saqué 150.000 de Cocos", "compré 100.000 de SPY"
+            • "Cocos vale 870.000", "SPY está en 520.000": cada semana te pregunto cuánto vale
+            • "reservá 300.000 de Cocos para Bariloche", "¿cuánto tengo invertido?" (o el botón 📈 Inversiones)
+
             <b>🧮 Sueldo</b>
             • "este mes hice 10 horas al 50, 6 al 100 y 30 nocturnas": calculo el sueldo del mes
             • "¿cuánto me da el sueldo calculado?"

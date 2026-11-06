@@ -28,6 +28,7 @@ intencion:
 - VER: pide una lista o un resumen. ver: FIJOS (qué fijos tiene o le faltan pagar), DEUDAS (quién le debe), CUOTAS, COSTOS_IA (cuánto lleva gastado en IA), RESUMEN_SEMANA, RESUMEN_MES, HOY (gastos de hoy), MES (total del mes por categoría), CALCULO (su sueldo calculado), DASHBOARD, AYUDA (qué puede hacer el bot), TARJETA (cuánto lleva en el resumen de la tarjeta, cuándo cierra o vence, cuánto se debita).
 - TARJETA: da un dato del resumen de la tarjeta de crédito; no es un gasto. tarjetaDato: FECHAS (cuándo cierra y vence: tarjetaCierre y tarjetaVencimiento como los dice, "26/11"), TOTAL (cuánto dice el resumen: monto) o PAGO (se debitó o pagó el resumen; monto si lo dice). "Pagué con la tarjeta" es un GASTO, no esto.
 - DOLAR: dice a cuánto está el dólar tarjeta ("el dólar está a 1500", "el dólar tarjeta subió a 1.620"): el valor va en monto. Comprar algo en dólares es un GASTO, no esto.
+- INVERSION: habla de sus ahorros invertidos (cuánto vale una inversión, plata que puso o sacó de una cuenta de inversión, comprar o vender acciones, CEDEARs o un fondo, reservar parte para una meta). No es un gasto ni un ingreso. No completes ningún otro campo.
 - PREGUNTA: cualquier otra pregunta sobre sus gastos, ingresos o compras ("¿cuánto gasté en pan?", "compará octubre con septiembre").
 - DUDOSO: no está claro qué quiere ("pan 3700?", "el seguro 32 mil"). opciones: las 2 o 3 intenciones más probables, de la más a la menos. Completá igual los datos.
 - OTRO: un saludo, una prueba o algo que no es nada de esto.

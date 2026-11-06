@@ -61,6 +61,7 @@ public class ProcesadorMensajes {
     private final ConversacionDolares dolares;
     private final ConversacionRecibos recibos;
     private final ConversacionEscalas escalas;
+    private final ConversacionInversiones inversiones;
     private final ComandosSueldo comandosSueldo;
 
     private final GuardadoAutomatico guardado;
@@ -79,7 +80,7 @@ public class ProcesadorMensajes {
             GastoFijoService gastosFijos,
             ConversacionVarios varios, ConversacionCuotas cuotas, ConversacionTarjeta tarjeta,
             ConversacionDolares dolares, ConversacionRecibos recibos,
-            ConversacionEscalas escalas,
+            ConversacionEscalas escalas, ConversacionInversiones inversiones,
             ComandosSueldo comandosSueldo, FormatoCostos formatoCostos, GastitoProperties properties,
             DashboardProperties dashboard, BotProperties bot, Clock clock) {
         this.movimientos = movimientos;
@@ -98,6 +99,7 @@ public class ProcesadorMensajes {
         this.dolares = dolares;
         this.recibos = recibos;
         this.escalas = escalas;
+        this.inversiones = inversiones;
         this.comandosSueldo = comandosSueldo;
         this.guardado = new GuardadoAutomatico(bot, movimientos, catalogos, tarjetas, tickets);
         this.edicion = new EdicionDeCampos(movimientos, juntadas, tarjetas, formato, fechas, clock, guardado);
@@ -107,7 +109,7 @@ public class ProcesadorMensajes {
                 dashboard.url(), this::interpretarTexto);
         this.flujo = new FlujoDeMensajes(interpretador, movimientos, usoIa, tarjetas, formato, comandosIngreso,
                 consultas, formatoConsulta, repetidos, juntadas, fijos, altaFijo, naturales, gastosFijos, varios,
-                cuotas, tarjeta, dolares, comandosSueldo, edicion, comandos, guardado);
+                cuotas, tarjeta, dolares, inversiones, comandosSueldo, edicion, comandos, guardado);
         this.medios = new MediosRecibidos(transcripciones, tickets, recibos, escalas, altaFijo, comandosSueldo, edicion,
                 flujo, properties.audio().duracionMaxima());
     }
@@ -168,6 +170,17 @@ public class ProcesadorMensajes {
             dolares.olvidar(chatId);
         }
 
+        // "¿Cuánto vale hoy Cocos?" esperaba un monto o "igual".
+        if (inversiones.esperando(chatId)) {
+            if (comando == null) {
+                Optional<List<Accion>> respuesta = inversiones.texto(chatId, limpio);
+                if (respuesta.isPresent()) {
+                    return respuesta.get();
+                }
+            }
+            inversiones.olvidar(chatId);
+        }
+
         // La juntada esperaba un nombre o la parte de alguien.
         if (juntadas.esperando(chatId)) {
             if (comando == null) {
@@ -188,7 +201,9 @@ public class ProcesadorMensajes {
             acciones.addAll(edicion.restaurar(espera));
         }
 
-        if (comando != null) {
+        if (ConversacionInversiones.COMANDO.equals(comando)) {
+            acciones.addAll(inversiones.consulta(""));
+        } else if (comando != null) {
             acciones.addAll(comandos.ejecutar(chatId, comando, limpio));
         } else if (comandosSueldo.pareceCalculo(limpio)) {
             acciones.add(comandosSueldo.calcularDeTexto(limpio));
@@ -262,6 +277,7 @@ public class ProcesadorMensajes {
         altaFijo.olvidar(chatId);
         tarjeta.olvidar(chatId);
         dolares.olvidar(chatId);
+        inversiones.olvidar(chatId);
         EdicionDeCampos.Espera previa = edicion.quitar(chatId);
         if (previa != null && (previa.mensajeId() == null || previa.mensajeId() != mensajeId)) {
             acciones.addAll(edicion.restaurar(previa));
@@ -368,6 +384,12 @@ public class ProcesadorMensajes {
             case ConversacionDolares.CON_TARJETA, ConversacionDolares.EN_PESOS, ConversacionDolares.NO_SE,
                     ConversacionDolares.CORREGIR, ConversacionDolares.OTRO_GASTO -> dolares.boton(chatId, mensajeId,
                             accion, id, elegido, flujo::tarjetaNueva, m -> edicion.principal(chatId, mensajeId, m));
+            case ConversacionInversiones.GUARDAR, ConversacionInversiones.CANCELAR, ConversacionInversiones.COMO_VALOR,
+                    ConversacionInversiones.OTRO_LADO, ConversacionInversiones.POSICION,
+                    ConversacionInversiones.DESHACER_VALOR, ConversacionInversiones.DESHACER_MOVIMIENTO,
+                    ConversacionInversiones.DESHACER_OPERACION, ConversacionInversiones.IGUAL,
+                    ConversacionInversiones.NO_PREGUNTAR, ConversacionInversiones.ACTUALIZAR,
+                    ConversacionInversiones.VER -> inversiones.boton(chatId, mensajeId, accion, id, elegido);
             case ConversacionVarios.GUARDAR_TODO, ConversacionVarios.CANCELAR_TODOS -> varios.boton(mensajeId,
                     accion, id);
             case Tarjetas.UNIR -> repetidos.unir(mensajeId, id, requerido(elegido));

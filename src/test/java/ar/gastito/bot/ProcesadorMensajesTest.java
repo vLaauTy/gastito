@@ -126,7 +126,7 @@ class ProcesadorMensajesTest {
                 new ConversacionTarjeta(ciclo, catalogos, formato),
                 new ConversacionDolares(compras, movimientos, formato),
                 recibos,
-                escalas,
+                escalas, mock(ConversacionInversiones.class),
                 comandosSueldo,
                 new FormatoCostos(costosIa, formato, RELOJ), properties, dashboard,
                 new BotProperties(false, new BigDecimal("100000")),
@@ -950,7 +950,7 @@ class ProcesadorMensajesTest {
                 .map(org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton::getText)
                 .toList())
                 .containsExactly(List.of(MenuFijo.RESUMEN, MenuFijo.DISPONIBLE), List.of(MenuFijo.FIJOS,
-                        MenuFijo.TARJETA, MenuFijo.ME_DEBEN), List.of(MenuFijo.HOY, MenuFijo.MES, MenuFijo.AYUDA));
+                        MenuFijo.TARJETA, MenuFijo.ME_DEBEN), List.of(MenuFijo.HOY, MenuFijo.MES, MenuFijo.INVERSIONES, MenuFijo.AYUDA));
         when(disponible.responder()).thenReturn("💰 Te queda $10");
         when(fijos.lista()).thenReturn(List.of(Accion.Enviar.texto("📋 Fijos")));
         when(juntadas.abiertas()).thenReturn(List.of(Accion.Enviar.texto("👥 Te deben")));

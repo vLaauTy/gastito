@@ -74,6 +74,7 @@ class FlujoDeMensajes {
     private final ConversacionCuotas cuotas;
     private final ConversacionTarjeta tarjeta;
     private final ConversacionDolares dolares;
+    private final ConversacionInversiones inversiones;
     private final ComandosSueldo comandosSueldo;
     private final EdicionDeCampos edicion;
     private final ComandosBot comandos;
@@ -84,7 +85,8 @@ class FlujoDeMensajes {
             FormatoConsulta formatoConsulta, ConversacionRepetidos repetidos, ConversacionJuntadas juntadas,
             ConversacionFijos fijos, ConversacionAltaFijo altaFijo, PedidosNaturales naturales,
             GastoFijoService gastosFijos, ConversacionVarios varios, ConversacionCuotas cuotas,
-            ConversacionTarjeta tarjeta, ConversacionDolares dolares, ComandosSueldo comandosSueldo,
+            ConversacionTarjeta tarjeta, ConversacionDolares dolares, ConversacionInversiones inversiones,
+            ComandosSueldo comandosSueldo,
             EdicionDeCampos edicion, ComandosBot comandos, GuardadoAutomatico guardado) {
         this.interpretador = interpretador;
         this.movimientos = movimientos;
@@ -104,6 +106,7 @@ class FlujoDeMensajes {
         this.cuotas = cuotas;
         this.tarjeta = tarjeta;
         this.dolares = dolares;
+        this.inversiones = inversiones;
         this.comandosSueldo = comandosSueldo;
         this.edicion = edicion;
         this.comandos = comandos;
@@ -113,6 +116,12 @@ class FlujoDeMensajes {
     /** Lo que diga el mensaje (un gasto, un ingreso, un fijo, una pregunta, una corrección…), interpretado. */
     List<Accion> nuevoGasto(long chatId, String texto, Origen origen) {
         boolean audio = origen == Origen.AUDIO;
+        // Las inversiones se reconocen sin IA por el nombre de la cuenta o la posición, antes de separar varios
+        // gastos ("tengo 850.000 en Cocos, 500.000 en SPY…" es uno solo).
+        Optional<List<Accion>> inversion = inversiones.intentar(chatId, texto, origen, audio ? escuche(texto) : "");
+        if (inversion.isPresent()) {
+            return inversion.get();
+        }
         List<String> partes = DivisorDeGastos.separar(texto);
         if (partes.size() > 1) {
             Optional<List<Accion>> varios = intentarVarios(partes, origen, texto, audio);
@@ -211,6 +220,7 @@ class FlujoDeMensajes {
                 case PERDONAR -> "🚫 Dar por perdida una deuda";
                 case TARJETA -> "💳 Datos de la tarjeta";
                 case DOLAR -> "💵 A cuánto está el dólar";
+                case INVERSION -> "📈 Algo de mis inversiones";
                 default -> "📋 Ver una lista";
             }, ES_OTRA + ":" + id + ":" + opcion.ordinal());
         };
@@ -247,6 +257,7 @@ class FlujoDeMensajes {
             case ValidadorInterpretacion.PagoTarjeta p -> tarjeta.pago(chatId, p.monto(), texto, prefijo);
             case ValidadorInterpretacion.Dolar d -> dolares.cotizacion(chatId, d.cotizacion(), prefijo,
                     this::tarjetaNueva);
+            case ValidadorInterpretacion.Inversion _ -> inversiones.queHacer(prefijo);
             default -> List.of(Accion.Enviar.texto(prefijo + "🤔 No entendí qué querés hacer. ¿Me lo contás de otra forma?"));
         };
     }

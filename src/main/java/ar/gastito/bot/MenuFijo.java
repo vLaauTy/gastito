@@ -16,21 +16,23 @@ public final class MenuFijo {
     static final String HOY = "📊 Hoy";
     static final String MES = "📅 Mes";
     static final String AYUDA = "❓ Ayuda";
+    static final String INVERSIONES = "📈 Inversiones";
     /** Ya no están en el teclado, pero un teclado viejo que quedó en el chat los sigue mandando. */
     static final String COSTOS = "💸 Costos IA";
     static final String DASHBOARD = "🖥 Dashboard";
 
-    private static final Map<String, String> COMANDOS = Map.of(
-            RESUMEN, "/resumen",
-            DISPONIBLE, "/disponible",
-            FIJOS, "/fijos",
-            ME_DEBEN, "/juntadas",
-            TARJETA, "/tarjeta",
-            HOY, "/hoy",
-            MES, "/mes",
-            AYUDA, "/ayuda",
-            COSTOS, "/costos",
-            DASHBOARD, "/dashboard");
+    private static final Map<String, String> COMANDOS = Map.ofEntries(
+            Map.entry(RESUMEN, "/resumen"),
+            Map.entry(DISPONIBLE, "/disponible"),
+            Map.entry(FIJOS, "/fijos"),
+            Map.entry(ME_DEBEN, "/juntadas"),
+            Map.entry(TARJETA, "/tarjeta"),
+            Map.entry(HOY, "/hoy"),
+            Map.entry(MES, "/mes"),
+            Map.entry(AYUDA, "/ayuda"),
+            Map.entry(INVERSIONES, ConversacionInversiones.COMANDO),
+            Map.entry(COSTOS, "/costos"),
+            Map.entry(DASHBOARD, "/dashboard"));
 
     private MenuFijo() {
     }
@@ -44,7 +46,7 @@ public final class MenuFijo {
         return ReplyKeyboardMarkup.builder()
                 .keyboardRow(new KeyboardRow(RESUMEN, DISPONIBLE))
                 .keyboardRow(new KeyboardRow(FIJOS, TARJETA, ME_DEBEN))
-                .keyboardRow(new KeyboardRow(HOY, MES, AYUDA))
+                .keyboardRow(new KeyboardRow(HOY, MES, INVERSIONES, AYUDA))
                 .resizeKeyboard(true)
                 .isPersistent(true)
                 .build();

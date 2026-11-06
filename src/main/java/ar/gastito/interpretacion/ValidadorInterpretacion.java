@@ -189,6 +189,10 @@ public class ValidadorInterpretacion {
     public record Dolar(BigDecimal cotizacion) implements Resultado {
     }
 
+    /** Habla de sus inversiones, pero no de una forma que Java entienda: el bot muestra lo que tiene y pregunta. */
+    public record Inversion() implements Resultado {
+    }
+
     public Resultado validar(InterpretacionIa ia, Catalogo catalogo, LocalDateTime ahora) {
         Intencion intencion = ia == null ? Intencion.OTRO : Intencion.de(ia.intencion());
         return switch (intencion) {
@@ -211,6 +215,7 @@ public class ValidadorInterpretacion {
             case VER -> Lista.de(ia.ver()).<Resultado>map(Ver::new).orElseGet(Pregunta::new);
             case TARJETA -> comoTarjeta(ia, ahora.toLocalDate());
             case DOLAR -> new Dolar(monto(ia.monto()).orElse(null));
+            case INVERSION -> new Inversion();
         };
     }
 
