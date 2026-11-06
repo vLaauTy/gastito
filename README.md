@@ -625,6 +625,37 @@ una** y **cuándo sale la plata** (MasterCard Gold, débito automático de Galic
 - Para arrancar hace falta un cierre real: decíselo al bot ("la tarjeta cerró el 29/10 y vence el 11/11") o cargalo en
   el dashboard. Los avisos no salen antes de las 9 (`gastito.tarjeta.*` en `application.yml`).
 
+### Inversiones
+
+La plata invertida (Cocos, CEDEARs, un FCI…) es **ahorro**: no es un ingreso del mes ni un gasto, y no se mezcla con
+el disponible. Va en su propia pestaña, **Inversiones**.
+
+- **Cuenta de inversión** (un tipo de cuenta aparte: no aparece como medio de pago), con **posiciones** de nombre libre
+  ("CEDEAR SPY", "FCI money market") o como una sola bolsa sin detalle.
+- **Saldo inicial** (el ahorro previo, con fecha; no suma a los ingresos): "tengo 850.000 invertidos en Cocos, 500.000
+  en CEDEAR SPY y 350.000 en un FCI". Crea la cuenta y las posiciones que falten; uno nuevo reemplaza al anterior.
+- **Aportes y retiros** son pases entre tus cuentas (`ENTRE_CUENTAS`): "pasé 200.000 de Galicia a Cocos", "saqué
+  150.000 de Cocos a Galicia". Si no decís de dónde salió o a dónde fue, pregunta con botones. **Compras y ventas**
+  dentro de la cuenta: "compré 100.000 de CEDEAR SPY" (de lo sin invertir a la posición).
+- **Valor actual**, a mano y con fecha: "Cocos vale 870.000" (el total de la cuenta), "SPY está en 520.000". Se
+  guarda solo, con ↩️ Deshacer. Mover plata no cambia el rendimiento: si la tenencia ya tenía valor, queda un ajuste.
+- **Rendimiento** (Java): lo que vale − (saldo inicial + aportes − retiros), en pesos y en %. Es ganancia o pérdida,
+  nunca ingreso.
+- **Reservas**: "reservá 300.000 de Cocos para Bariloche" aparta parte del valor para una meta (la misma meta otra vez
+  la reemplaza); "liberá la reserva de Bariloche".
+- "¿Cuánto tengo invertido?", **📈 Inversiones** o `/inversiones`: el total, el rendimiento y cada cuenta. Todo esto
+  se reconoce sin IA, por los nombres de tus cuentas y posiciones (si no, la IA reconoce que es de inversiones y el
+  bot te muestra lo que tenés para actualizarlo).
+- **Recordatorio** cada 7 días por cuenta (`gastito.inversiones.dias-recordatorio`, desde las 10): "¿Cuánto vale hoy
+  Cocos? (última: $850.000 hace 7 días)". Contestás con el monto, **🟰 Igual que antes** o **🔕 No preguntar más**; la
+  frecuencia se cambia por cuenta en el dashboard.
+- En el dashboard: el total invertido hoy, cuándo se actualizó y el rendimiento; una fila por cuenta y posición con
+  **Actualizar valor**; el gráfico del valor contra lo aportado; las reservas, el historial y las valuaciones. En
+  **Movimientos** los aportes y retiros aparecen con la etiqueta **Inversión** (con un filtro para ocultarlos), y en
+  **Resumen**, debajo del disponible: "Ahorros e inversiones: $X · total con lo disponible: $Y" (sin contar dos veces
+  lo que pasaste a las inversiones ese mes).
+- Las valuaciones salen de `inversion.FuenteDeValuaciones` (hoy, la carga manual), para sumar más adelante otra fuente.
+
 ### Costos de la IA
 
 `/costos` muestra el total del mes en dólares, la proyección a fin de mes (lo gastado ÷ días transcurridos × días
@@ -707,6 +738,7 @@ Abajo del chat queda un menú fijo con estos comandos, que también están en el
 | 💸 Costos IA   | `/costos`    | Lo gastado en IA este mes, la proyección y el desglose |
 |                | `/resumen`   | La semana hasta hoy; `/resumen mes`, el mes      |
 | 💳 Tarjeta     | `/tarjeta`   | Cuánto llevás de tarjeta y cuándo vence          |
+| 📈 Inversiones | `/inversiones` | Cuánto tenés invertido, el rendimiento y cada cuenta |
 |                | `/juntadas`  | Quién te debe plata de las juntadas              |
 |                | `/fijo`, `/fijos` | Agregar un gasto fijo; los que tenés y su próximo cobro |
 | 🖥 Dashboard   | `/dashboard` | El link del dashboard (se abre desde la PC)      |
@@ -797,7 +829,7 @@ decimales, y acepta `?mes=2026-10` (por defecto, el mes actual):
 | `GET /api/gastos/por-dia`         | Un valor por día (con los días en cero), promedio y día máximo  |
 | `GET /api/gastos/por-categoria`   | Monto, cantidad y emoji por categoría, de mayor a menor         |
 | `GET /api/gastos/por-billetera`   | Por tarjeta, cuenta, efectivo y sin especificar, con color      |
-| `GET /api/movimientos`            | Paginado; filtros `categoria`, `medioPago`, `origen`, `q`       |
+| `GET /api/movimientos`            | Paginado; filtros `categoria`, `medioPago`, `origen`, `q`, `sinInversiones` (los aportes y retiros vienen con `inversion`) |
 | `GET /api/movimientos/{id}/items` | Productos y descuentos de un ticket, su suma y si coincide con el total |
 | `GET /api/movimientos/{id}/foto`  | La foto del ticket (JPEG)                                       |
 | `GET /api/movimientos.csv`        | Gastos e ingresos del mes en CSV                                |
@@ -821,6 +853,10 @@ decimales, y acepta `?mes=2026-10` (por defecto, el mes actual):
 | `GET /api/ingresos/por-mes`       | Total de los últimos meses (`hasta`, `meses`, por defecto 6)    |
 | `POST /api/ingresos`              | Cargar un ingreso (JSON: `clase`, `monto`, `descripcion`, `cuentaId`, `fecha`) |
 | `DELETE /api/ingresos/{id}`       | Borrar un ingreso (queda cancelado)                             |
+| `GET /api/inversiones`            | Total, lo puesto, rendimiento, cada cuenta y posición, reservas, historial, valuaciones y la serie del gráfico |
+| `GET /api/inversiones/resumen`    | La línea del Resumen: invertido, lo movido en el mes y el total con lo disponible (`hay` false sin inversiones) |
+| `POST /api/inversiones/cuentas`, `PUT …/cuentas/{id}`, `POST …/cuentas/{id}/baja`, `POST …/cuentas/{id}/posiciones` | Cuentas de inversión (nombre, alias, `recordatorioDias`) y sus posiciones |
+| `POST /api/inversiones/saldo-inicial`, `/valuaciones`, `/operaciones`, `/reservas` | Saldo inicial, valor actual, aporte/retiro/compra/venta y reservas; `DELETE` de valuaciones, movimientos y operaciones; `POST …/reservas/{id}/liberar` |
 
 ## Pasar a PostgreSQL (perfil `postgres`)
 
