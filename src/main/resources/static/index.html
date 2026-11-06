@@ -15,6 +15,7 @@
 <script src="/js/escala-hoja.js" defer></script>
 <script src="/js/tarjeta.js" defer></script>
 <script src="/js/inversiones.js" defer></script>
+<script src="/js/viajes.js" defer></script>
 <script src="/js/movil.js" defer></script>
 </head>
 <body>
@@ -28,6 +29,7 @@
       <a href="#fijos" data-view="fijos"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#calendar-check"/></svg><span>Fijos</span></a>
       <div class="mas-panel">
         <a href="#inversiones" data-view="inversiones" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#trending-up"/></svg><span>Inversiones</span></a>
+        <a href="#viajes" data-view="viajes" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#plane"/></svg><span>Viajes</span></a>
         <a href="#tarjeta" data-view="tarjeta" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#credit-card"/></svg><span>Tarjeta</span></a>
         <a href="#costos-ia" data-view="costos-ia" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#bot"/></svg><span>Costos IA</span></a>
         <a href="#juntadas" data-view="juntadas" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#users"/></svg><span>Juntadas</span></a>
@@ -396,6 +398,86 @@
         </section>
       </div>
       <p class="error" id="inv-error" role="alert" hidden></p>
+    </div>
+
+    <!-- ===== Viajes ===== -->
+    <div class="view" id="v-viajes" hidden>
+      <header>
+        <div><h1>Viajes</h1><div class="sub">El viaje es una etiqueta: la fecha de cada gasto sigue siendo la real. Entre las fechas del viaje, lo que cargás en el bot queda en el viaje solo.</div></div>
+        <div class="btns"><button type="button" class="primary" id="vj-nuevo">Nuevo viaje</button></div>
+      </header>
+      <div class="pestanas" id="vj-pestanas" role="tablist" aria-label="Viajes"></div>
+      <section class="card" id="vj-editor" aria-label="Cargar" hidden></section>
+
+      <div class="vacio" id="vj-vacio" hidden>
+        <h2>Todavía no cargaste viajes</h2>
+        <p>Decíselo al bot, por ejemplo <b>me voy a Bariloche del 10/1 al 17/1, somos 2</b>, o tocá Nuevo viaje. El presupuesto es opcional.</p>
+      </div>
+
+      <div id="vj-contenido">
+        <p class="note" id="vj-fechas"></p>
+        <section class="cards" aria-label="Totales del viaje">
+          <div class="card dark">
+            <div class="label">Pagado</div>
+            <div class="big" id="vj-pagado">…</div>
+            <div class="note" id="vj-pagado-nota"></div>
+          </div>
+          <div class="card">
+            <div class="label">Falta ≈</div>
+            <div class="big" id="vj-falta">…</div>
+            <div class="note" id="vj-falta-nota"></div>
+          </div>
+          <div class="card">
+            <div class="label">Total estimado</div>
+            <div class="big" id="vj-total">…</div>
+            <div class="bar" id="vj-presupuesto-barra" hidden><i></i></div>
+            <div class="note" id="vj-presupuesto-nota"></div>
+          </div>
+          <div class="card">
+            <div class="label">Te deben por el viaje</div>
+            <div class="big" id="vj-deben">…</div>
+            <div class="note">Préstamos y juntadas</div>
+          </div>
+        </section>
+
+        <section class="card" id="vj-ahorro-card" aria-label="Cuánto ahorrar" hidden>
+          <h2>Cuánto ahorrar</h2>
+          <p id="vj-ahorro"></p>
+        </section>
+
+        <section class="card" aria-label="Falta pagar">
+          <div class="head"><h2>Falta pagar</h2><button type="button" id="vj-agregar-pendiente">Agregar</button></div>
+          <p class="note">El hospedaje, los traslados, las excursiones… con un monto aproximado si lo sabés. Al tildarlo se crea el gasto del viaje.</p>
+          <div id="vj-pendientes" class="lista"></div>
+        </section>
+
+        <section class="cards" aria-label="Lo que me costó a mí">
+          <div class="card"><div class="label">Me costó a mí</div><div class="big" id="vj-mio">…</div><div class="note">Tus gastos del viaje (tu parte)</div></div>
+          <div class="card"><div class="label">Puse por los demás</div><div class="big" id="vj-demas">…</div><div class="note">Partes de juntadas y préstamos: no son gasto tuyo</div></div>
+        </section>
+
+        <section class="card" aria-label="Gastos por categoría">
+          <h2>Por categoría</h2>
+          <div id="vj-categorias" class="lista"></div>
+        </section>
+
+        <section class="card" aria-label="Gastos por día">
+          <h2>Por día</h2>
+          <div class="grafico"><canvas id="vj-grafico" role="img" aria-label="Gastos del viaje por día"></canvas></div>
+        </section>
+
+        <section class="card" aria-label="Te deben por el viaje">
+          <h2>Te deben por el viaje</h2>
+          <div id="vj-deudas" class="lista"></div>
+        </section>
+
+        <section class="card" aria-label="Datos del viaje">
+          <div class="head"><h2>Datos del viaje</h2>
+            <div class="btns"><button type="button" id="vj-editar">Editar</button><button type="button" class="peligro" id="vj-borrar">Borrar viaje</button></div></div>
+          <p class="note" id="vj-notas"></p>
+        </section>
+      </div>
+      <p class="error" id="vj-error" role="alert" hidden></p>
     </div>
 
     <!-- ===== Tarjeta ===== -->

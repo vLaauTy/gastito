@@ -48,6 +48,12 @@ class ErroresApi {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new Error(e.getMessage()));
     }
 
+    /** Un viaje, un pendiente o un préstamo que no se puede cargar así: el mensaje se muestra tal cual. */
+    @ExceptionHandler({ar.gastito.viaje.ViajeInvalidoException.class, ar.gastito.prestamo.PrestamoInvalidoException.class})
+    ResponseEntity<Error> invalidoDeDominio(RuntimeException e) {
+        return ResponseEntity.badRequest().body(new Error(e.getMessage()));
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     ResponseEntity<Error> conflicto(IllegalStateException e) {
         log.debug("Conflicto en la API: {}", e.getMessage());

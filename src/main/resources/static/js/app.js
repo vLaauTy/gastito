@@ -169,7 +169,7 @@
 
   // --- Navegación ---
 
-  const VISTAS = ['resumen', 'movimientos', 'ingresos', 'fijos', 'inversiones', 'tarjeta', 'costos-ia', 'categorias', 'juntadas', 'cuotas'];
+  const VISTAS = ['resumen', 'movimientos', 'ingresos', 'fijos', 'inversiones', 'viajes', 'tarjeta', 'costos-ia', 'categorias', 'juntadas', 'cuotas'];
 
   function leerUrl() {
     const vista = location.hash.slice(1);
@@ -250,6 +250,8 @@
         tareas.push(api('/api/cuotas').then(vistaCuotas));
       } else if (estado.vista === 'inversiones') {
         tareas.push(...(window.Gastito.alCargarInversiones || []).map((f) => f()));
+      } else if (estado.vista === 'viajes') {
+        tareas.push(...(window.Gastito.alCargarViajes || []).map((f) => f()));
       } else if (estado.vista === 'tarjeta') {
         tareas.push(...(window.Gastito.alCargarTarjeta || []).map((f) => f()));
       } else {
