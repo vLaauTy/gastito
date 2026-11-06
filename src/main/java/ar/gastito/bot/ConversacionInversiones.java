@@ -158,7 +158,8 @@ public class ConversacionInversiones {
             esperas.remove(chatId);
             return Optional.of(List.of(igualQueAntes(cuentaId)));
         }
-        Optional<BigDecimal> valor = ParserInversion.unMonto(texto);
+        Cuenta cuenta = inversiones.cuentas().stream().filter(c -> c.getId().equals(cuentaId)).findFirst().orElse(null);
+        Optional<BigDecimal> valor = ParserInversion.unMonto(texto, cuenta);
         esperas.remove(chatId);
         return valor.map(v -> List.of(valuar(cuentaId, null, v, "")));
     }

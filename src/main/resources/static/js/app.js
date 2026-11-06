@@ -169,7 +169,7 @@
 
   // --- Navegación ---
 
-  const VISTAS = ['resumen', 'movimientos', 'ingresos', 'fijos', 'tarjeta', 'costos-ia', 'categorias', 'juntadas', 'cuotas'];
+  const VISTAS = ['resumen', 'movimientos', 'ingresos', 'fijos', 'inversiones', 'tarjeta', 'costos-ia', 'categorias', 'juntadas', 'cuotas'];
 
   function leerUrl() {
     const vista = location.hash.slice(1);
@@ -248,6 +248,8 @@
         tareas.push(api('/api/juntadas').then(vistaJuntadas));
       } else if (estado.vista === 'cuotas') {
         tareas.push(api('/api/cuotas').then(vistaCuotas));
+      } else if (estado.vista === 'inversiones') {
+        tareas.push(...(window.Gastito.alCargarInversiones || []).map((f) => f()));
       } else if (estado.vista === 'tarjeta') {
         tareas.push(...(window.Gastito.alCargarTarjeta || []).map((f) => f()));
       } else {
@@ -480,7 +482,21 @@
     tbody.replaceChildren(...pagina.elementos.map(filaMovimiento));
   }
 
+  /** Un aporte a una inversión o un retiro: no es un gasto, va con la etiqueta "Inversión" y se borra en Inversiones. */
+  function filaInversion(m) {
+    return h('tr', { 'data-movimiento': m.id, class: 'fila-inversion' },
+      h('td', { class: 'date' }, fechaCorta(m.fechaHora)),
+      h('td', {}, h('b', {}, m.descripcion || (m.inversion === 'APORTE' ? 'Aporte' : 'Retiro'))),
+      h('td', {}, h('span', { class: 'chip inversion', title: 'Pase entre tus cuentas: no cuenta como gasto ni como ingreso' },
+        window.Iconos.svg('trending-up'), 'Inversión')),
+      h('td', {}, m.medio),
+      h('td', {}, h('span', { class: `chip ${m.origen.toLowerCase()}` }, window.Iconos.iconoOrigen(m.origen), origenTexto(m.origen))),
+      h('td', { class: 'amt' }, `${m.inversion === 'APORTE' ? '→ ' : '← '}${pesos(m.monto)}`),
+      h('td', { class: 'acciones' }, h('a', { href: '#inversiones', 'data-view': 'inversiones', class: 'mini boton', title: 'Se borra en Inversiones' }, 'Ver')));
+  }
+
   function filaMovimiento(m) {
+    if (m.inversion) return filaInversion(m);
     const boton = m.ticket
       ? h('button', { class: 'mini desplegar', type: 'button', 'aria-expanded': 'false' }, window.Iconos.svg('receipt'), 'Productos')
       : null;
@@ -774,7 +790,7 @@
 
   async function ultimosMovimientos() {
     const pagina = await api(conMes('/api/movimientos', {
-      q: $('#r-q').value.trim(), categoria: $('#r-cat').value, tamanio: ULTIMOS_MOVIMIENTOS,
+      q: $('#r-q').value.trim(), categoria: $('#r-cat').value, tamanio: ULTIMOS_MOVIMIENTOS, sinInversiones: 'true',
     }));
     filasMovimientos($('#r-movimientos'), pagina,
       $('#r-q').value || $('#r-cat').value ? 'No hay gastos que coincidan.' : 'Todavía no hay gastos este mes. Mandale uno al bot.');
@@ -783,7 +799,7 @@
   async function tablaMovimientos() {
     const pagina = await api(conMes('/api/movimientos', {
       q: $('#m-q').value.trim(), categoria: $('#m-cat').value, medioPago: $('#m-med').value,
-      origen: $('#m-ori').value, pagina: estado.pagina, tamanio: TAMANIO_PAGINA,
+      origen: $('#m-ori').value, sinInversiones: $('#m-sin-inv').checked ? 'true' : '', pagina: estado.pagina, tamanio: TAMANIO_PAGINA,
     }));
     const filtrado = ['#m-q', '#m-cat', '#m-med', '#m-ori'].some((id) => $(id).value.trim());
     filasMovimientos($('#m-movimientos'), pagina,
@@ -1504,7 +1520,7 @@
 
     const movimientosFiltro = () => { estado.pagina = 0; recargarTabla(tablaMovimientos); };
     $('#m-q').addEventListener('input', debounce(movimientosFiltro, 300));
-    for (const id of ['#m-cat', '#m-med', '#m-ori']) $(id).addEventListener('change', movimientosFiltro);
+    for (const id of ['#m-cat', '#m-med', '#m-ori', '#m-sin-inv']) $(id).addEventListener('change', movimientosFiltro);
     $('#m-anterior').addEventListener('click', () => { estado.pagina--; recargarTabla(tablaMovimientos); });
     $('#m-siguiente').addEventListener('click', () => { estado.pagina++; recargarTabla(tablaMovimientos); });
 

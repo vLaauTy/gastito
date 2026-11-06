@@ -367,4 +367,28 @@ class ConsultaMovimientosTest {
         assertThat(consulta.foto(pendiente.getId())).isEmpty();
         assertThatThrownBy(() -> consulta.items(999_999L)).isInstanceOf(NoSuchElementException.class);
     }
+
+    @Autowired
+    ar.gastito.movimiento.MovimientoRepository repositorio;
+
+    @Test
+    void losAportesALasInversionesSeVenComoInversionYSeOcultanConElFiltro() {
+        gasto("Café", "1500", 10);
+        Cuenta cocos = cuentas.save(Cuenta.deInversion("Cocos", null, 7));
+        LocalDateTime dia11 = LocalDateTime.of(2026, 10, 11, 12, 0);
+        repositorio.save(Movimiento.entreCuentas(new BigDecimal("200000"), "Aporte a Cocos", cuenta("Galicia"), cocos,
+                null, dia11, Origen.TEXTO, null, dia11));
+        // Un pase entre dos cuentas bancarias no es una inversión: no aparece.
+        repositorio.save(Movimiento.entreCuentas(new BigDecimal("5000"), "A Mercado Pago", cuenta("Galicia"),
+                cuenta("Mercado Pago"), null, dia11, Origen.TEXTO, null, dia11));
+
+        ConsultaMovimientos.Pagina todo = consulta.buscar(filtros(), 0, 20);
+        assertThat(todo.elementos()).extracting(ConsultaMovimientos.Fila::descripcion, ConsultaMovimientos.Fila::inversion,
+                ConsultaMovimientos.Fila::medio)
+                .containsExactly(tuple("Aporte a Cocos", "APORTE", "Galicia → Cocos"), tuple("Café", null, "Efectivo"));
+
+        ConsultaMovimientos.Pagina sinInversiones = consulta.buscar(
+                new ConsultaMovimientos.Filtros(OCTUBRE, null, null, null, null, true), 0, 20);
+        assertThat(sinInversiones.elementos()).extracting(ConsultaMovimientos.Fila::descripcion).containsExactly("Café");
+    }
 }

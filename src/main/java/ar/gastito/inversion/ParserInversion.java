@@ -3,10 +3,12 @@ package ar.gastito.inversion;
 import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -219,10 +221,36 @@ public final class ParserInversion {
         return Optional.empty();
     }
 
-    /** La respuesta a "¿cuánto vale hoy Cocos?": un solo monto ("870.000", "vale 870 mil"), o vacío. */
-    public static Optional<BigDecimal> unMonto(String texto) {
-        List<Monto> montos = texto == null ? List.of() : montos(base(texto.strip()));
-        return montos.size() == 1 ? Optional.of(montos.getFirst().valor()) : Optional.empty();
+    /** Lo que puede acompañar al monto en la respuesta a "¿cuánto vale hoy Cocos?". */
+    private static final Set<String> RELLENO = Set.of("vale", "valen", "esta", "estan", "en", "a", "hoy", "ahora",
+            "unos", "unas", "como", "son", "pesos", "quedo", "tiene", "hay", "cerca", "de", "mas", "menos", "o",
+            "y", "el", "la", "total", "todo", "ya", "al", "dia", "aprox", "aproximadamente", "masomenos");
+
+    /**
+     * La respuesta a "¿cuánto vale hoy Cocos?": un solo monto ("870.000", "vale 870 mil", "Cocos está en 870k"), o
+     * vacío si dice otra cosa ("kiosco 1500" es un gasto).
+     *
+     * @param cuenta la cuenta por la que se preguntó: su nombre también puede ir en la respuesta
+     */
+    public static Optional<BigDecimal> unMonto(String texto, ConPalabrasClave cuenta) {
+        if (texto == null) {
+            return Optional.empty();
+        }
+        String n = base(texto.strip());
+        List<Monto> montos = montos(n);
+        if (montos.size() != 1) {
+            return Optional.empty();
+        }
+        String resto = NombresInversion.normalizar(n.substring(0, montos.getFirst().inicio()) + " "
+                + n.substring(montos.getFirst().fin()));
+        if (cuenta != null) {
+            for (String t : terminos(cuenta)) {
+                resto = (" " + resto + " ").replace(" " + t + " ", " ").strip();
+            }
+        }
+        boolean soloRelleno = resto.isEmpty()
+                || Arrays.stream(resto.split(" ")).allMatch(p -> p.isEmpty() || RELLENO.contains(p) || p.equals("$"));
+        return soloRelleno ? Optional.of(montos.getFirst().valor()) : Optional.empty();
     }
 
     /** "Igual", "igual que antes", "lo mismo", "sigue igual". */

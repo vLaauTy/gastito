@@ -107,8 +107,9 @@ class ConversacionInversionesTest {
         conversacion.recordatorio(CHAT,
                 new InversionService.Recordatorio(COCOS, "Cocos", new BigDecimal("850000"), HOY.minusDays(7), 7));
 
-        assertThat(conversacion.texto(CHAT, "kiosco 1500 y pan 2000")).isEmpty();
+        assertThat(conversacion.texto(CHAT, "kiosco 1500")).isEmpty();
         assertThat(conversacion.esperando(CHAT)).isFalse();
+        verify(inversiones, never()).valuar(anyLong(), any(), any(), any());
     }
 
     @Test

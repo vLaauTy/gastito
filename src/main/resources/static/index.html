@@ -14,6 +14,7 @@
 <script src="/js/sueldo.js" defer></script>
 <script src="/js/escala-hoja.js" defer></script>
 <script src="/js/tarjeta.js" defer></script>
+<script src="/js/inversiones.js" defer></script>
 <script src="/js/movil.js" defer></script>
 </head>
 <body>
@@ -26,6 +27,7 @@
       <a href="#ingresos" data-view="ingresos"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#wallet"/></svg><span>Ingresos</span></a>
       <a href="#fijos" data-view="fijos"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#calendar-check"/></svg><span>Fijos</span></a>
       <div class="mas-panel">
+        <a href="#inversiones" data-view="inversiones" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#trending-up"/></svg><span>Inversiones</span></a>
         <a href="#tarjeta" data-view="tarjeta" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#credit-card"/></svg><span>Tarjeta</span></a>
         <a href="#costos-ia" data-view="costos-ia" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#bot"/></svg><span>Costos IA</span></a>
         <a href="#juntadas" data-view="juntadas" class="en-mas"><svg class="i" aria-hidden="true"><use href="/img/icons.svg#users"/></svg><span>Juntadas</span></a>
@@ -85,6 +87,8 @@
           <div class="note" id="r-cantidad"></div>
         </div>
       </section>
+
+      <p class="note con-icono ahorros" id="r-ahorros" hidden></p>
 
       <div class="vacio" id="r-vacio" hidden>
         <h2>Todavía no hay gastos en <span data-mes-largo></span></h2>
@@ -173,6 +177,7 @@
             <option value="AUDIO">Solo audio</option>
             <option value="TICKET">Solo tickets</option>
           </select>
+          <label class="check"><input type="checkbox" id="m-sin-inv"> Ocultar inversiones</label>
         </div>
         <div class="scroll">
           <table>
@@ -300,6 +305,99 @@
         </div>
       </section>
     </div>
+    <!-- ===== Inversiones ===== -->
+    <div class="view" id="v-inversiones" hidden>
+      <header>
+        <div><h1>Inversiones</h1><div class="sub">Son ahorros: no cuentan como ingreso ni como gasto, y no se mezclan con el disponible del mes.</div></div>
+        <div class="btns">
+          <button type="button" id="inv-operacion">Aporte o retiro</button>
+          <button type="button" class="primary" id="inv-nueva-cuenta">Agregar cuenta</button>
+        </div>
+      </header>
+
+      <section class="cards" aria-label="Total invertido">
+        <div class="card dark">
+          <div class="label">Total invertido hoy</div>
+          <div class="big" id="inv-total">…</div>
+          <div class="note" id="inv-actualizado"></div>
+        </div>
+        <div class="card">
+          <div class="label">Lo que pusiste</div>
+          <div class="big" id="inv-aportado">…</div>
+          <div class="note">Saldo inicial + aportes − retiros</div>
+        </div>
+        <div class="card">
+          <div class="label">Rendimiento</div>
+          <div class="big" id="inv-rendimiento">…</div>
+          <div class="note" id="inv-rendimiento-nota"></div>
+        </div>
+        <div class="card">
+          <div class="label">Reservado para metas</div>
+          <div class="big" id="inv-reservado">…</div>
+          <div class="note" id="inv-reservado-nota"></div>
+        </div>
+      </section>
+
+      <section class="card" id="inv-editor" aria-label="Cargar" hidden></section>
+
+      <div class="vacio" id="inv-vacio" hidden>
+        <h2>Todavía no cargaste inversiones</h2>
+        <p>Decíselo al bot como te salga, por ejemplo <b>tengo 850.000 invertidos en Cocos, 500.000 en CEDEAR SPY y 350.000 en un FCI</b>, o agregá una cuenta acá.</p>
+      </div>
+
+      <div id="inv-contenido">
+        <section class="card table-card" aria-label="Cuentas y posiciones">
+          <div class="head"><h2>Cuentas y posiciones</h2><span class="note">Rendimiento = lo que vale − lo que pusiste</span></div>
+          <div class="scroll">
+            <table>
+              <thead><tr><th>Cuenta o posición</th><th class="num">Pusiste</th><th class="num">Vale</th><th class="num">Rendimiento</th><th>Última valuación</th><th class="acciones"><span class="sr">Acciones</span></th></tr></thead>
+              <tbody id="inv-tenencias"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card" aria-label="Valor en el tiempo">
+          <div class="head"><h2>Valor en el tiempo</h2><span class="note">La línea punteada es lo que pusiste</span></div>
+          <div class="grafico"><canvas id="inv-grafico" role="img" aria-label="Valor de las inversiones en el tiempo contra lo aportado"></canvas></div>
+        </section>
+
+        <section class="card" aria-label="Reservas para metas">
+          <div class="head"><h2>Reservas para metas</h2><button type="button" id="inv-reservar">Reservar</button></div>
+          <p class="note">Parte del valor apartada para una meta ("300.000 de Cocos para Bariloche"). Sigue invertida.</p>
+          <div id="inv-reservas" class="lista"></div>
+        </section>
+
+        <section class="card table-card" aria-label="Aportes y retiros">
+          <div class="head"><h2>Aportes, retiros y saldos iniciales</h2></div>
+          <p class="note">Los aportes y retiros son pases entre tus cuentas: también aparecen en Movimientos con la etiqueta Inversión.</p>
+          <div class="scroll">
+            <table>
+              <thead><tr><th>Fecha</th><th>Qué</th><th>Cuenta</th><th>Desde / hacia</th><th class="num">Monto</th><th class="acciones"><span class="sr">Acciones</span></th></tr></thead>
+              <tbody id="inv-historial"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card table-card" aria-label="Valuaciones">
+          <div class="head"><h2>Valuaciones</h2></div>
+          <p class="note">Cada vez que actualizás un valor. Los ajustes salen solos de un aporte, un retiro o una compra.</p>
+          <div class="scroll">
+            <table>
+              <thead><tr><th>Fecha</th><th>Cuenta</th><th>Posición</th><th class="num">Valor</th><th>Origen</th><th class="acciones"><span class="sr">Acciones</span></th></tr></thead>
+              <tbody id="inv-valuaciones"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card table-card" aria-label="Tus cuentas de inversión">
+          <div class="head"><h2>Tus cuentas de inversión</h2></div>
+          <p class="note">El bot te pregunta cuánto vale cada cuenta cada tantos días (o nunca). Los alias son las palabras con las que la nombrás en un mensaje. Dar de baja no borra el historial.</p>
+          <div id="inv-cuentas" class="lista"></div>
+        </section>
+      </div>
+      <p class="error" id="inv-error" role="alert" hidden></p>
+    </div>
+
     <!-- ===== Tarjeta ===== -->
     <div class="view" id="v-tarjeta" hidden>
       <header>

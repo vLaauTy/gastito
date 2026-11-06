@@ -174,6 +174,16 @@ class ParserInversionTest {
     }
 
     @Test
+    void laRespuestaAlRecordatorioEsSoloUnMonto() {
+        assertThat(ParserInversion.unMonto("870.000", cocos)).contains(new java.math.BigDecimal("870000"));
+        assertThat(ParserInversion.unMonto("hoy vale 870 mil", cocos)).contains(new java.math.BigDecimal("870000"));
+        assertThat(ParserInversion.unMonto("Cocos está en $870.000", cocos)).isPresent();
+        assertThat(ParserInversion.unMonto("kiosco 1500", cocos)).isEmpty();
+        assertThat(ParserInversion.esIgualQueAntes("igual que antes")).isTrue();
+        assertThat(ParserInversion.esIgualQueAntes("sigue igual")).isTrue();
+    }
+
+    @Test
     void unGastoNoEsDeInversiones() {
         assertThat(parsear("kiosco 1500")).isEmpty();
         assertThat(parsear("pagué 3000 con mercado pago")).isEmpty();

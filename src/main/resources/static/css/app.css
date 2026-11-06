@@ -426,3 +426,16 @@ tr[hidden] { display: none !important; }
 .fila-tarjeta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--row); }
 .fila-tarjeta .datos { flex: 1 1 220px; min-width: 0; }
 .fila-tarjeta.inactiva { opacity: .6; }
+
+/* Inversiones: ahorros, no ingresos ni gastos. La ganancia en verde y la pérdida en naranja, como el resto. */
+.chip.inversion { background: var(--info-soft); color: var(--info); }
+.gana { color: var(--ok); font-weight: 600; }
+.pierde { color: var(--warn); font-weight: 600; }
+.filters label.check { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--fg); }
+.filters label.check input { margin: 0; }
+.ahorros { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+.fila-cuenta td { border-top: 1px solid var(--border); }
+.fila-posicion td:first-child { padding-left: 20px; color: var(--muted); }
+.pendiente .crece { flex: 1 1 200px; min-width: 0; }
+.pendiente select { max-width: 160px; }
+#inv-cuentas .pendiente { flex-wrap: wrap; align-items: center; }

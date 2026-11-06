@@ -173,6 +173,22 @@ public class InversionService {
         return new CargaInicial(c, saldos, reemplazados, nueva);
     }
 
+    /** Desde el dashboard: el saldo inicial de la bolsa (posicionId null) o de una posición; reemplaza al anterior. */
+    public CargaInicial cargarSaldo(long cuentaId, Long posicionId, BigDecimal monto, LocalDate fecha) {
+        if (monto == null || monto.signum() <= 0) {
+            throw new IllegalArgumentException("El saldo inicial tiene que ser mayor a cero");
+        }
+        Cuenta c = deInversion(cuentaId);
+        PosicionInversion p = posicionId == null ? null : posicionPorId(posicionId);
+        if (p != null && !p.getCuenta().getId().equals(c.getId())) {
+            throw new IllegalArgumentException("La posición " + p.getNombre() + " no es de " + c.getNombre());
+        }
+        List<OperacionInversion> saldos = new ArrayList<>();
+        List<SaldoAnterior> reemplazados = new ArrayList<>();
+        saldo(c, p, monto, fecha, null, saldos, reemplazados);
+        return new CargaInicial(c, saldos, reemplazados, false);
+    }
+
     private void saldo(Cuenta c, PosicionInversion p, BigDecimal monto, LocalDate fecha, String texto,
             List<OperacionInversion> saldos, List<SaldoAnterior> reemplazados) {
         Optional<OperacionInversion> anterior = p == null

@@ -22,8 +22,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 
+import ar.gastito.catalogo.Cuenta;
+import ar.gastito.catalogo.TipoCuenta;
 import ar.gastito.movimiento.EstadoMovimiento;
 import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.Origen;
@@ -130,8 +134,17 @@ public class ConsultaMovimientos {
         return monto == null ? null : monto.setScale(2, RoundingMode.HALF_UP);
     }
 
-    /** Todos opcionales menos el mes. {@code q} busca en la descripción, sin distinguir tildes ni mayúsculas. */
-    public record Filtros(YearMonth mes, Long categoriaId, Long medioPagoId, Origen origen, String q) {
+    /**
+     * Todos opcionales menos el mes. {@code q} busca en la descripción, sin distinguir tildes ni mayúsculas.
+     *
+     * @param sinInversiones oculta los aportes a las inversiones y los retiros (por defecto se ven, como "Inversión")
+     */
+    public record Filtros(YearMonth mes, Long categoriaId, Long medioPagoId, Origen origen, String q,
+            boolean sinInversiones) {
+
+        public Filtros(YearMonth mes, Long categoriaId, Long medioPagoId, Origen origen, String q) {
+            this(mes, categoriaId, medioPagoId, origen, q, false);
+        }
     }
 
     /**
@@ -147,11 +160,22 @@ public class ConsultaMovimientos {
      * @param cuotaActual      de una cuota, cuál es; si no, null
      * @param cuotaTotal       de una cuota, de cuántas; si no, null
      * @param dolares          de una compra en dólares, cuántos (monto son los pesos); si no, null
+     * @param inversion        APORTE o RETIRO si es plata que entró a una inversión o salió de ella (no es un
+     *                         gasto: se muestra con la etiqueta "Inversión"); null en un gasto
      */
     public record Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
             String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
             boolean foto, boolean estimado, Long medioPagoId, Long cuentaId, Especial especial, Integer cuotaActual,
-            Integer cuotaTotal, BigDecimal dolares, Long tarjetaId) {
+            Integer cuotaTotal, BigDecimal dolares, Long tarjetaId, String inversion) {
+
+        public Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
+                String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
+                boolean foto, boolean estimado, Long medioPagoId, Long cuentaId, Especial especial, Integer cuotaActual,
+                Integer cuotaTotal, BigDecimal dolares, Long tarjetaId) {
+            this(id, fechaHora, descripcion, categoriaId, categoria, emoji, medio, sinEspecificar, origen, monto,
+                    ticket, foto, estimado, medioPagoId, cuentaId, especial, cuotaActual, cuotaTotal, dolares,
+                    tarjetaId, null);
+        }
 
         public Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
                 String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
@@ -239,7 +263,17 @@ public class ConsultaMovimientos {
         return (root, query, cb) -> {
             List<Predicate> condiciones = new ArrayList<>();
             condiciones.add(cb.equal(root.get("estado"), EstadoMovimiento.CONFIRMADO));
-            condiciones.add(cb.equal(root.get("tipo"), TipoMovimiento.GASTO));
+            if (f.sinInversiones()) {
+                condiciones.add(cb.equal(root.get("tipo"), TipoMovimiento.GASTO));
+            } else {
+                // Los gastos, y los aportes a las inversiones y los retiros de ellas (pases con una de inversión).
+                Join<Movimiento, Cuenta> cuenta = root.join("cuenta", JoinType.LEFT);
+                Join<Movimiento, Cuenta> destino = root.join("cuentaDestino", JoinType.LEFT);
+                condiciones.add(cb.or(cb.equal(root.get("tipo"), TipoMovimiento.GASTO),
+                        cb.and(cb.equal(root.get("tipo"), TipoMovimiento.ENTRE_CUENTAS),
+                                cb.or(cb.equal(cuenta.get("tipo"), TipoCuenta.INVERSION),
+                                        cb.equal(destino.get("tipo"), TipoCuenta.INVERSION)))));
+            }
             condiciones.add(cb.greaterThanOrEqualTo(root.get("fechaHora"), periodo.desde()));
             condiciones.add(cb.lessThan(root.get("fechaHora"), periodo.hasta()));
             if (f.categoriaId() != null) {
@@ -285,16 +319,32 @@ public class ConsultaMovimientos {
                 m.getMedioPago() == null ? null : m.getMedioPago().getId(),
                 m.getCuenta() == null ? null : m.getCuenta().getId(),
                 Especial.de(m), m.getCuotaActual(), m.getCuotaTotal(), dosDecimales(m.getMontoOriginal()),
-                m.getTarjeta() == null ? null : m.getTarjeta().getId());
+                m.getTarjeta() == null ? null : m.getTarjeta().getId(), inversion(m));
+    }
+
+    /** APORTE o RETIRO en un pase con una cuenta de inversión; null en lo demás. */
+    static String inversion(Movimiento m) {
+        if (!m.isDeInversion()) {
+            return null;
+        }
+        return m.getCuentaDestino() != null && m.getCuentaDestino().isInversion() ? "APORTE" : "RETIRO";
     }
 
     private static boolean sinEspecificar(Movimiento m) {
+        if (m.getTipo() == TipoMovimiento.ENTRE_CUENTAS) {
+            return false;
+        }
         return m.getTarjeta() == null && m.getCuenta() == null
                 && (m.getMedioPago() == null || !m.getMedioPago().isEfectivo());
     }
 
     /** "Tarjeta de crédito · MasterCard Gold", "QR · Mercado Pago", "Efectivo", "Débito" o "Sin especificar". */
     static String medio(Movimiento m) {
+        if (m.getTipo() == TipoMovimiento.ENTRE_CUENTAS) {
+            // "Galicia → Cocos", "Cocos → Efectivo".
+            return (m.getCuenta() == null ? "Efectivo" : m.getCuenta().getNombre()) + " → "
+                    + (m.getCuentaDestino() == null ? "Efectivo" : m.getCuentaDestino().getNombre());
+        }
         String nombreMedio = m.getMedioPago() == null ? null : m.getMedioPago().getNombre();
         String billetera = m.getTarjeta() != null ? m.getTarjeta().getNombre()
                 : m.getCuenta() != null ? m.getCuenta().getNombre() : null;
