@@ -24,6 +24,16 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
     Optional<Movimiento> findConDetalleById(Long id);
 
     /** Los meses que ya tienen cobro de este fijo, en cualquier estado ("este mes no" también cuenta). */
+    /** Los aportes a las cuentas de inversión y los retiros de ellas, confirmados, del más viejo al más nuevo. */
+    @Query("""
+            select m from Movimiento m left join m.cuenta c left join m.cuentaDestino d
+            where m.tipo = ar.gastito.movimiento.TipoMovimiento.ENTRE_CUENTAS
+              and m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
+              and (c.tipo = ar.gastito.catalogo.TipoCuenta.INVERSION
+                   or d.tipo = ar.gastito.catalogo.TipoCuenta.INVERSION)
+            order by m.fechaHora, m.id""")
+    List<Movimiento> deInversiones();
+
     @Query("select m.fijoPeriodo from Movimiento m where m.gastoFijoId = :fijo")
     List<LocalDate> periodosDeFijo(@Param("fijo") Long gastoFijoId);
 

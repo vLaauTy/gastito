@@ -98,6 +98,6 @@ public class CatalogoService {
     @Transactional(readOnly = true)
     public Catalogo cargar() {
         return new Catalogo(categorias.findByActivaTrueOrderByNombre(), medios.findByActivoTrueOrderById(),
-                cuentas.findByActivaTrueOrderById(), tarjetas.activasPorUso());
+                cuentas.findByActivaTrueAndTipoOrderById(TipoCuenta.BANCARIA), tarjetas.activasPorUso());
     }
 }

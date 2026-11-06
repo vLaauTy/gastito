@@ -688,6 +688,48 @@ public class Movimiento {
         return m;
     }
 
+    /**
+     * Plata que pasa entre cuentas propias, ya confirmada ("pasé 200.000 de Galicia a Cocos"). No cuenta como gasto
+     * ni como ingreso: la plata ya se contó al cobrarla.
+     *
+     * @param cuenta   de dónde sale, o null si sale del efectivo
+     * @param destino  a dónde va, o null si va al efectivo
+     * @param efectivo el medio de pago efectivo, para el lado que no tiene cuenta (o null)
+     */
+    public static Movimiento entreCuentas(BigDecimal monto, String descripcion, Cuenta cuenta, Cuenta destino,
+            MedioPago efectivo, LocalDateTime fechaHora, Origen origen, String textoOriginal, LocalDateTime ahora) {
+        if (monto == null || monto.signum() <= 0) {
+            throw new IllegalArgumentException("El monto tiene que ser mayor a cero");
+        }
+        if (cuenta == null && destino == null) {
+            throw new IllegalArgumentException("Un pase entre cuentas sale de una cuenta o va a una");
+        }
+        if (cuenta != null && destino != null && cuenta.getId() != null && cuenta.getId().equals(destino.getId())) {
+            throw new IllegalArgumentException("La plata sale y entra en la misma cuenta");
+        }
+        Movimiento m = new Movimiento();
+        m.tipo = TipoMovimiento.ENTRE_CUENTAS;
+        m.monto = monto;
+        m.descripcion = descripcion;
+        m.cuenta = cuenta;
+        m.cuentaDestino = destino;
+        m.medioPago = cuenta == null || destino == null ? efectivo : null;
+        m.fechaHora = fechaHora;
+        m.origen = origen;
+        m.estado = EstadoMovimiento.CONFIRMADO;
+        m.textoOriginal = textoOriginal != null && textoOriginal.length() > LARGO_MAXIMO_TEXTO_ORIGINAL
+                ? textoOriginal.substring(0, LARGO_MAXIMO_TEXTO_ORIGINAL)
+                : textoOriginal;
+        m.creadoEn = ahora;
+        return m;
+    }
+
+    /** Un aporte a una cuenta de inversión o un retiro de una: un pase entre cuentas con una de inversión. */
+    public boolean isDeInversion() {
+        return tipo == TipoMovimiento.ENTRE_CUENTAS
+                && ((cuenta != null && cuenta.isInversion()) || (cuentaDestino != null && cuentaDestino.isInversion()));
+    }
+
     /** Al elegir de quién es la devolución: la descripción ("Pablo, del Asado") y, si no se dijo, la cuenta. */
     public void asignarDevolucion(String nuevaDescripcion, Cuenta cuentaSiFalta) {
         verificarPendiente();

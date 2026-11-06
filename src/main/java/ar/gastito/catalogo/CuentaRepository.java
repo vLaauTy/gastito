@@ -7,4 +7,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface CuentaRepository extends JpaRepository<Cuenta, Long> {
 
     List<Cuenta> findByActivaTrueOrderById();
+
+    /** Las activas de un tipo: las bancarias son las que se usan para pagar; las de inversión van aparte. */
+    List<Cuenta> findByActivaTrueAndTipoOrderById(TipoCuenta tipo);
+
+    List<Cuenta> findByTipoOrderById(TipoCuenta tipo);
+
+    boolean existsByNombreIgnoreCase(String nombre);
 }

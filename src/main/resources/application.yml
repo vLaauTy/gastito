@@ -139,6 +139,11 @@ gastito:
     hora-avisos: 9                  # antes de esta hora no se manda ningún aviso de la tarjeta
     tolerancia-diferencia: 1        # entre el total del resumen y lo cargado
     resumenes-siguientes: 6         # con cuotas comprometidas, en el dashboard
+  inversiones:
+    # Cada cuántos días se pregunta cuánto vale una cuenta de inversión nueva (0: no se pregunta). Después se cambia
+    # por cuenta en el dashboard, o con "No preguntar más" en el recordatorio.
+    dias-recordatorio: 7
+    hora-recordatorio: 10           # antes de esta hora no se pregunta
   fijos:
     # Como máximo, cada cuánto se manda el recordatorio agrupado de fijos vencidos sin cargar.
     intervalo-recordatorio: 3d
