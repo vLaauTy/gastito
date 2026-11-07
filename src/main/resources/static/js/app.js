@@ -501,8 +501,22 @@
       h('td', { class: 'acciones' }, h('a', { href: '#inversiones', 'data-view': 'inversiones', class: 'mini boton', title: 'Se borra en Inversiones' }, 'Ver')));
   }
 
+  /** Lo que me devolvieron de un préstamo o una juntada: no es un gasto ni un ingreso; va con la etiqueta "Devolución" y se puede eliminar (lo que pagaba se vuelve a deber). */
+  function filaDevolucion(m) {
+    return h('tr', { 'data-movimiento': m.id, class: 'fila-devolucion', hidden: borradosPendientes.has(m.id) },
+      h('td', { class: 'date' }, fechaCorta(m.fechaHora)),
+      h('td', {}, h('b', {}, m.descripcion || 'Devolución')),
+      h('td', {}, h('span', { class: 'chip devolucion', title: 'Te devolvieron plata: no cuenta como gasto ni como ingreso' },
+        window.Iconos.svg('undo-2'), 'Devolución')),
+      h('td', {}, window.Iconos.medio(m.medio)),
+      h('td', {}, h('span', { class: `chip ${m.origen.toLowerCase()}` }, window.Iconos.iconoOrigen(m.origen), origenTexto(m.origen))),
+      h('td', { class: 'amt' }, `+ ${pesos(m.monto)}`),
+      accionesMovimiento(m));
+  }
+
   function filaMovimiento(m) {
     if (m.inversion) return filaInversion(m);
+    if (m.especial === 'DEVOLUCION') return filaDevolucion(m);
     const boton = m.ticket
       ? h('button', { class: 'mini desplegar', type: 'button', 'aria-expanded': 'false' }, window.Iconos.svg('receipt'), 'Productos')
       : null;
@@ -557,7 +571,7 @@
     const menu = h('div', { class: 'menu-acciones', role: 'menu' },
       m.dolares != null ? h('button', { type: 'button', class: 'mini', role: 'menuitem', onclick: () => { cerrarMenus(); corregirPesos(m); } },
         window.Iconos.svg('banknote'), 'Corregir monto') : null,
-      h('button', { type: 'button', class: 'mini', role: 'menuitem', onclick: () => { cerrarMenus(); abrirEdicion(m); } },
+      m.especial === 'DEVOLUCION' ? null : h('button', { type: 'button', class: 'mini', role: 'menuitem', onclick: () => { cerrarMenus(); abrirEdicion(m); } },
         window.Iconos.svg('pencil'), 'Editar'),
       h('button', { type: 'button', class: 'mini peligro', role: 'menuitem', onclick: () => { cerrarMenus(); pedirBorrado(m); } },
         window.Iconos.svg('trash-2'), 'Eliminar'));
@@ -682,6 +696,10 @@
     FIJO: {
       alcance: 'FIJO', boton: 'Deshacer el fijo del mes',
       nota: () => 'Es el pago de un gasto fijo: si lo borrás, el fijo vuelve a figurar como que falta.',
+    },
+    DEVOLUCION: {
+      alcance: 'DEVOLUCION', boton: 'Eliminar la devolución',
+      nota: () => 'Es una devolución, no un gasto. Si la borrás, lo que pagaba se vuelve a deber: la cuota del préstamo vuelve a pendiente, o la persona de la juntada te lo vuelve a deber.',
     },
   };
 
@@ -812,7 +830,7 @@
 
   async function ultimosMovimientos() {
     const pagina = await api(conMes('/api/movimientos', {
-      q: $('#r-q').value.trim(), categoria: $('#r-cat').value, tamanio: ULTIMOS_MOVIMIENTOS, sinInversiones: 'true',
+      q: $('#r-q').value.trim(), categoria: $('#r-cat').value, tamanio: ULTIMOS_MOVIMIENTOS, sinInversiones: 'true', sinDevoluciones: 'true',
     }));
     filasMovimientos($('#r-movimientos'), pagina,
       $('#r-q').value || $('#r-cat').value ? 'No hay gastos que coincidan.' : 'Todavía no hay gastos este mes. Mandale uno al bot.');
@@ -821,7 +839,8 @@
   async function tablaMovimientos() {
     const pagina = await api(conMes('/api/movimientos', {
       q: $('#m-q').value.trim(), categoria: $('#m-cat').value, medioPago: $('#m-med').value,
-      origen: $('#m-ori').value, sinInversiones: $('#m-sin-inv').checked ? 'true' : '', pagina: estado.pagina, tamanio: TAMANIO_PAGINA,
+      origen: $('#m-ori').value, sinInversiones: $('#m-sin-inv').checked ? 'true' : '',
+      sinDevoluciones: $('#m-sin-dev').checked ? 'true' : '', pagina: estado.pagina, tamanio: TAMANIO_PAGINA,
     }));
     const filtrado = ['#m-q', '#m-cat', '#m-med', '#m-ori'].some((id) => $(id).value.trim());
     filasMovimientos($('#m-movimientos'), pagina,
@@ -1542,7 +1561,7 @@
 
     const movimientosFiltro = () => { estado.pagina = 0; recargarTabla(tablaMovimientos); };
     $('#m-q').addEventListener('input', debounce(movimientosFiltro, 300));
-    for (const id of ['#m-cat', '#m-med', '#m-ori', '#m-sin-inv']) $(id).addEventListener('change', movimientosFiltro);
+    for (const id of ['#m-cat', '#m-med', '#m-ori', '#m-sin-inv', '#m-sin-dev']) $(id).addEventListener('change', movimientosFiltro);
     $('#m-anterior').addEventListener('click', () => { estado.pagina--; recargarTabla(tablaMovimientos); });
     $('#m-siguiente').addEventListener('click', () => { estado.pagina++; recargarTabla(tablaMovimientos); });
 

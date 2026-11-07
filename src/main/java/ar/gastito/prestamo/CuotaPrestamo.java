@@ -61,6 +61,13 @@ public class CuotaPrestamo {
         this.cobradaEn = cuando;
     }
 
+    /** Se borró la devolución que la pagaba: me la vuelve a deber (si ya venció, se marca atrasada en el aviso). */
+    void volverAPendiente() {
+        this.estado = EstadoCuota.PENDIENTE;
+        this.devolucionId = null;
+        this.cobradaEn = null;
+    }
+
     void cambiarMonto(BigDecimal nuevo) {
         this.monto = nuevo;
     }

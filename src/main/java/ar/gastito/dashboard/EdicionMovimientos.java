@@ -26,7 +26,7 @@ public class EdicionMovimientos {
 
     /** Qué se borra: un gasto común, la juntada entera, el plan de cuotas desde esa cuota, o el pago del fijo. */
     public enum Alcance {
-        GASTO, JUNTADA, CUOTAS, FIJO
+        GASTO, JUNTADA, CUOTAS, FIJO, DEVOLUCION
     }
 
     private final MovimientoService movimientos;
@@ -80,12 +80,13 @@ public class EdicionMovimientos {
     /** La foto de un ticket queda en disco; los productos se borran con el gasto. */
     @Transactional
     public void borrar(long id, Alcance alcance) {
-        Movimiento m = gastoGuardado(id);
+        Movimiento m = guardado(id);
         Especial especial = Especial.de(m);
         Alcance corresponde = especial == null ? Alcance.GASTO : switch (especial) {
             case JUNTADA -> Alcance.JUNTADA;
             case CUOTA -> Alcance.CUOTAS;
             case FIJO -> Alcance.FIJO;
+            case DEVOLUCION -> Alcance.DEVOLUCION;
         };
         if (alcance != corresponde) {
             throw new MovimientoEspecialException(switch (corresponde) {
@@ -94,13 +95,23 @@ public class EdicionMovimientos {
                         + ": se cancela el plan desde esta cuota";
                 case FIJO -> "Es el pago de un gasto fijo: si lo borrás, el fijo vuelve a figurar como que falta";
                 case GASTO -> "Es un gasto común: se borra solo ese";
+                case DEVOLUCION -> "Es una devolución: se borra y lo que pagaba se vuelve a deber";
             });
         }
         switch (alcance) {
             case JUNTADA -> juntadas.borrarEntera(id);
             case CUOTAS -> cuotas.cancelarDesde(id);
-            case GASTO, FIJO -> movimientos.borrar(id);
+            case GASTO, FIJO, DEVOLUCION -> movimientos.borrar(id);
         }
+    }
+
+    /** Un gasto o una devolución guardados: lo que se puede eliminar desde Movimientos. */
+    private Movimiento guardado(long id) {
+        Movimiento m = movimientos.buscar(id);
+        if (m.getTipo() == TipoMovimiento.DEVOLUCION && m.getEstado() == EstadoMovimiento.CONFIRMADO) {
+            return m;
+        }
+        return gastoGuardado(id);
     }
 
     private Movimiento gastoGuardado(long id) {

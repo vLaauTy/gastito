@@ -391,4 +391,26 @@ class ConsultaMovimientosTest {
                 new ConsultaMovimientos.Filtros(OCTUBRE, null, null, null, null, true), 0, 20);
         assertThat(sinInversiones.elementos()).extracting(ConsultaMovimientos.Fila::descripcion).containsExactly("Café");
     }
+
+    @Test
+    void lasDevolucionesSeVenComoDevolucionYSeOcultanConElFiltro() {
+        gasto("Café", "1500", 10);
+        LocalDateTime dia11 = LocalDateTime.of(2026, 10, 11, 12, 0);
+        Movimiento devolucion = Movimiento.devolucion(new BigDecimal("12150"), "Devolución", null, null, dia11,
+                Origen.TEXTO, "lucas me pasó", dia11);
+        devolucion.asignarDevolucion("Lucas, cuota 1 de 6", null);
+        devolucion.confirmar();
+        repositorio.save(devolucion);
+
+        ConsultaMovimientos.Pagina todo = consulta.buscar(filtros(), 0, 20);
+        assertThat(todo.elementos()).extracting(ConsultaMovimientos.Fila::descripcion,
+                ConsultaMovimientos.Fila::especial, ConsultaMovimientos.Fila::sinEspecificar)
+                .containsExactly(tuple("Lucas, cuota 1 de 6", ConsultaMovimientos.Especial.DEVOLUCION, false),
+                        tuple("Café", null, false));
+
+        ConsultaMovimientos.Pagina sinDevoluciones = consulta.buscar(
+                new ConsultaMovimientos.Filtros(OCTUBRE, null, null, null, null, false, true), 0, 20);
+        assertThat(sinDevoluciones.elementos()).extracting(ConsultaMovimientos.Fila::descripcion)
+                .containsExactly("Café");
+    }
 }

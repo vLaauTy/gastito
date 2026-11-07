@@ -22,6 +22,7 @@ import ar.gastito.movimiento.Movimiento;
 import ar.gastito.movimiento.MovimientoEspecialException;
 import ar.gastito.movimiento.MovimientoRepository;
 import ar.gastito.movimiento.Origen;
+import ar.gastito.movimiento.TipoMovimiento;
 
 /**
  * Préstamos a personas, devueltos en cuotas. No son gasto mío: la plata prestada queda a cobrar, como la parte de los
@@ -342,6 +343,14 @@ public class PrestamoService implements AntesDeBorrar {
      */
     @Override
     public void antesDeBorrar(Movimiento m) {
+        if (m.getTipo() == TipoMovimiento.DEVOLUCION) {
+            // Una devolución cargada por error: las cuotas que pagaba vuelven a pendiente.
+            prestamos.conDevolucion(m.getId()).ifPresent(p -> {
+                p.deshacerCobro(m.getId());
+                prestamos.flush();
+            });
+            return;
+        }
         prestamos.findByMovimientoId(m.getId()).ifPresent(p -> {
             if (p.getCuotasCobradas() > 0) {
                 throw new MovimientoEspecialException("De este pago salió el préstamo a " + p.getPersona()

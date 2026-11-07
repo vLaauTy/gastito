@@ -95,10 +95,11 @@ public class DashboardController {
             @RequestParam(required = false) Origen origen,
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "false") boolean sinInversiones,
+            @RequestParam(defaultValue = "false") boolean sinDevoluciones,
             @RequestParam(defaultValue = "0") int pagina,
             @RequestParam(defaultValue = "20") int tamanio) {
         return movimientos.buscar(new ConsultaMovimientos.Filtros(mesOActual(mes), categoria, medioPago, origen, q,
-                sinInversiones),
+                sinInversiones, sinDevoluciones),
                 pagina, tamanio);
     }
 

@@ -202,6 +202,7 @@ class ConversacionJuntadasTest {
     void alCobrarDiceCuantoFaltaYQueNoEsUnIngreso() {
         Movimiento devolucion = mock(Movimiento.class);
         when(devolucion.getMonto()).thenReturn(new BigDecimal("8000.00"));
+        when(devolucion.getId()).thenReturn(ID);
         when(devolucion.getDescripcion()).thenReturn("Martín, de Asado");
         when(servicio.faltante(ID, MARTIN)).thenReturn(BigDecimal.ZERO);
         when(servicio.cobrar(ID, MARTIN, false)).thenReturn(new JuntadaService.Cobro(devolucion, asado(true),
@@ -216,6 +217,7 @@ class ConversacionJuntadasTest {
                 📥 De Asado te falta cobrar <b>$32.000</b>.
 
                 <i>Es una devolución: no cuenta como ingreso.</i>""");
+        assertThat(datos(editar.teclado())).containsExactly(Tarjetas.DESHACER + ":" + ID);
     }
 
     // --- Pago de otro monto ---

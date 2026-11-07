@@ -133,6 +133,20 @@ class EdicionMovimientosTest {
     }
 
     @Test
+    void unaDevolucionSeBorraYNoComoUnGastoComun() {
+        LocalDateTime cuando = LocalDateTime.of(2026, 11, 6, 21, 24);
+        Movimiento d = conId(Movimiento.devolucion(new BigDecimal("12150"), "Devolución", null, null, cuando,
+                Origen.TEXTO, "x", cuando), ID);
+        d.confirmar();
+        existe(d);
+
+        assertThatThrownBy(() -> edicion.borrar(ID, Alcance.GASTO)).isInstanceOf(MovimientoEspecialException.class);
+        edicion.borrar(ID, Alcance.DEVOLUCION);
+
+        verify(movimientos).borrar(ID);
+    }
+
+    @Test
     void unoPendienteONoGuardadoNoExisteParaElDashboard() {
         existe(conId(Movimiento.pendiente(MovimientoInterpretado.conCategoria(BigDecimal.TEN, "x", KIOSCO, null,
                 null, null, COMPRA), Origen.TEXTO, "x", COMPRA), ID));

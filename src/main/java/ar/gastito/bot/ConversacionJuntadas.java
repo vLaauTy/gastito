@@ -391,7 +391,8 @@ public class ConversacionJuntadas {
                 ? "\n📥 De " + html(j.descripcion()) + " te falta cobrar <b>" + formato.pesos(j.aCobrar()) + "</b>."
                 : "\n🎉 De " + html(j.descripcion()) + " ya no te deben nada.");
         html.append("\n\n<i>Es una devolución: no cuenta como ingreso.</i>");
-        return List.of(new Accion.Editar(mensajeId, html.toString(), Teclado.NINGUNO),
+        return List.of(new Accion.Editar(mensajeId, html.toString(),
+                ConversacionPrestamos.conDeshacer(cobro.devolucion().getId(), Teclado.NINGUNO)),
                 new Accion.Avisar("✅ Cobrado"));
     }
 

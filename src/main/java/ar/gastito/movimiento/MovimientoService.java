@@ -287,12 +287,14 @@ public class MovimientoService {
     /**
      * Borra un gasto común de verdad (con sus productos de ticket): ↩️ Deshacer de uno que se guardó solo, o
      * Eliminar en el dashboard. La foto del ticket no se toca. Una juntada o una cuota tienen su propio camino.
+     * También una devolución (de un préstamo o de una juntada): lo que pagaba se vuelve a deber (ver
+     * {@link AntesDeBorrar}).
      */
     @Transactional
     public Movimiento borrar(Long id) {
         Movimiento m = buscar(id);
-        if (m.getTipo() != TipoMovimiento.GASTO) {
-            throw new MovimientoEspecialException("Solo se borran gastos");
+        if (m.getTipo() != TipoMovimiento.GASTO && m.getTipo() != TipoMovimiento.DEVOLUCION) {
+            throw new MovimientoEspecialException("Solo se borran gastos y devoluciones");
         }
         if (m.isJuntada()) {
             throw new MovimientoEspecialException("Es una juntada: se borra entera, con lo que te deben");

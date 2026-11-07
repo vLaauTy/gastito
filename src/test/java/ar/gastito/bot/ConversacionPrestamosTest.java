@@ -136,6 +136,8 @@ class ConversacionPrestamosTest {
                 "Martín: 1 de 6 cuotas, faltan <b>$27.000</b>",
                 "Te pasó $3.000 y eran $5.000: las cuotas que siguen se acomodaron (la próxima, $5.400 el 10/12)",
                 "no cuenta como ingreso");
+        // Deshacer primero: si la cargué por error, la borra y la cuota vuelve a pendiente.
+        assertThat(datos(editada.teclado())).first().isEqualTo(Tarjetas.DESHACER + ":" + devolucion.getId());
     }
 
     @Test

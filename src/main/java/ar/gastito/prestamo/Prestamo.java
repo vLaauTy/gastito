@@ -189,6 +189,37 @@ public class Prestamo {
         return a;
     }
 
+    /**
+     * Se borra la devolución {@code devolucionId} (la cargué por error): las cuotas que cubría vuelven a estar por
+     * cobrar y el préstamo, si había terminado, sigue activo. Si los pagos fueron justos, cada cuota vuelve con su
+     * valor del plan; si alguno fue de más o de menos (las cuotas se habían acomodado), lo que me debe se reparte de
+     * nuevo en partes iguales entre las que quedan por cobrar.
+     *
+     * @return si esa devolución había cubierto alguna cuota de este préstamo
+     */
+    boolean deshacerCobro(Long devolucionId) {
+        List<CuotaPrestamo> cubiertas = cuotas.stream().filter(c -> devolucionId.equals(c.getDevolucionId())).toList();
+        if (cubiertas.isEmpty()) {
+            return false;
+        }
+        cubiertas.forEach(CuotaPrestamo::volverAPendiente);
+        BigDecimal debe = monto.subtract(getCobrado());
+        List<CuotaPrestamo> porCobrar = porCobrar();
+        BigDecimal suman = porCobrar.stream().map(CuotaPrestamo::getMonto).reduce(BigDecimal.ZERO, BigDecimal::add);
+        boolean comoElPlan = suman.compareTo(debe) == 0 && porCobrar.subList(0, porCobrar.size() - 1).stream()
+                .allMatch(c -> c.getMonto().compareTo(valorCuota) == 0);
+        if (!comoElPlan && debe.signum() > 0) {
+            List<BigDecimal> montos = PlanPrestamo.repartir(debe, porCobrar.size());
+            for (int i = 0; i < porCobrar.size(); i++) {
+                porCobrar.get(i).cambiarMonto(montos.get(i));
+            }
+        }
+        if (estado == EstadoPrestamo.TERMINADO) {
+            this.estado = EstadoPrestamo.ACTIVO;
+        }
+        return true;
+    }
+
     /** Las cuotas que todavía me debe (pendientes o atrasadas), de la más vieja a la más nueva. */
     List<CuotaPrestamo> porCobrar() {
         return cuotas.stream().filter(c -> c.getEstado().porCobrar()).toList();

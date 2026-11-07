@@ -429,6 +429,7 @@ tr[hidden] { display: none !important; }
 
 /* Inversiones: ahorros, no ingresos ni gastos. La ganancia en verde y la pérdida en naranja, como el resto. */
 .chip.inversion { background: var(--info-soft); color: var(--info); }
+.chip.devolucion { background: var(--accent-soft); color: var(--accent-fg); }
 .gana { color: var(--ok); font-weight: 600; }
 .pierde { color: var(--warn); font-weight: 600; }
 .filters label.check { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--fg); }

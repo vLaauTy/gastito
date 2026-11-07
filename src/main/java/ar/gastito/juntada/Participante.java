@@ -98,6 +98,19 @@ public class Participante {
         }
     }
 
+    /**
+     * Se borró la devolución con la que me pagó {@code pago} (la cargué por error): me lo vuelve a deber. Si había
+     * quedado pagado (o saldado), vuelve a pendiente; una parte dada por perdida no cambia.
+     */
+    void deshacerPago(BigDecimal pago) {
+        this.montoPagado = montoPagado.subtract(pago).max(BigDecimal.ZERO);
+        this.devolucionId = null;
+        if (estado == EstadoParticipante.PAGADO) {
+            this.estado = EstadoParticipante.PENDIENTE;
+            this.pagadoEn = null;
+        }
+    }
+
     void renombrar(String nuevo) {
         this.nombre = recortar(nuevo);
     }

@@ -234,6 +234,60 @@ class PrestamoServiceTest {
     }
 
     @Test
+    void borrarUnaDevolucionJustaDejaLaCuotaPendienteComoEstaba() {
+        VistaPrestamo v = guardado();
+        PrestamoService.Cobro c = prestamos.cobrar(devolucion("5000").getId(), v.id());
+
+        movimientos.borrar(c.devolucion().getId());
+
+        VistaPrestamo despues = prestamos.vista(v.id());
+        assertThat(despues.cuotasCobradas()).isZero();
+        assertThat(despues.restante()).isEqualByComparingTo("30000");
+        assertThat(despues.proxima().numero()).isEqualTo(1);
+        assertThat(despues.proxima().vence()).isEqualTo(LocalDate.of(2026, 12, 6));
+        assertThat(despues.cuotas()).extracting(VistaPrestamo.Cuota::monto).map(BigDecimal::intValue)
+                .containsOnly(5000);
+        assertThat(repositorio.findById(c.devolucion().getId())).isEmpty();
+    }
+
+    @Test
+    void borrarUnaDevolucionQueAcomodoLasCuotasLasRepartePareja() {
+        VistaPrestamo v = guardado();
+        PrestamoService.Cobro de = prestamos.cobrar(devolucion("12000").getId(), v.id());
+
+        movimientos.borrar(de.devolucion().getId());
+
+        assertThat(prestamos.vista(v.id()).cuotas()).extracting(VistaPrestamo.Cuota::monto)
+                .map(BigDecimal::intValue).containsExactly(5000, 5000, 5000, 5000, 5000, 5000);
+    }
+
+    @Test
+    void borrarUnaDevolucionDeUnPrestamoTerminadoLoVuelveAActivarYRespetaLosOtrosCobros() {
+        VistaPrestamo v = guardado();
+        prestamos.cobrar(devolucion("5000").getId(), v.id());
+        PrestamoService.Cobro resto = prestamos.cobrar(devolucion("25000").getId(), v.id());
+        assertThat(resto.prestamo().terminado()).isTrue();
+
+        movimientos.borrar(resto.devolucion().getId());
+
+        VistaPrestamo despues = prestamos.vista(v.id());
+        assertThat(despues.terminado()).isFalse();
+        assertThat(despues.cuotasCobradas()).isEqualTo(1);
+        assertThat(despues.restante()).isEqualByComparingTo("25000");
+        assertThat(prestamos.conDeuda()).extracting(VistaPrestamo::id).contains(v.id());
+    }
+
+    @Test
+    void borrarUnaDevolucionQueNoEsDeUnPrestamoNoTocaNada() {
+        VistaPrestamo v = guardado();
+        Movimiento suelta = devolucion("5000");
+
+        movimientos.borrar(suelta.getId());
+
+        assertThat(prestamos.vista(v.id()).restante()).isEqualByComparingTo("30000");
+    }
+
+    @Test
     void borrarElGastoBorraElPrestamoSiNoHayCobrosYSiLosHayNoSeBorra() {
         VistaPrestamo v = guardado();
         prestamos.cobrar(devolucion("5000").getId(), v.id());

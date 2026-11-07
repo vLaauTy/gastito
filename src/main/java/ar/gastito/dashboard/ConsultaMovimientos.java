@@ -138,9 +138,16 @@ public class ConsultaMovimientos {
      * Todos opcionales menos el mes. {@code q} busca en la descripción, sin distinguir tildes ni mayúsculas.
      *
      * @param sinInversiones oculta los aportes a las inversiones y los retiros (por defecto se ven, como "Inversión")
+     * @param sinDevoluciones oculta lo que me devolvieron de préstamos y juntadas (por defecto se ve, como
+     *                        "Devolución")
      */
     public record Filtros(YearMonth mes, Long categoriaId, Long medioPagoId, Origen origen, String q,
-            boolean sinInversiones) {
+            boolean sinInversiones, boolean sinDevoluciones) {
+
+        public Filtros(YearMonth mes, Long categoriaId, Long medioPagoId, Origen origen, String q,
+                boolean sinInversiones) {
+            this(mes, categoriaId, medioPagoId, origen, q, sinInversiones, false);
+        }
 
         public Filtros(YearMonth mes, Long categoriaId, Long medioPagoId, Origen origen, String q) {
             this(mes, categoriaId, medioPagoId, origen, q, false);
@@ -205,12 +212,16 @@ public class ConsultaMovimientos {
 
     /**
      * Un gasto que no se borra como uno común: una juntada (se borra entera, o es una parte dada por perdida), una
-     * cuota (se cancela el plan desde ella) o el pago de un fijo (el fijo vuelve a "Falta").
+     * cuota (se cancela el plan desde ella), el pago de un fijo (el fijo vuelve a "Falta") o una devolución (de un
+     * préstamo o una juntada: no es gasto, va con la etiqueta "Devolución" y lo que pagaba se vuelve a deber).
      */
     public enum Especial {
-        JUNTADA, CUOTA, FIJO;
+        JUNTADA, CUOTA, FIJO, DEVOLUCION;
 
         static Especial de(Movimiento m) {
+            if (m.getTipo() == TipoMovimiento.DEVOLUCION) {
+                return DEVOLUCION;
+            }
             return m.isJuntada() ? JUNTADA : m.getPlanCuotasId() != null ? CUOTA : m.getGastoFijoId() != null ? FIJO
                     : null;
         }
@@ -272,17 +283,21 @@ public class ConsultaMovimientos {
         return (root, query, cb) -> {
             List<Predicate> condiciones = new ArrayList<>();
             condiciones.add(cb.equal(root.get("estado"), EstadoMovimiento.CONFIRMADO));
-            if (f.sinInversiones()) {
-                condiciones.add(cb.equal(root.get("tipo"), TipoMovimiento.GASTO));
-            } else {
-                // Los gastos, y los aportes a las inversiones y los retiros de ellas (pases con una de inversión).
+            // Los gastos; los aportes a las inversiones y los retiros de ellas (pases con una de inversión), y las
+            // devoluciones, salvo que se oculten.
+            List<Predicate> tipos = new ArrayList<>();
+            tipos.add(cb.equal(root.get("tipo"), TipoMovimiento.GASTO));
+            if (!f.sinInversiones()) {
                 Join<Movimiento, Cuenta> cuenta = root.join("cuenta", JoinType.LEFT);
                 Join<Movimiento, Cuenta> destino = root.join("cuentaDestino", JoinType.LEFT);
-                condiciones.add(cb.or(cb.equal(root.get("tipo"), TipoMovimiento.GASTO),
-                        cb.and(cb.equal(root.get("tipo"), TipoMovimiento.ENTRE_CUENTAS),
-                                cb.or(cb.equal(cuenta.get("tipo"), TipoCuenta.INVERSION),
-                                        cb.equal(destino.get("tipo"), TipoCuenta.INVERSION)))));
+                tipos.add(cb.and(cb.equal(root.get("tipo"), TipoMovimiento.ENTRE_CUENTAS),
+                        cb.or(cb.equal(cuenta.get("tipo"), TipoCuenta.INVERSION),
+                                cb.equal(destino.get("tipo"), TipoCuenta.INVERSION))));
             }
+            if (!f.sinDevoluciones()) {
+                tipos.add(cb.equal(root.get("tipo"), TipoMovimiento.DEVOLUCION));
+            }
+            condiciones.add(cb.or(tipos.toArray(Predicate[]::new)));
             condiciones.add(cb.greaterThanOrEqualTo(root.get("fechaHora"), periodo.desde()));
             condiciones.add(cb.lessThan(root.get("fechaHora"), periodo.hasta()));
             if (f.categoriaId() != null) {
@@ -340,7 +355,7 @@ public class ConsultaMovimientos {
     }
 
     private static boolean sinEspecificar(Movimiento m) {
-        if (m.getTipo() == TipoMovimiento.ENTRE_CUENTAS) {
+        if (m.getTipo() == TipoMovimiento.ENTRE_CUENTAS || m.getTipo() == TipoMovimiento.DEVOLUCION) {
             return false;
         }
         return m.getTarjeta() == null && m.getCuenta() == null

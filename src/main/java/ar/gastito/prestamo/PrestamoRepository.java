@@ -39,6 +39,12 @@ public interface PrestamoRepository extends JpaRepository<Prestamo, Long> {
             order by p.fecha, p.id""")
     List<Prestamo> delViaje(@Param("viajeId") Long viajeId);
 
+    /** El préstamo con alguna cuota pagada con esta devolución. */
+    @Query("""
+            select distinct p from Prestamo p left join fetch p.cuotas left join fetch p.movimiento
+            where exists (select c from CuotaPrestamo c where c.prestamo = p and c.devolucionId = :devolucionId)""")
+    Optional<Prestamo> conDevolucion(@Param("devolucionId") Long devolucionId);
+
     /** Se borró un viaje: sus préstamos quedan sin viaje. */
     @org.springframework.data.jpa.repository.Modifying
     @Query("update Prestamo p set p.viajeId = null where p.viajeId = :viajeId")

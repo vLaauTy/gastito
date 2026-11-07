@@ -311,6 +311,11 @@ public class Tarjetas {
 
     /** ↩️ Deshacer: el gasto se borró. */
     public String deshecho(Movimiento m) {
+        if (m.getTipo() == TipoMovimiento.DEVOLUCION) {
+            return "↩️ <b>Deshecho</b> · <s>" + formato.monto(m) + "</s>"
+                    + (m.getDescripcion() == null ? "" : "\n" + html(m.getDescripcion()))
+                    + "\nSe borró la devolución: lo que pagaba te lo vuelve a deber.";
+        }
         Categoria c = m.getCategoria();
         return "↩️ <b>Deshecho</b> · <s>" + formato.monto(m) + "</s>"
                 + (c == null ? "" : " · " + html(c.getNombreConEmoji()))

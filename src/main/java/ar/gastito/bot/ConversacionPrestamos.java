@@ -380,7 +380,19 @@ public class ConversacionPrestamos {
                             + DIA_MES.format(proxima.vence()) + ").");
         }
         sb.append("\n\n<i>Es una devolución: no cuenta como ingreso.</i>");
-        return List.of(new Accion.Editar(mensajeId, sb.toString(), botones(p)), new Accion.Avisar("✅ Cobrado"));
+        return List.of(new Accion.Editar(mensajeId, sb.toString(), conDeshacer(c.devolucion().getId(), botones(p))),
+                new Accion.Avisar("✅ Cobrado"));
+    }
+
+    /**
+     * Los botones de un cobro, con ↩️ Deshacer primero: borra la devolución y las cuotas que pagaba vuelven a
+     * pendiente (lo mismo sirve para las juntadas).
+     */
+    static Teclado conDeshacer(long devolucionId, Teclado resto) {
+        List<List<Teclado.Boton>> filas = new java.util.ArrayList<>();
+        filas.add(List.of(new Teclado.Boton("↩️ Deshacer", Tarjetas.DESHACER + ":" + devolucionId)));
+        filas.addAll(resto.filas());
+        return new Teclado(filas);
     }
 
     /** Un texto para copiar y mandarle a la persona. El bot no le escribe. */

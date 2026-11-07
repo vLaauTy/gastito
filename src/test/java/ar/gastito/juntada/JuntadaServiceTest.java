@@ -35,7 +35,7 @@ import ar.gastito.movimiento.TipoMovimiento;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
-@Import({JuntadaService.class, MovimientoService.class, JuntadaServiceTest.Config.class})
+@Import({JuntadaService.class, MovimientoService.class, DevolucionesJuntada.class, JuntadaServiceTest.Config.class})
 class JuntadaServiceTest {
 
     static final ZoneId ARGENTINA = ZoneId.of("America/Argentina/Buenos_Aires");
@@ -244,6 +244,24 @@ class JuntadaServiceTest {
         assertThat(resto.juntada().participantes().get(0).estado()).isEqualTo(EstadoParticipante.PAGADO);
         assertThat(resto.juntada().aCobrar()).isEqualByComparingTo("32000");
         assertThat(repositorio.totalIngresos(ASADO.toLocalDate().atStartOfDay(), AHORA.plusHours(1))).isZero();
+    }
+
+    @Test
+    void borrarLaDevolucionLaVuelveADeber() {
+        VistaJuntada v = guardada(asado("48000", 6, "Martín", "Sofi"));
+        Long martin = v.participantes().get(0).id();
+        Movimiento devolucion = devolucion("8000");
+        juntadas.cobrar(devolucion.getId(), martin);
+
+        movimientos.borrar(devolucion.getId());
+
+        VistaJuntada despues = juntadas.vista(v.movimientoId()).orElseThrow();
+        VistaJuntada.Persona p = despues.participantes().get(0);
+        assertThat(p.estado()).isEqualTo(EstadoParticipante.PENDIENTE);
+        assertThat(p.pagado()).isZero();
+        assertThat(p.restante()).isEqualByComparingTo("8000");
+        assertThat(despues.aCobrar()).isEqualByComparingTo("40000");
+        assertThat(repositorio.findById(devolucion.getId())).isEmpty();
     }
 
     @Test
