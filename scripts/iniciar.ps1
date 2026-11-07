@@ -35,6 +35,23 @@ function JarCompilado {
         Where-Object { $_.Name -notmatch 'original|sources|javadoc' } | Select-Object -First 1
 }
 
+# Un jar de Spring Boot ejecutable dice en el manifiesto cuál es la aplicación (Start-Class). Si un package se cortó
+# a la mitad (por ejemplo, con Gastito prendido usando el jar), queda un jar común, más nuevo que el código pero que
+# no arranca ("no hay ningún atributo de manifiesto principal").
+function JarEjecutable($jar) {
+    if (-not $jar) { return $false }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    try {
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($jar.FullName)
+        try {
+            $entrada = $zip.GetEntry('META-INF/MANIFEST.MF')
+            if (-not $entrada) { return $false }
+            $lector = New-Object System.IO.StreamReader($entrada.Open())
+            try { return $lector.ReadToEnd() -match '(?m)^Start-Class:' } finally { $lector.Dispose() }
+        } finally { $zip.Dispose() }
+    } catch { return $false }
+}
+
 # Gastito corriendo: el java de este proyecto (el jar de target\ o GastitoApplication desde el IDE/mvnw).
 function GastitosCorriendo {
     $procesos = @(Get-CimInstance Win32_Process -Filter "Name='java.exe' OR Name='javaw.exe'" |
@@ -141,12 +158,12 @@ if (-not $variables['WHISPER_API_KEY']) {
 $jar = JarCompilado
 $fuentes = @(Get-Item pom.xml) + @(Get-ChildItem src -Recurse -File)
 $ultimoCambio = ($fuentes | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
-if (-not $jar -or $jar.LastWriteTime -lt $ultimoCambio) {
+if (-not $jar -or $jar.LastWriteTime -lt $ultimoCambio -or -not (JarEjecutable $jar)) {
     Paso "Actualizando Gastito… (compila el código nuevo; tarda alrededor de un minuto)"
     & .\mvnw.cmd -q -B -DskipTests package
     if ($LASTEXITCODE -ne 0) {
         $viejo = JarCompilado
-        if (-not $viejo -or $Automatico) {
+        if (-not (JarEjecutable $viejo) -or $Automatico) {
             Falla "La compilación falló (el error está arriba). No arranco la versión anterior: corregí el error y volvé a abrir iniciar.bat o reiniciar.bat."
         }
         Write-Host ""
