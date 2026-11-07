@@ -2,16 +2,18 @@
 # Se usa desde iniciar.bat (doble clic). Perfil por defecto: postgres (la base real, gastito).
 # "iniciar.bat prueba" arranca con la base de prueba (gastito_prueba), solo para probar cambios, y "iniciar.bat dev" con H2.
 # -Automatico es para el Programador de tareas: no pregunta nada y espera hasta 10 minutos a que la base responda.
+# -Reiniciar (reiniciar.bat): cierra el Gastito que está corriendo sin preguntar, recompila si hace falta y lo vuelve a abrir
+# con el mismo perfil que tenía (salvo que se pase otro).
 param(
     [ValidateSet('prueba', 'postgres', 'dev')][string]$Perfil = 'postgres',
-    [switch]$Automatico
+    [switch]$Automatico,
+    [switch]$Reiniciar
 )
 
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $raiz = Split-Path -Parent $PSScriptRoot
 Set-Location $raiz
-$Host.UI.RawUI.WindowTitle = "Gastito ($Perfil)"
 
 function Paso($texto) { Write-Host "-> $texto" -ForegroundColor Cyan }
 function Ok($texto) { Write-Host "   $texto" -ForegroundColor Green }
@@ -33,6 +35,34 @@ function JarCompilado {
         Where-Object { $_.Name -notmatch 'original|sources|javadoc' } | Select-Object -First 1
 }
 
+# Gastito corriendo: el java de este proyecto (el jar de target\ o GastitoApplication desde el IDE/mvnw).
+function GastitosCorriendo {
+    $procesos = @(Get-CimInstance Win32_Process -Filter "Name='java.exe' OR Name='javaw.exe'" |
+        Where-Object { $_.CommandLine -and $_.CommandLine -match 'GastitoApplication|gastito-[\d.]+[^\\/]*\.jar' })
+    $propios = @($procesos | Where-Object { $_.CommandLine -match 'GastitoApplication' -or $_.CommandLine.Contains($raiz) })
+    if ($propios.Count -gt 0) { return $propios }
+    return $procesos
+}
+# Las ventanas de iniciar.ps1 que lo abrieron (menos esta), para que no queden abiertas esperando un Enter.
+function VentanasDeIniciar {
+    @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe' OR Name='pwsh.exe'" |
+        Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match 'iniciar\.ps1' })
+}
+function Apagar($procesos) {
+    VentanasDeIniciar | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    $procesos | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    $limite = (Get-Date).AddSeconds(15)
+    while (@(GastitosCorriendo).Count -gt 0 -and (Get-Date) -lt $limite) { Start-Sleep -Milliseconds 500 }
+    Start-Sleep -Seconds 1  # que Windows suelte el jar antes de recompilarlo
+}
+
+# Al reiniciar sin decir el perfil, el mismo que tenía el que está corriendo.
+if ($Reiniciar -and -not $PSBoundParameters.ContainsKey('Perfil')) {
+    $anterior = @(GastitosCorriendo) | Select-Object -First 1
+    if ($anterior -and $anterior.CommandLine -match '--spring\.profiles\.active=(prueba|postgres|dev)\b') { $Perfil = $Matches[1] }
+}
+$Host.UI.RawUI.WindowTitle = "Gastito ($Perfil)"
+
 # 1. Java (Maven no hace falta: se usa el wrapper del proyecto, mvnw.cmd)
 Paso "Revisando Java"
 if (-not (Get-Command java -ErrorAction SilentlyContinue)) { Falla "No encontré 'java' en el PATH." }
@@ -53,15 +83,16 @@ Ok "Completo"
 
 # 3. Dos Gastitos a la vez se pisan: Telegram le entrega cada mensaje a uno solo.
 Paso "Revisando que no haya otro Gastito prendido"
-$otros = @(Get-CimInstance Win32_Process -Filter "Name='java.exe'" |
-    Where-Object { $_.CommandLine -match 'GastitoApplication|gastito-[\d.]+.*\.jar' })
+$otros = @(GastitosCorriendo)
 if ($otros.Count -gt 0) {
     Write-Host "   Ya hay un Gastito corriendo (PID $($otros.ProcessId -join ', '))." -ForegroundColor Yellow
-    if ($Automatico) { exit 0 }
-    $respuesta = Read-Host "   ¿Lo apago y arranco este? (S/N)"
-    if ($respuesta -notmatch '^\s*[sS]') { exit 0 }
-    $otros | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
-    Start-Sleep -Seconds 2
+    if (-not $Reiniciar) {
+        if ($Automatico) { exit 0 }
+        $respuesta = Read-Host "   ¿Lo apago y arranco este? (S/N)"
+        if ($respuesta -notmatch '^\s*[sS]') { exit 0 }
+    }
+    Apagar $otros
+    if (@(GastitosCorriendo).Count -gt 0) { Falla "No pude cerrar el Gastito que estaba corriendo." }
     Ok "Apagado"
 } else {
     Ok "Ninguno"
@@ -106,16 +137,28 @@ if (-not $variables['WHISPER_API_KEY']) {
     Write-Host "   Falta WHISPER_API_KEY en el .env: el servidor de Whisper va a rechazar los audios." -ForegroundColor Yellow
 }
 
-# 6. Compilar solo si no hay jar o si el código es más nuevo que el jar
+# 6. Compilar solo si no hay jar o si el código (src\ o pom.xml) es más nuevo que el jar
 $jar = JarCompilado
-$fuentes = @(Get-Item pom.xml) + @(Get-ChildItem src\main -Recurse -File)
+$fuentes = @(Get-Item pom.xml) + @(Get-ChildItem src -Recurse -File)
 $ultimoCambio = ($fuentes | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
 if (-not $jar -or $jar.LastWriteTime -lt $ultimoCambio) {
-    Paso "Compilando (pasa la primera vez y cuando cambia el código; tarda alrededor de un minuto)"
+    Paso "Actualizando Gastito… (compila el código nuevo; tarda alrededor de un minuto)"
     & .\mvnw.cmd -q -B -DskipTests package
-    if ($LASTEXITCODE -ne 0) { Falla "La compilación falló. El error está arriba." }
-    $jar = JarCompilado
-    Ok "Listo"
+    if ($LASTEXITCODE -ne 0) {
+        $viejo = JarCompilado
+        if (-not $viejo -or $Automatico) {
+            Falla "La compilación falló (el error está arriba). No arranco la versión anterior: corregí el error y volvé a abrir iniciar.bat o reiniciar.bat."
+        }
+        Write-Host ""
+        Write-Host "X  La compilación falló (el error está arriba). El jar que quedó es la versión ANTERIOR, sin los últimos cambios." -ForegroundColor Red
+        $respuesta = Read-Host "   ¿Arranco igual con la versión anterior? (S/N)"
+        if ($respuesta -notmatch '^\s*[sS]') { exit 1 }
+        Write-Host "   Arrancando con la versión ANTERIOR." -ForegroundColor Yellow
+        $jar = $viejo
+    } else {
+        $jar = JarCompilado
+        Ok "Listo"
+    }
 } else {
     Paso "El código no cambió desde la última compilación: uso el jar que ya está"
 }

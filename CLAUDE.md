@@ -11,6 +11,7 @@ Este archivo es el contexto permanente del proyecto. Leelo antes de cualquier ta
 - La documentación (README y este archivo) se actualiza al terminar cada **etapa**, no cada parte; este archivo se mantiene corto, lo detallado va en `docs/`.
 - Los reportes de cierre de cada parte: máximo 10 líneas (qué se hizo, cómo probarlo, decisiones tomadas).
 - Antes de pausar o cambiar de parte, verificá que todo esté commiteado y subido.
+- Al terminar cada pedido no le pidas al usuario que recompile: decile solo "reiniciá con reiniciar.bat" (`iniciar.bat` y `reiniciar.bat` recompilan solos si `src/` o `pom.xml` cambiaron).
 
 ## Stack
 

@@ -105,7 +105,7 @@ Doble clic en **`iniciar.bat`**, en la raíz del proyecto. Arranca con el perfil
 3. Que no haya otro Gastito prendido. Si hay uno, pregunta si lo apaga: dos a la vez se pisan en Telegram.
 4. Que PostgreSQL responda. Si la VM todavía está arrancando, espera hasta 3 minutos.
 5. Que responda el servidor de Whisper. Si no, avisa y arranca igual: con texto funciona, solo fallan los audios.
-6. Que el jar esté al día. Compila solo la primera vez y cuando cambió el código (sin correr los tests).
+6. Que el jar esté al día: si `src/` o `pom.xml` son más nuevos que el jar (o no hay jar), muestra "Actualizando Gastito…" y compila sin tests. Si la compilación falla, muestra el error y no arranca la versión anterior sin preguntar (en `-Automatico`, no la arranca).
 
 Cuando en la ventana aparece `Bot de Telegram conectado y escuchando mensajes`, ya se puede usar. Al arrancar,
 la consola (`Gastito corriendo con la base ...`) y un mensaje de Telegram dicen con qué base está corriendo
@@ -122,6 +122,8 @@ iniciar.bat dev        # H2 en un archivo, sin PostgreSQL
 `scripts\iniciar.ps1 -Automatico` es la variante para el Programador de tareas (ver
 [Arranque automático](#arranque-automático)): no pregunta nada, espera hasta 10 minutos a PostgreSQL y, si ya
 hay un Gastito prendido, no hace nada.
+
+Después de un cambio en el código, doble clic en **`reiniciar.bat`**: cierra el Gastito que está corriendo (solo el java de este proyecto y su ventana de `iniciar`), recompila si hace falta y lo vuelve a abrir con el mismo perfil (`reiniciar.bat prueba` para cambiarlo).
 
 ## Dos bases: prueba y real
 
