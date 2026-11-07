@@ -69,7 +69,7 @@
     $('#vj-fechas').textContent = `${nombreConEmoji(v)} · del ${fechaCorta(v.desde)} al ${fechaCorta(v.hasta)} (${v.dias} días)`
       + (v.personas ? ` · ${v.personas} ${v.personas === 1 ? 'persona' : 'personas'}` : '') + ` · ${ESTADOS[v.estado] || ''}`;
     $('#vj-pagado').textContent = pesos(v.pagado);
-    $('#vj-pagado-nota').textContent = `Pagado ${pesos(v.pagado)} · Falta ≈ ${pesos(v.falta)} · Total estimado ${pesos(v.totalEstimado)}`;
+    $('#vj-pagado-nota').textContent = 'Tus gastos guardados del viaje (tu parte)';
     $('#vj-falta').textContent = pesos(v.falta);
     $('#vj-falta-nota').textContent = v.sinMonto ? `Sin contar ${v.sinMonto === 1 ? '1 pendiente sin monto' : `${v.sinMonto} pendientes sin monto`}` : 'Lo que falta pagar con monto';
     $('#vj-total').textContent = pesos(v.totalEstimado);
@@ -121,10 +121,11 @@
       const monto = p.pagado ? `Pagado ${pesos(p.montoPagado)}` : p.montoAproximado != null ? `≈ ${pesos(p.montoAproximado)}` : 'sin monto';
       return h('div', { class: 'pendiente' }, check,
         h('div', { class: 'crece' }, p.pagado ? h('s', {}, p.descripcion) : h('b', {}, p.descripcion), ` · ${monto}`),
-        p.pagado ? null : h('button', { type: 'button', class: 'mini', onclick: () => editorPendiente(p) }, Iconos.svg('pencil'), 'Editar'),
-        p.pagado ? null : h('button', { type: 'button', class: 'mini peligro', onclick: () => {
-          if (confirm(`¿Sacar ${p.descripcion} de lo que falta pagar?`)) enviar(`/api/viajes/pendientes/${p.id}`, null, 'Sacado', 'DELETE');
-        } }, Iconos.svg('x'), 'Sacar'));
+        p.pagado ? null : h('div', { class: 'botones' },
+          h('button', { type: 'button', class: 'mini', onclick: () => editorPendiente(p) }, Iconos.svg('pencil'), 'Editar'),
+          h('button', { type: 'button', class: 'mini peligro', onclick: () => {
+            if (confirm(`¿Sacar ${p.descripcion} de lo que falta pagar?`)) enviar(`/api/viajes/pendientes/${p.id}`, null, 'Sacado', 'DELETE');
+          } }, Iconos.svg('x'), 'Sacar')));
     });
     $('#vj-pendientes').replaceChildren(...(items.length ? items
       : [h('p', { class: 'note' }, 'No anotaste nada. Decíselo al bot ("para Bariloche me falta el hospedaje, ≈ 400.000") o tocá Agregar.')]));
