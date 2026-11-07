@@ -9,6 +9,8 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Agregar, editar y dar de baja tarjetas desde el dashboard, sin tocar el historial. */
 @DataJpaTest
@@ -65,6 +67,21 @@ class TarjetasAbmTest {
 
         catalogos.reactivarTarjeta(mp.getId());
         assertThat(catalogos.cargar().tarjetas()).hasSize(2);
+    }
+
+    /** Como en el dashboard (sin open-in-view): lo que devuelve se lee fuera de la transacción. */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void bajaYReactivarDevuelvenLaCuentaQuePagaYaCargada() {
+        long master = catalogos.todasLasTarjetas().stream().filter(t -> t.getNombre().equals("MasterCard Gold"))
+                .findFirst().orElseThrow().getId();
+        try {
+            assertThat(catalogos.bajaTarjeta(master).getCuentaDebito().getNombre()).isEqualTo("Galicia");
+        } finally {
+            TarjetaCredito reactivada = catalogos.reactivarTarjeta(master);
+            assertThat(reactivada.isActiva()).isTrue();
+            assertThat(reactivada.getCuentaDebito().getNombre()).isEqualTo("Galicia");
+        }
     }
 
     @Test

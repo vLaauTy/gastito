@@ -42,11 +42,7 @@ public class CatalogoService {
     @Transactional(readOnly = true)
     public java.util.List<TarjetaCredito> todasLasTarjetas() {
         java.util.List<TarjetaCredito> todas = tarjetas.findAllByOrderByActivaDescIdAsc();
-        todas.forEach(t -> {
-            if (t.getCuentaDebito() != null) {
-                t.getCuentaDebito().getNombre();
-            }
-        });
+        todas.forEach(CatalogoService::conCuenta);
         return todas;
     }
 
@@ -67,7 +63,7 @@ public class CatalogoService {
             throw new IllegalArgumentException("Ya hay una tarjeta que se llama " + d.nombre().strip());
         }
         t.editar(d.nombre(), d.banco(), cuenta(d.cuentaDebitoId()), d.color(), d.inicial(), d.alias());
-        return t;
+        return conCuenta(t);
     }
 
     /** Ya no se usa: deja de aparecer para elegir y en el ciclo, pero sus gastos y resúmenes quedan. */
@@ -75,13 +71,21 @@ public class CatalogoService {
     public TarjetaCredito bajaTarjeta(long id) {
         TarjetaCredito t = tarjeta(id);
         t.darDeBaja();
-        return t;
+        return conCuenta(t);
     }
 
     @Transactional
     public TarjetaCredito reactivarTarjeta(long id) {
         TarjetaCredito t = tarjeta(id);
         t.reactivar();
+        return conCuenta(t);
+    }
+
+    /** La cuenta que paga es perezosa y el dashboard la lee fuera de la transacción (sin open-in-view). */
+    private static TarjetaCredito conCuenta(TarjetaCredito t) {
+        if (t.getCuentaDebito() != null) {
+            t.getCuentaDebito().getNombre();
+        }
         return t;
     }
 
