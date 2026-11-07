@@ -452,3 +452,4 @@ tr[hidden] { display: none !important; }
   #vj-pendientes .pendiente, #vj-deudas .pendiente, #vj-sin-viaje .pendiente { flex-wrap: wrap; }
   #vj-pendientes .pendiente .botones, #vj-deudas .pendiente .botones, #vj-sin-viaje .pendiente .botones { flex-basis: 100%; justify-content: flex-end; }
 }
+.grafico[hidden] { display: none; }

@@ -148,6 +148,11 @@
 
   function porDia(v) {
     if (grafico) grafico.destroy();
+    grafico = null;
+    const vacio = Number(v.pagado) === 0;
+    $('#vj-grafico').parentElement.hidden = vacio;
+    $('#vj-por-dia-vacio').hidden = !vacio;
+    if (vacio) return;
     grafico = new window.Chart($('#vj-grafico'), {
       type: 'bar',
       data: {
