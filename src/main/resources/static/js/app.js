@@ -90,7 +90,11 @@
     for (const [clave, valor] of Object.entries(props)) {
       if (valor == null || valor === false) continue;
       if (clave === 'class') el.className = valor;
-      else if (clave === 'style') Object.assign(el.style, valor);
+      // El estilo puede venir como objeto ({ width: '40%' }) o como texto ('--tarjeta: #c00', para variables CSS).
+      else if (clave === 'style') {
+        if (typeof valor === 'string') el.setAttribute('style', valor);
+        else Object.assign(el.style, valor);
+      }
       else if (clave.startsWith('on')) el.addEventListener(clave.slice(2), valor);
       else el.setAttribute(clave, valor === true ? '' : valor);
     }
