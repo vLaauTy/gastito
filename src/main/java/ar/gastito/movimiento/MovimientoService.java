@@ -53,11 +53,17 @@ public class MovimientoService {
         this.viajes = viajes;
     }
 
-    /** Un gasto que cargó el usuario (texto, audio o ticket) con la fecha de un viaje es de ese viaje. */
+    /**
+     * Un gasto que cargó el usuario (texto, audio o ticket) con la fecha de un viaje es de ese viaje; si no, el viaje
+     * que nombra ("el pasaje a Bariloche").
+     */
     private Movimiento conViaje(Movimiento m) {
         if (m.getTipo() == TipoMovimiento.GASTO && m.getFechaHora() != null && (m.getOrigen() == Origen.TEXTO
                 || m.getOrigen() == Origen.AUDIO || m.getOrigen() == Origen.TICKET)) {
-            viajes.viajeDe(m.getFechaHora().toLocalDate()).ifPresent(m::asociarViaje);
+            viajes.viajeDe(m.getFechaHora().toLocalDate())
+                    .or(() -> viajes.viajeNombradoEn(m.getTextoOriginal()))
+                    .or(() -> viajes.viajeNombradoEn(m.getDescripcion()))
+                    .ifPresent(m::asociarViaje);
         }
         return m;
     }

@@ -65,6 +65,25 @@ class EdicionMovimientosControllerTest {
     }
 
     @Test
+    void conElViajeSeAsociaYConCeroSeDesasocia() throws Exception {
+        ConsultaMovimientos.Fila fila = new ConsultaMovimientos.Fila(7L, LocalDateTime.of(2026, 10, 20, 16, 42),
+                "Pancho", 1L, "Kiosco", "🍬", "Galicia", false, "TEXTO", new BigDecimal("3500.00"), false, false, false,
+                null, 2L, null, null, null, null, null, null, 3L);
+        when(edicion.editar(7L, new BigDecimal("3500"), LocalDate.of(2026, 10, 20), "Pancho", 1L, null, 2L, 3L))
+                .thenReturn(fila);
+
+        mvc.perform(put("/api/movimientos/7").contentType(MediaType.APPLICATION_JSON)
+                .content(CAMBIO.replace("\"cuentaId\": 2", "\"cuentaId\": 2, \"viajeId\": 3")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.viajeId").value(3));
+
+        mvc.perform(put("/api/movimientos/7").contentType(MediaType.APPLICATION_JSON)
+                .content(CAMBIO.replace("\"cuentaId\": 2", "\"cuentaId\": 2, \"viajeId\": 0")));
+        org.mockito.Mockito.verify(edicion).editar(7L, new BigDecimal("3500"), LocalDate.of(2026, 10, 20), "Pancho",
+                1L, null, 2L, 0L);
+    }
+
+    @Test
     void unMontoQueNoSeEntiendeEsUn400() throws Exception {
         mvc.perform(put("/api/movimientos/7").contentType(MediaType.APPLICATION_JSON)
                 .content(CAMBIO.replace("3.500", "mucho")))

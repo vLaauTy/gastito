@@ -167,6 +167,33 @@ class ViajeServiceTest {
     }
 
     @Test
+    void unGastoFueraDeLasFechasQueNombraAlViajeQuedaAsociado() {
+        Long id = bariloche().id();
+        Movimiento pasaje = movimientos.crearPendiente(MovimientoInterpretado.conCategoria(new BigDecimal("293000"),
+                "Pasaje", categorias.findByNombre("Salidas").orElseThrow(), null, null, null, AHORA), Origen.TEXTO,
+                "pagué 293.000 del pasaje a Bariloche");
+        Movimiento otro = gasto("5000", AHORA, Origen.TEXTO);
+
+        assertThat(pasaje.getViajeId()).isEqualTo(id);
+        assertThat(otro.getViajeId()).isNull();
+        // Por la descripción también, y sin confundir un nombre con parte de otra palabra.
+        assertThat(modo.viajeNombradoEn("Hotel en bariloche")).contains(id);
+        assertThat(modo.viajeNombradoEn("Barilochense")).isEmpty();
+    }
+
+    @Test
+    void desdeElDashboardSeAsociaYSeDesasociaUnGastoYaGuardado() {
+        Long id = bariloche().id();
+        Movimiento m = gasto("5000", AHORA, Origen.TEXTO);
+        movimientos.confirmar(m.getId());
+
+        assertThat(viajes.asociar(m.getId(), id).getViajeId()).isEqualTo(id);
+        assertThat(viajes.panel(id).pagado()).isEqualByComparingTo("5000");
+        assertThat(viajes.asociar(m.getId(), null).getViajeId()).isNull();
+        assertThat(viajes.panel(id).pagado()).isZero();
+    }
+
+    @Test
     void noEsDelViajeLoSaca() {
         bariloche();
         Movimiento m = gasto("12000", LocalDateTime.of(2027, 1, 12, 13, 0), Origen.TEXTO);

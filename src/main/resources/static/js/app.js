@@ -612,8 +612,23 @@
     $('#mv-categoria').value = m.categoriaId == null ? '' : String(m.categoriaId);
     $('#mv-medio').value = valorDeMedio($('#mv-medio'), m.medioPagoId, m.tarjetaId);
     $('#mv-cuenta').value = m.cuentaId == null ? '' : String(m.cuentaId);
+    viajesDelEditor(m);
     $('#modal-movimiento').hidden = false;
     (fijo ? $('#mv-fecha') : $('#mv-monto')).focus();
+  }
+
+  /** El viaje del gasto: el selector aparece solo si hay viajes cargados ("Ninguno" es 0). */
+  async function viajesDelEditor(m) {
+    const select = $('#mv-viaje');
+    let viajes = [];
+    try { viajes = await api('/api/viajes'); } catch { /* sin viajes, no se muestra */ }
+    const hay = viajes.length > 0;
+    select.hidden = !hay;
+    $('#mv-viaje-label').hidden = !hay;
+    if (!hay) return;
+    select.replaceChildren(h('option', { value: '0' }, 'Ninguno'),
+      ...viajes.map((v) => h('option', { value: v.id }, v.emoji ? `${v.emoji} ${v.nombre}` : v.nombre)));
+    select.value = m.viajeId == null ? '0' : String(m.viajeId);
   }
 
   function cerrarEdicion() { $('#modal-movimiento').hidden = true; editando = null; }
@@ -636,6 +651,7 @@
           categoriaId: $('#mv-categoria').value ? Number($('#mv-categoria').value) : null,
           medioPagoId: $('#mv-medio').value ? Number($('#mv-medio').value) : null,
           cuentaId: $('#mv-cuenta').value ? Number($('#mv-cuenta').value) : null,
+          viajeId: $('#mv-viaje').hidden ? null : Number($('#mv-viaje').value),
         }),
       });
       cerrarEdicion();

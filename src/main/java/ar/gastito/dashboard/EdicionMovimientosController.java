@@ -36,9 +36,15 @@ public class EdicionMovimientosController {
      * @param fecha       el día; la hora queda la que tenía
      * @param medioPagoId null es "sin especificar"
      * @param cuentaId    null es sin cuenta
+     * @param viajeId     el viaje del gasto: 0 es "sin viaje" y null (o no mandarlo), no tocarlo
      */
     public record Cambio(String monto, LocalDate fecha, String descripcion, Long categoriaId, Long medioPagoId,
-            Long cuentaId) {
+            Long cuentaId, Long viajeId) {
+
+        public Cambio(String monto, LocalDate fecha, String descripcion, Long categoriaId, Long medioPagoId,
+                Long cuentaId) {
+            this(monto, fecha, descripcion, categoriaId, medioPagoId, cuentaId, null);
+        }
     }
 
     @PutMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -47,8 +53,11 @@ public class EdicionMovimientosController {
                 .or(() -> cambio.monto() != null && cambio.monto().strip().matches("0+([.,]0+)?")
                         ? Optional.of(BigDecimal.ZERO) : Optional.empty())
                 .orElseThrow(() -> new IllegalArgumentException("No entendí el monto. Por ejemplo: 3.700"));
-        return edicion.editar(id, monto, cambio.fecha(), cambio.descripcion(), cambio.categoriaId(),
-                cambio.medioPagoId(), cambio.cuentaId());
+        return cambio.viajeId() == null
+                ? edicion.editar(id, monto, cambio.fecha(), cambio.descripcion(), cambio.categoriaId(),
+                        cambio.medioPagoId(), cambio.cuentaId())
+                : edicion.editar(id, monto, cambio.fecha(), cambio.descripcion(), cambio.categoriaId(),
+                        cambio.medioPagoId(), cambio.cuentaId(), cambio.viajeId());
     }
 
     @DeleteMapping("/{id}")

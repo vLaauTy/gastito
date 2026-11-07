@@ -54,6 +54,29 @@ public class EdicionMovimientos {
         return ConsultaMovimientos.fila(editado);
     }
 
+    /** Los viajes, para asociar un gasto a uno; sin viajes, no se toca. */
+    private ar.gastito.viaje.ViajeService viajes;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void usarViajes(ar.gastito.viaje.ViajeService viajes) {
+        this.viajes = viajes;
+    }
+
+    /**
+     * Como {@link #editar(long, BigDecimal, LocalDate, String, Long, Long, Long)} y además el viaje.
+     *
+     * @param viajeId el viaje del gasto; 0 es "sin viaje" y null, no tocarlo
+     */
+    @Transactional
+    public ConsultaMovimientos.Fila editar(long id, BigDecimal monto, LocalDate fecha, String descripcion,
+            Long categoriaId, Long medioPagoId, Long cuentaId, Long viajeId) {
+        ConsultaMovimientos.Fila fila = editar(id, monto, fecha, descripcion, categoriaId, medioPagoId, cuentaId);
+        if (viajeId == null || viajes == null) {
+            return fila;
+        }
+        return ConsultaMovimientos.fila(viajes.asociar(id, viajeId == 0 ? null : viajeId));
+    }
+
     /** La foto de un ticket queda en disco; los productos se borran con el gasto. */
     @Transactional
     public void borrar(long id, Alcance alcance) {

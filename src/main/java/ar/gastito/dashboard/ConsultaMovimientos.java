@@ -166,7 +166,16 @@ public class ConsultaMovimientos {
     public record Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
             String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
             boolean foto, boolean estimado, Long medioPagoId, Long cuentaId, Especial especial, Integer cuotaActual,
-            Integer cuotaTotal, BigDecimal dolares, Long tarjetaId, String inversion) {
+            Integer cuotaTotal, BigDecimal dolares, Long tarjetaId, String inversion, Long viajeId) {
+
+        public Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
+                String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
+                boolean foto, boolean estimado, Long medioPagoId, Long cuentaId, Especial especial, Integer cuotaActual,
+                Integer cuotaTotal, BigDecimal dolares, Long tarjetaId, String inversion) {
+            this(id, fechaHora, descripcion, categoriaId, categoria, emoji, medio, sinEspecificar, origen, monto,
+                    ticket, foto, estimado, medioPagoId, cuentaId, especial, cuotaActual, cuotaTotal, dolares,
+                    tarjetaId, inversion, null);
+        }
 
         public Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
                 String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
@@ -319,7 +328,7 @@ public class ConsultaMovimientos {
                 m.getMedioPago() == null ? null : m.getMedioPago().getId(),
                 m.getCuenta() == null ? null : m.getCuenta().getId(),
                 Especial.de(m), m.getCuotaActual(), m.getCuotaTotal(), dosDecimales(m.getMontoOriginal()),
-                m.getTarjeta() == null ? null : m.getTarjeta().getId(), inversion(m));
+                m.getTarjeta() == null ? null : m.getTarjeta().getId(), inversion(m), m.getViajeId());
     }
 
     /** APORTE o RETIRO en un pase con una cuenta de inversión; null en lo demás. */

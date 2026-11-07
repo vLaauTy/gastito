@@ -163,6 +163,20 @@ public class ViajeService {
         return m;
     }
 
+    /**
+     * Desde el dashboard: el gasto pasa a ser de este viaje (o de ninguno, con null). El préstamo que haya salido de él
+     * lo sigue.
+     */
+    @Transactional
+    public Movimiento asociar(Long movimientoId, Long viajeId) {
+        if (viajeId != null && !viajes.existsById(viajeId)) {
+            throw new NoSuchElementException("No existe el viaje " + viajeId);
+        }
+        Movimiento m = movimientoService.asociarViaje(movimientoId, viajeId);
+        prestamos.seguirViajeDelGasto(movimientoId, viajeId);
+        return m;
+    }
+
     // --- Pendientes ---
 
     @Transactional
