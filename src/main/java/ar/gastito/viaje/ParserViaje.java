@@ -31,6 +31,13 @@ public final class ParserViaje {
     public record Falta(Viaje viaje, String descripcion, BigDecimal monto) implements Pedido {
     }
 
+    /**
+     * "El préstamo a lucas es del viaje a Bariloche" (viaje nombrado) o "el préstamo a lucas no es del viaje" (viaje
+     * null): cambiar el viaje de un préstamo ya cargado.
+     */
+    public record PrestamoDelViaje(String persona, Viaje viaje) implements Pedido {
+    }
+
     /** "¿Cómo va Bariloche?", "/viajes": el panel (del viaje nombrado, o del actual o próximo). */
     public record Consulta(Viaje viaje) implements Pedido {
     }
@@ -54,6 +61,13 @@ public final class ParserViaje {
             + " (?:me |nos )?(?:falta|faltan)(?: pagar)? (?<desc>.+?)"
             + "(?:\\s*(?:,|≈|~|de|por|unos|unas|como|que (?:son|sale|salen))\\s*(?:≈|~|unos|unas|como)?\\s*"
             + "(?<monto>" + MONTO + "))?\\s*$");
+    private static final String PRESTAMO = "^(?:el prestamo|la plata que le preste|lo que le preste)"
+            + " (?:a|de|para) (?<persona>.+?) ";
+    private static final Pattern PRESTAMO_DEL_VIAJE = Pattern.compile(PRESTAMO
+            + "(?:es|va|era|fue|corresponde)(?: parte)? (?:del|al|para el|de|a) (?:viaje (?:a|de|para) )?"
+            + "(?<viaje>.+?)\\.?$");
+    private static final Pattern PRESTAMO_SIN_VIAJE = Pattern.compile(PRESTAMO
+            + "no (?:es|va|era|fue|corresponde)(?: parte)? (?:del|de ningun|de un|al) viaje.*$");
     private static final Pattern ARTICULO = Pattern.compile("^(?:el|la|los|las|un|una|pagar) ");
     private static final Pattern PREGUNTA = Pattern.compile("\\b(como va|como vengo|cuanto|ahorrar|separar|"
             + "falta|faltan|resumen|mostrame|ver)\\b");
@@ -69,6 +83,18 @@ public final class ParserViaje {
         String t = normalizar(texto);
         if (t.equals("/viaje") || t.equals("/viajes") || t.matches("^(como va|como vengo con) (el|mi) viaje$")) {
             return Optional.of(new Consulta(null));
+        }
+        Matcher sin = PRESTAMO_SIN_VIAJE.matcher(t);
+        if (sin.matches()) {
+            return Optional.of(new PrestamoDelViaje(nombreOriginal(texto, sin.group("persona")), null));
+        }
+        Matcher prestamo = PRESTAMO_DEL_VIAJE.matcher(t);
+        if (prestamo.matches()) {
+            Optional<Viaje> viaje = porNombre(prestamo.group("viaje"), viajes);
+            if (viaje.isPresent()) {
+                return Optional.of(new PrestamoDelViaje(nombreOriginal(texto, prestamo.group("persona")),
+                        viaje.get()));
+            }
         }
         Matcher nuevo = NUEVO.matcher(t);
         if (nuevo.matches()) {

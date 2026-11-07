@@ -41,6 +41,10 @@ public class ConversacionPrestamos {
     static final String COBRAR_PROXIMA = "pq";
     /** "💬 Armar mensaje": "pm:<préstamo>". */
     static final String MENSAJE = "pm";
+    /** "🧳 Sí, es del viaje": "pv:<préstamo>:<viaje>" (0: sin viaje). */
+    static final String DEL_VIAJE = "pv";
+    /** "No" a la pregunta del viaje: "pn:<préstamo>". */
+    static final String NO_DEL_VIAJE = "pn";
 
     private static final Locale ES = Locale.forLanguageTag("es-AR");
     private static final DateTimeFormatter DIA_MES = DateTimeFormatter.ofPattern("d/M");
@@ -57,7 +61,7 @@ public class ConversacionPrestamos {
 
     static boolean esBoton(String accion) {
         return switch (accion) {
-            case GUARDAR, CANCELAR, COBRAR, COBRAR_PROXIMA, MENSAJE -> true;
+            case GUARDAR, CANCELAR, COBRAR, COBRAR_PROXIMA, MENSAJE, DEL_VIAJE, NO_DEL_VIAJE -> true;
             default -> false;
         };
     }
@@ -132,10 +136,112 @@ public class ConversacionPrestamos {
         } catch (PrestamoInvalidoException e) {
             return Accion.Enviar.texto(prefijo + "🤔 " + html(e.getMessage()) + ". ¿Me lo contás de nuevo?");
         }
-        return Accion.Enviar.conBotones(prefijo + tarjeta(v, "🤝 <b>Nuevo préstamo</b>"), Teclado.constructor()
-                .fila(new Teclado.Boton("✅ Guardar", GUARDAR + ":" + v.id()),
-                        new Teclado.Boton("❌ Cancelar", CANCELAR + ":" + v.id()))
-                .build());
+        // "Para el pasaje", sin nombrar el viaje: si hay uno en curso o próximo, se pregunta si es de ese viaje.
+        Optional<ar.gastito.viaje.Viaje> viaje = v.viajeId() == null && hablaDeViaje(texto, p.descripcion())
+                ? viajes().flatMap(ar.gastito.viaje.ViajeService::enCursoOProximo) : Optional.empty();
+        return Accion.Enviar.conBotones(prefijo + pendiente(v, viaje.orElse(null)),
+                botonesPendiente(v, viaje.orElse(null)));
+    }
+
+    /** Palabras que hacen pensar que un préstamo es de un viaje. */
+    private static final java.util.regex.Pattern DE_VIAJE = java.util.regex.Pattern.compile(
+            "\\b(pasajes?|vuelos?|avion|aereos?|hospedaje|alojamiento|hotel|hostel|cabana|excursion(es)?|viaje)\\b");
+
+    static boolean hablaDeViaje(String... textos) {
+        for (String t : textos) {
+            if (t != null && DE_VIAJE.matcher(java.text.Normalizer.normalize(t, java.text.Normalizer.Form.NFD)
+                    .replaceAll("\\p{M}", "").toLowerCase(Locale.ROOT)).find()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** La tarjeta de un préstamo cargado solo, sin guardar; si {@code preguntar}, "¿Es del viaje Bariloche?". */
+    private String pendiente(VistaPrestamo v, ar.gastito.viaje.Viaje preguntar) {
+        return tarjeta(v, "🤝 <b>Nuevo préstamo</b>") + (preguntar == null ? ""
+                : "\n\n🧳 <b>¿Es del viaje " + html(preguntar.getNombreConEmoji()) + "?</b>");
+    }
+
+    private static Teclado botonesPendiente(VistaPrestamo v, ar.gastito.viaje.Viaje preguntar) {
+        Teclado.Constructor t = Teclado.constructor();
+        if (preguntar != null) {
+            t.fila(new Teclado.Boton("🧳 Sí, es del viaje", DEL_VIAJE + ":" + v.id() + ":" + preguntar.getId()),
+                    new Teclado.Boton("No", NO_DEL_VIAJE + ":" + v.id()));
+        }
+        return t.fila(new Teclado.Boton("✅ Guardar", GUARDAR + ":" + v.id()),
+                new Teclado.Boton("❌ Cancelar", CANCELAR + ":" + v.id())).build();
+    }
+
+    // --- Viajes ---
+
+    /** Los viajes, para preguntar si un préstamo es de uno y para asociarlo; sin viajes, no se pregunta. */
+    private ar.gastito.viaje.ViajeService viajes;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void usarViajes(ar.gastito.viaje.ViajeService viajes) {
+        this.viajes = viajes;
+    }
+
+    private Optional<ar.gastito.viaje.ViajeService> viajes() {
+        return Optional.ofNullable(viajes);
+    }
+
+    /** "🧳 Sí": el préstamo pasa a ser del viaje (o de ninguno, con 0). Uno sin guardar sigue para confirmar. */
+    private List<Accion> delViaje(int mensajeId, long prestamoId, long viajeId) {
+        if (viajes == null) {
+            return List.of(new Accion.Avisar("Botón inválido"));
+        }
+        VistaPrestamo v = viajes.asociarPrestamo(prestamoId, viajeId == 0 ? null : viajeId);
+        String viaje = v.viajeId() == null ? null : viajes.nombreConEmoji(v.viajeId()).orElse("el viaje");
+        if (v.estado() == ar.gastito.prestamo.EstadoPrestamo.PENDIENTE) {
+            return List.of(new Accion.Editar(mensajeId, pendiente(v, null), botonesPendiente(v, null)),
+                    new Accion.Avisar(viaje == null ? "Sin viaje" : "🧳 Del viaje"));
+        }
+        return List.of(new Accion.Editar(mensajeId, viaje == null
+                ? "🧳 Listo: el préstamo a " + html(v.persona()) + " ya no es de ningún viaje."
+                : "🧳 Listo: el préstamo a " + html(v.persona()) + " (" + formato.pesos(v.monto()) + ") es del viaje "
+                        + html(viaje) + ".", Teclado.NINGUNO), new Accion.Avisar("🧳 Listo"));
+    }
+
+    /** "No": uno sin guardar sigue para confirmar, sin la pregunta; si no, no se cambia nada. */
+    private List<Accion> noDelViaje(int mensajeId, long prestamoId) {
+        VistaPrestamo v = prestamos.vista(prestamoId);
+        if (v.estado() == ar.gastito.prestamo.EstadoPrestamo.PENDIENTE) {
+            return List.of(new Accion.Editar(mensajeId, pendiente(v, null), botonesPendiente(v, null)));
+        }
+        return List.of(new Accion.Editar(mensajeId, "Listo, no cambié nada.", Teclado.NINGUNO));
+    }
+
+    /**
+     * "El préstamo a lucas es del viaje a Bariloche" ({@code viajeId}) o "no es del viaje" (null): se confirma con un
+     * botón; si hay varios préstamos a esa persona, uno por préstamo.
+     */
+    public Accion cambiarViaje(String persona, Long viajeId, String nombreViaje, String prefijo) {
+        if (viajes == null) {
+            return Accion.Enviar.texto(prefijo + "🤔 No puedo cambiar el viaje de un préstamo todavía.");
+        }
+        List<VistaPrestamo> candidatos = viajes.prestamosA(persona);
+        if (candidatos.isEmpty()) {
+            return Accion.Enviar.texto(prefijo + "🤝 No encontré un préstamo a " + html(persona) + ".");
+        }
+        long destino = viajeId == null ? 0 : viajeId;
+        String pregunta = viajeId == null ? "¿Lo saco del viaje?" : "¿Es del viaje " + html(nombreViaje) + "?";
+        if (candidatos.size() == 1) {
+            VistaPrestamo v = candidatos.get(0);
+            return Accion.Enviar.conBotones(prefijo + "🤝 Préstamo a <b>" + html(v.persona()) + "</b> "
+                    + formato.pesos(v.monto()) + (v.descripcion() == null ? "" : " · " + html(v.descripcion()))
+                    + "\n🧳 " + pregunta, Teclado.constructor()
+                    .fila(new Teclado.Boton("✅ Sí", DEL_VIAJE + ":" + v.id() + ":" + destino),
+                            new Teclado.Boton("❌ No", NO_DEL_VIAJE + ":" + v.id()))
+                    .build());
+        }
+        Teclado.Constructor t = Teclado.constructor();
+        candidatos.stream().limit(8).forEach(v -> t.fila(new Teclado.Boton(v.persona() + " · "
+                + formato.pesos(v.monto()) + " · " + DIA_MES.format(v.fecha()), DEL_VIAJE + ":" + v.id() + ":"
+                + destino)));
+        return Accion.Enviar.conBotones(prefijo + "🤝 Hay varios préstamos a " + html(persona) + ". " + pregunta
+                + " ¿Cuál?", t.build());
     }
 
     /** El préstamo con sus cuotas. */
@@ -148,6 +254,9 @@ public class ConversacionPrestamos {
         sb.append("\n🗓 ").append(cuotas(p)).append(", los ").append(p.dia());
         if (p.billetera() != null) {
             sb.append("\n💳 Salió de ").append(html(p.billetera()));
+        }
+        if (p.viajeId() != null && viajes != null) {
+            viajes.nombreConEmoji(p.viajeId()).ifPresent(n -> sb.append("\n🧳 Del viaje ").append(html(n)));
         }
         if (p.cuotasCobradas() > 0 || p.terminado()) {
             sb.append("\n📥 ").append(estado(p));
@@ -246,6 +355,8 @@ public class ConversacionPrestamos {
                 case COBRAR_PROXIMA -> cobrado(mensajeId, prestamos.cobrarProxima(id, Origen.TEXTO));
                 case MENSAJE -> List.of(Accion.Enviar.texto(mensajeParaLaPersona(prestamos.vista(id))),
                         new Accion.Avisar("💬 Listo para copiar"));
+                case DEL_VIAJE -> delViaje(mensajeId, id, elegido == null ? 0 : elegido);
+                case NO_DEL_VIAJE -> noDelViaje(mensajeId, id);
                 default -> List.of(new Accion.Avisar("Botón inválido"));
             };
         } catch (PrestamoInvalidoException e) {

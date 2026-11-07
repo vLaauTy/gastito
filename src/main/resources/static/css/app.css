@@ -445,10 +445,10 @@ tr[hidden] { display: none !important; }
 #vj-contenido[hidden], #inv-contenido[hidden] { display: none; }
 #vj-contenido > .note { margin: 0; }
 .pendiente input[type="checkbox"] { width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; flex: none; }
-#vj-pendientes .pendiente { align-items: center; }
+#vj-pendientes .pendiente, #vj-deudas .pendiente, #vj-sin-viaje .pendiente { align-items: center; }
 .pendiente .botones { display: flex; gap: 6px; flex: none; }
 @media (max-width: 719px) {
   /* En el celular, los botones de un pendiente van abajo, así la descripción usa todo el ancho. */
-  #vj-pendientes .pendiente { flex-wrap: wrap; }
-  #vj-pendientes .pendiente .botones { flex-basis: 100%; justify-content: flex-end; }
+  #vj-pendientes .pendiente, #vj-deudas .pendiente, #vj-sin-viaje .pendiente { flex-wrap: wrap; }
+  #vj-pendientes .pendiente .botones, #vj-deudas .pendiente .botones, #vj-sin-viaje .pendiente .botones { flex-basis: 100%; justify-content: flex-end; }
 }

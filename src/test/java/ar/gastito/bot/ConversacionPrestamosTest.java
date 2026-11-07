@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -169,5 +170,85 @@ class ConversacionPrestamosTest {
 
         assertThat(aviso.html()).startsWith("⏰ <b>Martín no te pasó la cuota 1 de 6</b>\n$5.000, que era para el 10/11");
         assertThat(datos(aviso.teclado())).containsExactly("pq:7", "pm:7");
+    }
+
+    // --- Viajes ---
+
+    static final long BARILOCHE = 3;
+
+    private static VistaPrestamo con(VistaPrestamo v, EstadoPrestamo estado, Long viajeId) {
+        return new VistaPrestamo(v.id(), v.persona(), v.descripcion(), v.monto(), v.cantidadCuotas(), v.valorCuota(),
+                v.primerMes(), v.dia(), v.fecha(), v.billetera(), null, viajeId, estado, v.cobrado(), v.restante(),
+                v.cuotasCobradas(), v.cuotas());
+    }
+
+    private ar.gastito.viaje.ViajeService conViajes() {
+        ar.gastito.viaje.ViajeService viajes = mock(ar.gastito.viaje.ViajeService.class);
+        ar.gastito.viaje.Viaje bariloche = mock(ar.gastito.viaje.Viaje.class);
+        when(bariloche.getId()).thenReturn(BARILOCHE);
+        when(bariloche.getNombreConEmoji()).thenReturn("🏔 Bariloche");
+        when(viajes.enCursoOProximo()).thenReturn(Optional.of(bariloche));
+        when(viajes.nombreConEmoji(BARILOCHE)).thenReturn(Optional.of("🏔 Bariloche"));
+        prestamos.usarViajes(viajes);
+        return viajes;
+    }
+
+    private Accion.Enviar nuevo(String texto, String descripcion) {
+        when(servicio.crearSolo(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(con(martin(0), EstadoPrestamo.PENDIENTE, null));
+        return prestamos.nuevo(new ValidadorInterpretacion.Prestamo(new ar.gastito.interpretacion.PedidoPrestamo(
+                "Lucas", new BigDecimal("72900"), null, null, null, null), descripcion, null, null, AHORA), texto, null,
+                "");
+    }
+
+    @Test
+    void unPrestamoQueHablaDelPasajeConUnViajeProximoPreguntaSiEsDelViaje() {
+        conViajes();
+
+        Accion.Enviar tarjeta = nuevo("le presté 72.900 a lucas para el pasaje", "Pasaje");
+
+        assertThat(tarjeta.html()).endsWith("🧳 <b>¿Es del viaje 🏔 Bariloche?</b>");
+        assertThat(datos(tarjeta.teclado())).containsExactly("pv:7:3", "pn:7", "pg:7", "px:7");
+    }
+
+    @Test
+    void sinPalabrasDeViajeOSinViajeNoPregunta() {
+        assertThat(nuevo("le presté 72.900 a lucas para el pasaje", "Pasaje").html()).doesNotContain("¿Es del viaje");
+        conViajes();
+        assertThat(nuevo("le presté 5.000 a lucas", null).html()).doesNotContain("¿Es del viaje");
+    }
+
+    @Test
+    void siEsDelViajeSeAsociaYSigueParaGuardar() {
+        ar.gastito.viaje.ViajeService viajes = conViajes();
+        when(viajes.asociarPrestamo(PRESTAMO, BARILOCHE))
+                .thenReturn(con(martin(0), EstadoPrestamo.PENDIENTE, BARILOCHE));
+
+        Accion.Editar tarjeta = (Accion.Editar) prestamos.boton(1, ConversacionPrestamos.DEL_VIAJE, PRESTAMO,
+                BARILOCHE).get(0);
+
+        assertThat(tarjeta.html()).contains("🧳 Del viaje 🏔 Bariloche").doesNotContain("¿Es del viaje");
+        assertThat(datos(tarjeta.teclado())).containsExactly("pg:7", "px:7");
+    }
+
+    @Test
+    void elPrestamoALucasEsDelViajeSeConfirmaConUnBoton() {
+        ar.gastito.viaje.ViajeService viajes = conViajes();
+        when(viajes.prestamosA("lucas")).thenReturn(List.of(martin(0)));
+        when(viajes.asociarPrestamo(PRESTAMO, BARILOCHE)).thenReturn(con(martin(0), EstadoPrestamo.ACTIVO,
+                BARILOCHE));
+
+        Accion.Enviar pregunta = (Accion.Enviar) prestamos.cambiarViaje("lucas", BARILOCHE, "🏔 Bariloche", "");
+
+        assertThat(pregunta.html()).contains("¿Es del viaje 🏔 Bariloche?");
+        assertThat(datos(pregunta.teclado())).containsExactly("pv:7:3", "pn:7");
+        Accion.Editar listo = (Accion.Editar) prestamos.boton(1, ConversacionPrestamos.DEL_VIAJE, PRESTAMO,
+                BARILOCHE).get(0);
+        assertThat(listo.html()).isEqualTo("🧳 Listo: el préstamo a Martín ($30.000) es del viaje 🏔 Bariloche.");
+        verify(viajes).asociarPrestamo(PRESTAMO, BARILOCHE);
+        // Sacarlo del viaje manda 0.
+        when(viajes.asociarPrestamo(PRESTAMO, null)).thenReturn(con(martin(0), EstadoPrestamo.ACTIVO, null));
+        prestamos.boton(1, ConversacionPrestamos.DEL_VIAJE, PRESTAMO, 0L);
+        verify(viajes).asociarPrestamo(PRESTAMO, null);
     }
 }

@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.catalogo.MedioElegido;
+import ar.gastito.prestamo.VistaPrestamo;
 import ar.gastito.viaje.PanelViaje;
 import ar.gastito.viaje.ViajeService;
 
@@ -72,6 +73,23 @@ public class ViajesController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void borrar(@PathVariable Long id) {
         viajes.borrar(id);
+    }
+
+    // --- Préstamos ---
+
+    /** Los préstamos guardados que no son de ningún viaje, para asociarlos. */
+    @GetMapping("/prestamos-sin-viaje")
+    public List<VistaPrestamo> prestamosSinViaje() {
+        return viajes.prestamosSinViaje();
+    }
+
+    /** @param viajeId null: el préstamo queda sin viaje */
+    public record ViajeDelPrestamo(Long viajeId) {
+    }
+
+    @PutMapping("/prestamos/{id}")
+    public VistaPrestamo viajeDelPrestamo(@PathVariable Long id, @RequestBody ViajeDelPrestamo r) {
+        return viajes.asociarPrestamo(id, r.viajeId());
     }
 
     // --- Pendientes ---

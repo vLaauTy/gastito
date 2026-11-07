@@ -177,6 +177,42 @@ public class ViajeService {
         return m;
     }
 
+    /** Un préstamo ya cargado pasa a ser de este viaje (o de ninguno, con null). */
+    @Transactional
+    public VistaPrestamo asociarPrestamo(Long prestamoId, Long viajeId) {
+        if (viajeId != null && !viajes.existsById(viajeId)) {
+            throw new NoSuchElementException("No existe el viaje " + viajeId);
+        }
+        prestamos.asociarViaje(prestamoId, viajeId);
+        return prestamos.vista(prestamoId);
+    }
+
+    /** Los préstamos guardados a esa persona ("lucas" encuentra a "Lucas"), del más nuevo al más viejo. */
+    @Transactional(readOnly = true)
+    public List<VistaPrestamo> prestamosA(String persona) {
+        String buscado = normalizar(persona);
+        return prestamos.todos().stream().filter(p -> {
+            String nombre = " " + normalizar(p.persona()) + " ";
+            return !buscado.isEmpty() && (nombre.contains(" " + buscado + " ")
+                    || java.util.Arrays.stream(buscado.split(" ")).anyMatch(w -> w.length() > 1
+                            && nombre.contains(" " + w + " ")));
+        }).toList();
+    }
+
+    /** Los préstamos guardados sin viaje (para asociarlos desde el dashboard). */
+    @Transactional(readOnly = true)
+    public List<VistaPrestamo> prestamosSinViaje() {
+        return prestamos.todos().stream().filter(p -> p.viajeId() == null).toList();
+    }
+
+    /** El viaje en curso o el próximo (no uno que ya terminó), para preguntar si algo es de ese viaje. */
+    @Transactional(readOnly = true)
+    public Optional<Viaje> enCursoOProximo() {
+        LocalDate hoy = LocalDate.now(clock);
+        return viajes.findAllByOrderByDesdeDesc().stream().filter(v -> !v.getHasta().isBefore(hoy))
+                .min(Comparator.comparing(Viaje::getDesde));
+    }
+
     // --- Pendientes ---
 
     @Transactional

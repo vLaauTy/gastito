@@ -61,6 +61,18 @@ class ParserViajeTest {
     }
 
     @Test
+    void elViajeDeUnPrestamoYaCargado() {
+        assertThat(parsear("el préstamo a lucas es del viaje a Bariloche"))
+                .contains(new ParserViaje.PrestamoDelViaje("Lucas", bariloche));
+        assertThat(parsear("Lo que le presté a Lucas es de Bariloche."))
+                .contains(new ParserViaje.PrestamoDelViaje("Lucas", bariloche));
+        assertThat(parsear("el préstamo a Lucas no es del viaje"))
+                .contains(new ParserViaje.PrestamoDelViaje("Lucas", null));
+        // Un viaje que no existe no se entiende acá.
+        assertThat(parsear("el préstamo a lucas es del viaje a Mendoza")).isEmpty();
+    }
+
+    @Test
     void unGastoNormalNoEsDeViajes() {
         assertThat(parsear("kiosco 1500")).isEmpty();
         assertThat(parsear("pagué 12000 de nafta en Bariloche")).isEmpty();

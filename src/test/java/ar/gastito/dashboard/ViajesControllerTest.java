@@ -99,4 +99,19 @@ class ViajesControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("El viaje termina antes de empezar"));
     }
+
+    @Test
+    void cambiarElViajeDeUnPrestamo() throws Exception {
+        when(viajes.asociarPrestamo(eq(9L), any())).thenReturn(null);
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/viajes/prestamos/9")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"viajeId\":3}"))
+                .andExpect(status().isOk());
+        verify(viajes).asociarPrestamo(9L, 3L);
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/viajes/prestamos/9")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"viajeId\":null}"))
+                .andExpect(status().isOk());
+        verify(viajes).asociarPrestamo(9L, null);
+    }
 }

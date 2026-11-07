@@ -65,6 +65,14 @@ public class ConversacionViajes {
         }
     });
 
+    /** Los préstamos, para "el préstamo a lucas es del viaje a Bariloche"; sin préstamos, no se entiende. */
+    private ConversacionPrestamos prestamos;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void usarPrestamos(ConversacionPrestamos prestamos) {
+        this.prestamos = prestamos;
+    }
+
     public ConversacionViajes(ViajeService viajes, FormatoMensajes formato, Clock clock) {
         this.viajes = viajes;
         this.formato = formato;
@@ -95,6 +103,10 @@ public class ConversacionViajes {
                             prefijo));
                 }
                 case ParserViaje.Consulta c -> consulta(c.viaje() == null ? null : c.viaje().getId(), prefijo);
+                case ParserViaje.PrestamoDelViaje p -> List.of(prestamos == null
+                        ? Accion.Enviar.texto(prefijo + "🤔 No puedo cambiar el viaje de un préstamo todavía.")
+                        : prestamos.cambiarViaje(p.persona(), p.viaje() == null ? null : p.viaje().getId(),
+                                p.viaje() == null ? null : p.viaje().getNombreConEmoji(), prefijo));
             });
         } catch (ViajeInvalidoException e) {
             return Optional.of(List.of(Accion.Enviar.texto(prefijo + "🤔 " + html(e.getMessage()) + ".")));

@@ -29,7 +29,7 @@
       const r = await api(ruta, { method: metodo, headers: JSON_HEADERS, body: cuerpo == null ? undefined : JSON.stringify(cuerpo) });
       toast(exito);
       cerrarEditor();
-      if (r && r.id) elegido = r.id;
+      if (r && r.id && r.desde) elegido = r.id; // solo si volvió un viaje (no un préstamo)
       await vista();
     } catch (err) {
       const el = $('#vj-editor .error');
@@ -93,6 +93,7 @@
     categorias(v);
     porDia(v);
     deudas(v);
+    api('/api/viajes/prestamos-sin-viaje').then((ps) => sinViaje(v, ps)).catch(mensajeError);
     $('#vj-notas').textContent = v.notas || 'Sin notas.';
   }
 
@@ -164,12 +165,30 @@
     });
   }
 
+  /** Cambia el viaje de un préstamo (null: sin viaje). */
+  function viajeDelPrestamo(p, viajeId, exito) {
+    enviar(`/api/viajes/prestamos/${p.id}`, { viajeId }, exito, 'PUT');
+  }
+
+  /** Los préstamos guardados que no son de ningún viaje, con "Es de este viaje". */
+  function sinViaje(v, prestamos) {
+    $('#vj-sin-viaje-card').hidden = prestamos.length === 0;
+    $('#vj-sin-viaje').replaceChildren(...prestamos.map((p) => h('div', { class: 'pendiente' }, Iconos.svg('banknote'),
+      h('div', { class: 'crece' }, h('b', {}, p.persona), ` · ${pesos(p.monto)}`, p.descripcion ? ` · ${p.descripcion}` : '',
+        ` · ${fechaCorta(p.fecha)}`),
+      h('div', { class: 'botones' }, h('button', { type: 'button', class: 'mini', onclick: () => viajeDelPrestamo(p, v.id, `Del viaje ${v.nombre}`) },
+        Iconos.svg('plane'), 'Es de este viaje')))));
+  }
+
   function deudas(v) {
     const items = [
       ...v.prestamos.map((p) => h('div', { class: 'pendiente' }, Iconos.svg('banknote'),
         h('div', { class: 'crece' }, h('b', {}, p.persona), ` · préstamo de ${pesos(p.monto)}`,
           p.estado === 'TERMINADO' ? ' · ya te devolvió todo'
-            : ` · ${p.cuotasCobradas} de ${p.cantidadCuotas} cuotas, faltan ${pesos(p.restante)}`))),
+            : ` · ${p.cuotasCobradas} de ${p.cantidadCuotas} cuotas, faltan ${pesos(p.restante)}`),
+        h('div', { class: 'botones' }, h('button', { type: 'button', class: 'mini', onclick: () => {
+          if (confirm(`¿Sacar el préstamo a ${p.persona} del viaje ${v.nombre}? Sigue siendo plata a cobrar.`)) viajeDelPrestamo(p, null, 'Sacado del viaje');
+        } }, Iconos.svg('x'), 'Sacar del viaje')))),
       ...v.juntadas.map((j) => h('div', { class: 'pendiente' }, Iconos.svg('users'),
         h('div', { class: 'crece' }, h('b', {}, j.descripcion || 'Juntada'), ` · ${fechaCorta(j.fechaHora)}`,
           Number(j.aCobrar) > 0 ? ` · te deben ${pesos(j.aCobrar)}` : ' · ya no te deben nada'))),

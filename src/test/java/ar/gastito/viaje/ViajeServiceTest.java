@@ -193,6 +193,37 @@ class ViajeServiceTest {
         assertThat(viajes.panel(id).pagado()).isZero();
     }
 
+    @Autowired
+    PrestamoService prestamos;
+
+    @Test
+    void unPrestamoYaCargadoSeAsociaYSeDesasociaDelViaje() {
+        Long id = bariloche().id();
+        var lucas = prestamos.crearSolo(new PrestamoService.Datos("Lucas", new BigDecimal("72900"), null, null, null,
+                null), "Pasaje", null, null, AHORA.toLocalDate(), null, "le presté 72.900 a lucas para el pasaje");
+        prestamos.confirmar(lucas.id());
+        assertThat(lucas.viajeId()).isNull();
+        assertThat(viajes.prestamosSinViaje()).extracting(p -> p.persona()).containsExactly("Lucas");
+        assertThat(viajes.prestamosA("lucas")).hasSize(1);
+        assertThat(viajes.prestamosA("Pablo")).isEmpty();
+
+        assertThat(viajes.asociarPrestamo(lucas.id(), id).viajeId()).isEqualTo(id);
+        assertThat(viajes.panel(id).meDeben()).isEqualByComparingTo("72900");
+        assertThat(viajes.prestamosSinViaje()).isEmpty();
+
+        assertThat(viajes.asociarPrestamo(lucas.id(), null).viajeId()).isNull();
+        assertThat(viajes.panel(id).meDeben()).isZero();
+    }
+
+    @Test
+    void elViajeEnCursoOProximoNoEsUnoQueYaTermino() {
+        viajes.crear(new ViajeService.Datos("Córdoba", null, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 5), null,
+                null, null));
+        assertThat(viajes.enCursoOProximo()).isEmpty();
+        Long id = bariloche().id();
+        assertThat(viajes.enCursoOProximo()).map(Viaje::getId).contains(id);
+    }
+
     @Test
     void noEsDelViajeLoSaca() {
         bariloche();

@@ -389,7 +389,8 @@ public class ProcesadorMensajes {
                         new Accion.Avisar("🧳 Ya no es del viaje"));
             }
             case ConversacionPrestamos.GUARDAR, ConversacionPrestamos.CANCELAR, ConversacionPrestamos.COBRAR,
-                    ConversacionPrestamos.COBRAR_PROXIMA, ConversacionPrestamos.MENSAJE ->
+                    ConversacionPrestamos.COBRAR_PROXIMA, ConversacionPrestamos.MENSAJE, ConversacionPrestamos.DEL_VIAJE,
+                    ConversacionPrestamos.NO_DEL_VIAJE ->
                     juntadas.botonDePrestamo(mensajeId, accion, id, elegido);
             case ConversacionTarjeta.TODAVIA_NO_FECHAS, ConversacionTarjeta.CARGAR_TOTAL, ConversacionTarjeta.DEBITADO,
                     ConversacionTarjeta.TODAVIA_NO_DEBITO, ConversacionTarjeta.CONFIRMAR_PAGO,
