@@ -103,7 +103,7 @@ public class GastoFijo {
         this.categoria = categoria;
         this.medioPago = medioPago;
         this.cuenta = cuenta;
-        this.tarjeta = tarjeta;
+        this.tarjeta = tarjetaSiEsCredito(medioPago, tarjeta);
         this.diaDelMes = diaDelMes;
         this.frecuencia = frecuencia;
         this.mesInicio = mesInicio.atDay(1);
@@ -229,12 +229,20 @@ public class GastoFijo {
         this.categoria = categoria;
         this.medioPago = medioPago;
         this.cuenta = cuenta;
-        this.tarjeta = tarjeta;
+        this.tarjeta = tarjetaSiEsCredito(medioPago, tarjeta);
         this.diaDelMes = diaDelMes;
         this.frecuencia = frecuencia;
         this.montoVariable = montoVariable;
         this.alias = limpiarAlias(alias);
         this.proponerMonto = puedeProponer(proponerMonto, diaDelMes, montoEsperado);
+    }
+
+    /**
+     * Un fijo que se paga por transferencia, débito, etc. no lleva tarjeta: si no, sus cobros la heredan y aparecen
+     * como compras con esa tarjeta de crédito.
+     */
+    static TarjetaCredito tarjetaSiEsCredito(MedioPago medioPago, TarjetaCredito tarjeta) {
+        return medioPago != null && !medioPago.esTarjetaDeCredito() ? null : tarjeta;
     }
 
     public Long getId() {

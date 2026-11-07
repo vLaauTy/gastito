@@ -10,11 +10,33 @@ import java.time.YearMonth;
 
 import org.junit.jupiter.api.Test;
 
+import ar.gastito.catalogo.MedioPago;
+import ar.gastito.catalogo.TarjetaCredito;
+
 class GastoFijoTest {
 
     private static GastoFijo fijo(int dia, Frecuencia frecuencia, YearMonth inicio) {
         return new GastoFijo("Seguro", new BigDecimal("32900"), null, null, null, null, dia, frecuencia, inicio, false,
                 null, true, LocalDateTime.now());
+    }
+
+    @Test
+    void unFijoQueNoEsConCreditoNoGuardaTarjetaNiAlCrearloNiAlEditarlo() {
+        MedioPago transferencia = new MedioPago("Transferencia", null);
+        MedioPago credito = new MedioPago(MedioPago.TARJETA_DE_CREDITO, null);
+        TarjetaCredito master = new TarjetaCredito("MasterCard Gold", "Galicia", null, null, "M", null);
+
+        GastoFijo f = new GastoFijo("Servicios sociales", new BigDecimal("22000"), null, transferencia, null, master,
+                5, Frecuencia.MENSUAL, YearMonth.of(2026, 11), true, null, true, LocalDateTime.now());
+        assertThat(f.getTarjeta()).isNull();
+
+        f.editar("Servicios sociales", new BigDecimal("22000"), null, credito, null, master, 5, Frecuencia.MENSUAL,
+                true, null, true);
+        assertThat(f.getTarjeta()).isSameAs(master);
+
+        f.editar("Servicios sociales", new BigDecimal("22000"), null, transferencia, null, master, 5,
+                Frecuencia.MENSUAL, true, null, true);
+        assertThat(f.getTarjeta()).isNull();
     }
 
     @Test
