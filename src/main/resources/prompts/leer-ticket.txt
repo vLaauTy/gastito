@@ -46,12 +46,10 @@ Cómo completar cada dato:
 - descuentos: solo si el ticket imprime una línea con el total de los descuentos ("Descuentos -7.666,60"). No lo calcules vos.
 - total: el TOTAL impreso, lo que se pagó por la compra, después de los descuentos. Si solo figura lo que el cliente entregó y el vuelto, el total es el importe de la compra, no lo entregado.
 - medioPago: según lo impreso o el texto del usuario. Si el texto del usuario dice otra cosa que el ticket, manda el texto del usuario.
-  - "Débito", "Tarjeta de débito", "Maestro", "Visa Débito", "Visa Electron" o "Cabal Débito" es "Débito".
   - "Crédito", "Visa", "Mastercard", "Master", "American Express", "Naranja" o "Cabal" sin la palabra débito es "Tarjeta de crédito".
+  - Todo lo demás es "Contado": "Efectivo", "Contado", "Débito", "Tarjeta de débito", "Maestro", "Visa Débito", "Visa Electron", "Cabal Débito", "Transferencia", "Mercado Pago", "QR", "Modo" o "Pago con billetera". Cuál de esos fue ya queda en medioPagoImpreso.
   - Si solo dice "Tarjeta", sin aclarar si es débito o crédito ni la marca, dejalo vacío: lo elige el usuario.
-  - "Mercado Pago", "QR", "Modo" o "Pago con billetera" es "QR".
-  - "Efectivo" o "Contado" es "Efectivo". "Transferencia" es "Transferencia".
-- cuenta: "Mercado Pago" si se pagó con Mercado Pago. Si el usuario nombra la cuenta ("desde la cuenta de Galicia"), esa. Si no, vacío. Si el usuario nombra una tarjeta de crédito ("con la master", "con la de mercado pago"), medioPago es "Tarjeta de crédito" y la cuenta va vacía.
+- cuenta: si el usuario nombra la cuenta ("desde la cuenta de Galicia"), esa. Si no, vacío. Si el usuario nombra una tarjeta de crédito ("con la master", "con la de mercado pago"), medioPago es "Tarjeta de crédito" y la cuenta va vacía.
 - categorias y confianza: para la compra entera, igual que con un gasto escrito. Un supermercado es "Supermercado"; una farmacia, "Salud / farmacia". Si dudás entre alta y media, elegí media.
 - lineasIlegibles: si el ticket está arrugado, doblado, gastado o tapado y alguna línea no se lee bien, decí cuál es (por su posición o el producto de al lado) y qué no se lee. Si se lee todo, vacía.
 
