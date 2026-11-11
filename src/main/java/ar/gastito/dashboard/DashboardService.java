@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import ar.gastito.catalogo.MedioPago;
 import ar.gastito.ia.ResumenUsoIa;
 import ar.gastito.ia.UsoIaRepository;
 import ar.gastito.movimiento.IngresoService;
@@ -33,8 +34,8 @@ import ar.gastito.movimiento.TotalPorMes;
 @Service
 public class DashboardService {
 
-    /** Colores de las billeteras que no son una cuenta ni una tarjeta. "Sin especificar" va en gris claro. */
-    static final String COLOR_EFECTIVO = "#8A968E";
+    /** Colores de las billeteras que no son una tarjeta. "Sin especificar" va en gris claro. */
+    static final String COLOR_CONTADO = "#8A968E";
     static final String COLOR_SIN_ESPECIFICAR = "#D5DBD2";
     /** Para las cuentas y tarjetas sin color propio en la base. */
     static final List<String> COLORES_DE_RESERVA = List.of("#7A5AA6", "#2E8C8C", "#B08A1E", "#A3476B", "#4F6D8F");
@@ -104,7 +105,7 @@ public class DashboardService {
     }
 
     public enum TipoBilletera {
-        EFECTIVO, CUENTA, TARJETA, SIN_ESPECIFICAR
+        CONTADO, TARJETA, SIN_ESPECIFICAR
     }
 
     /** @param porcentaje parte del total gastado en el mes */
@@ -188,10 +189,9 @@ public class DashboardService {
     }
 
     /**
-     * Agrupa los gastos por la tarjeta o la cuenta de cada uno (así una cuenta o tarjeta nueva aparece sola), o
-     * como Efectivo si se pagaron con el medio de pago efectivo. Lo que no tiene nada de eso queda en
-     * "Sin especificar", para darse cuenta de los gastos mal cargados. Orden: efectivo, cuentas, tarjetas y sin
-     * especificar; dentro de cada tipo, de mayor a menor.
+     * Agrupa los gastos en Contado (efectivo, débito, transferencia, QR: todo lo que no es crédito) y una billetera
+     * por tarjeta (así una tarjeta nueva aparece sola). Con crédito y sin tarjeta queda en "Sin especificar", para
+     * darse cuenta de los gastos mal cargados. Orden: contado, tarjetas (de mayor a menor) y sin especificar.
      */
     @Transactional(readOnly = true)
     public List<Billetera> porBilletera(YearMonth mes) {
@@ -202,15 +202,12 @@ public class DashboardService {
             if (f.tarjetaId() != null) {
                 grupo = grupos.computeIfAbsent("tarjeta-" + f.tarjetaId(), k -> new Acumulado(k,
                         TipoBilletera.TARJETA, f.tarjeta(), color(f.colorTarjeta(), f.tarjetaId())));
-            } else if (f.cuentaId() != null) {
-                grupo = grupos.computeIfAbsent("cuenta-" + f.cuentaId(), k -> new Acumulado(k,
-                        TipoBilletera.CUENTA, f.cuenta(), color(f.colorCuenta(), f.cuentaId())));
-            } else if (Boolean.TRUE.equals(f.efectivo())) {
-                grupo = grupos.computeIfAbsent("efectivo", k -> new Acumulado(k,
-                        TipoBilletera.EFECTIVO, "Efectivo", COLOR_EFECTIVO));
-            } else {
+            } else if (f.credito()) {
                 grupo = grupos.computeIfAbsent("sin-especificar", k -> new Acumulado(k,
                         TipoBilletera.SIN_ESPECIFICAR, "Sin especificar", COLOR_SIN_ESPECIFICAR));
+            } else {
+                grupo = grupos.computeIfAbsent("contado", k -> new Acumulado(k,
+                        TipoBilletera.CONTADO, MedioPago.CONTADO, COLOR_CONTADO));
             }
             grupo.total = grupo.total.add(f.total());
             grupo.cantidad += f.cantidad();

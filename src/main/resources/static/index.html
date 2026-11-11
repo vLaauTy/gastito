@@ -716,9 +716,13 @@
     <label for="mv-categoria">Categoría</label>
     <select id="mv-categoria" data-categorias required></select>
     <label for="mv-medio">Medio de pago</label>
-    <select id="mv-medio"><option value="">Sin especificar</option></select>
-    <label for="mv-cuenta">Cuenta</label>
-    <select id="mv-cuenta"><option value="">—</option></select>
+    <select id="mv-medio"></select>
+    <label for="mv-detalle" id="mv-detalle-label">Detalle (opcional)</label>
+    <input id="mv-detalle" list="mv-detalles" maxlength="40" autocomplete="off" placeholder="Débito, transferencia, QR…">
+    <datalist id="mv-detalles">
+      <option value="Efectivo"></option><option value="Débito"></option><option value="Transferencia"></option>
+      <option value="QR"></option><option value="Mercado Pago"></option>
+    </datalist>
     <label for="mv-viaje" id="mv-viaje-label" hidden>Viaje</label>
     <select id="mv-viaje" hidden><option value="0">Ninguno</option></select>
     <p class="error" id="form-movimiento-error" role="alert" hidden></p>

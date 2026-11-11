@@ -54,6 +54,13 @@ public class EdicionMovimientos {
         return ConsultaMovimientos.fila(editado);
     }
 
+    /** El detalle de un gasto de contado ("Débito", "Mercado Pago"…); vacío lo saca. */
+    @Transactional
+    public ConsultaMovimientos.Fila cambiarDetallePago(long id, String detalle) {
+        gastoGuardado(id);
+        return ConsultaMovimientos.fila(movimientos.cambiarDetallePago(id, detalle));
+    }
+
     /** Los viajes, para asociar un gasto a uno; sin viajes, no se toca. */
     private ar.gastito.viaje.ViajeService viajes;
 

@@ -37,9 +37,15 @@ public class EdicionMovimientosController {
      * @param medioPagoId null es "sin especificar"
      * @param cuentaId    null es sin cuenta
      * @param viajeId     el viaje del gasto: 0 es "sin viaje" y null (o no mandarlo), no tocarlo
+     * @param detallePago de contado, cómo se pagó ("Débito"…): vacío lo saca y null (o no mandarlo), no tocarlo
      */
     public record Cambio(String monto, LocalDate fecha, String descripcion, Long categoriaId, Long medioPagoId,
-            Long cuentaId, Long viajeId) {
+            Long cuentaId, Long viajeId, String detallePago) {
+
+        public Cambio(String monto, LocalDate fecha, String descripcion, Long categoriaId, Long medioPagoId,
+                Long cuentaId, Long viajeId) {
+            this(monto, fecha, descripcion, categoriaId, medioPagoId, cuentaId, viajeId, null);
+        }
 
         public Cambio(String monto, LocalDate fecha, String descripcion, Long categoriaId, Long medioPagoId,
                 Long cuentaId) {
@@ -53,11 +59,12 @@ public class EdicionMovimientosController {
                 .or(() -> cambio.monto() != null && cambio.monto().strip().matches("0+([.,]0+)?")
                         ? Optional.of(BigDecimal.ZERO) : Optional.empty())
                 .orElseThrow(() -> new IllegalArgumentException("No entendí el monto. Por ejemplo: 3.700"));
-        return cambio.viajeId() == null
+        ConsultaMovimientos.Fila fila = cambio.viajeId() == null
                 ? edicion.editar(id, monto, cambio.fecha(), cambio.descripcion(), cambio.categoriaId(),
                         cambio.medioPagoId(), cambio.cuentaId())
                 : edicion.editar(id, monto, cambio.fecha(), cambio.descripcion(), cambio.categoriaId(),
                         cambio.medioPagoId(), cambio.cuentaId(), cambio.viajeId());
+        return cambio.detallePago() == null ? fila : edicion.cambiarDetallePago(id, cambio.detallePago());
     }
 
     @DeleteMapping("/{id}")

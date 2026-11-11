@@ -27,6 +27,7 @@ import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 
 import ar.gastito.catalogo.Cuenta;
+import ar.gastito.catalogo.MedioPago;
 import ar.gastito.catalogo.TipoCuenta;
 import ar.gastito.movimiento.EstadoMovimiento;
 import ar.gastito.movimiento.Movimiento;
@@ -155,7 +156,7 @@ public class ConsultaMovimientos {
     }
 
     /**
-     * @param medio            para la columna Medio: "QR · Mercado Pago", "Efectivo", "Sin especificar"…
+     * @param medio            para la columna Medio: "Contado · Débito", "Tarjeta de crédito · MasterCard Gold"…
      * @param sinEspecificar   si no se sabe con qué se pagó (se muestra en gris, para corregirlo)
      * @param ticket           si vino de la foto de un ticket (la fila se despliega con los productos)
      * @param foto             si guardó la foto del ticket
@@ -169,11 +170,22 @@ public class ConsultaMovimientos {
      * @param dolares          de una compra en dólares, cuántos (monto son los pesos); si no, null
      * @param inversion        APORTE o RETIRO si es plata que entró a una inversión o salió de ella (no es un
      *                         gasto: se muestra con la etiqueta "Inversión"); null en un gasto
+     * @param detallePago      de contado, cómo se pagó ("Débito", "Mercado Pago"…), para editarlo; o null
      */
     public record Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
             String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
             boolean foto, boolean estimado, Long medioPagoId, Long cuentaId, Especial especial, Integer cuotaActual,
-            Integer cuotaTotal, BigDecimal dolares, Long tarjetaId, String inversion, Long viajeId) {
+            Integer cuotaTotal, BigDecimal dolares, Long tarjetaId, String inversion, Long viajeId,
+            String detallePago) {
+
+        public Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
+                String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
+                boolean foto, boolean estimado, Long medioPagoId, Long cuentaId, Especial especial, Integer cuotaActual,
+                Integer cuotaTotal, BigDecimal dolares, Long tarjetaId, String inversion, Long viajeId) {
+            this(id, fechaHora, descripcion, categoriaId, categoria, emoji, medio, sinEspecificar, origen, monto,
+                    ticket, foto, estimado, medioPagoId, cuentaId, especial, cuotaActual, cuotaTotal, dolares,
+                    tarjetaId, inversion, viajeId, null);
+        }
 
         public Fila(Long id, LocalDateTime fechaHora, String descripcion, Long categoriaId, String categoria,
                 String emoji, String medio, boolean sinEspecificar, String origen, BigDecimal monto, boolean ticket,
@@ -304,7 +316,15 @@ public class ConsultaMovimientos {
                 condiciones.add(cb.equal(root.get("categoria").get("id"), f.categoriaId()));
             }
             if (f.medioPagoId() != null) {
-                condiciones.add(cb.equal(root.get("medioPago").get("id"), f.medioPagoId()));
+                // Un gasto sin medio también es Contado.
+                Join<Movimiento, MedioPago> medio = root.join("medioPago", JoinType.LEFT);
+                jakarta.persistence.criteria.Subquery<Long> elegidoEsContado = query.subquery(Long.class);
+                jakarta.persistence.criteria.Root<MedioPago> elegido = elegidoEsContado.from(MedioPago.class);
+                elegidoEsContado.select(elegido.get("id")).where(cb.equal(elegido.get("id"), f.medioPagoId()),
+                        cb.isTrue(elegido.get("efectivo")));
+                condiciones.add(cb.or(cb.equal(medio.get("id"), f.medioPagoId()),
+                        cb.and(cb.isNull(medio.get("id")), cb.isNull(root.get("tarjeta")),
+                                cb.equal(root.get("tipo"), TipoMovimiento.GASTO), cb.exists(elegidoEsContado))));
             }
             if (f.origen() != null) {
                 condiciones.add(cb.equal(root.get("origen"), f.origen()));
@@ -343,7 +363,8 @@ public class ConsultaMovimientos {
                 m.getMedioPago() == null ? null : m.getMedioPago().getId(),
                 m.getCuenta() == null ? null : m.getCuenta().getId(),
                 Especial.de(m), m.getCuotaActual(), m.getCuotaTotal(), dosDecimales(m.getMontoOriginal()),
-                m.getTarjeta() == null ? null : m.getTarjeta().getId(), inversion(m), m.getViajeId());
+                m.getTarjeta() == null ? null : m.getTarjeta().getId(), inversion(m), m.getViajeId(),
+                m.getDetallePago());
     }
 
     /** APORTE o RETIRO en un pase con una cuenta de inversión; null en lo demás. */
@@ -354,20 +375,23 @@ public class ConsultaMovimientos {
         return m.getCuentaDestino() != null && m.getCuentaDestino().isInversion() ? "APORTE" : "RETIRO";
     }
 
+    /** Un gasto con crédito sin decir la tarjeta (sin medio es Contado, eso está claro). */
     private static boolean sinEspecificar(Movimiento m) {
-        if (m.getTipo() == TipoMovimiento.ENTRE_CUENTAS || m.getTipo() == TipoMovimiento.DEVOLUCION) {
-            return false;
-        }
-        return m.getTarjeta() == null && m.getCuenta() == null
-                && (m.getMedioPago() == null || !m.getMedioPago().isEfectivo());
+        return m.getTipo() == TipoMovimiento.GASTO && m.isFaltaTarjeta();
     }
 
-    /** "Tarjeta de crédito · MasterCard Gold", "QR · Mercado Pago", "Efectivo", "Débito" o "Sin especificar". */
+    /**
+     * Un gasto: "Tarjeta de crédito · MasterCard Gold", "Contado · Débito" o "Contado". Un pase, "Galicia → Cocos";
+     * lo demás, el medio y la cuenta.
+     */
     static String medio(Movimiento m) {
         if (m.getTipo() == TipoMovimiento.ENTRE_CUENTAS) {
             // "Galicia → Cocos", "Cocos → Efectivo".
             return (m.getCuenta() == null ? "Efectivo" : m.getCuenta().getNombre()) + " → "
                     + (m.getCuentaDestino() == null ? "Efectivo" : m.getCuentaDestino().getNombre());
+        }
+        if (m.getTipo() == TipoMovimiento.GASTO && !m.isConCredito()) {
+            return MedioPago.CONTADO + (m.getDetallePago() == null ? "" : " · " + m.getDetallePago());
         }
         String nombreMedio = m.getMedioPago() == null ? null : m.getMedioPago().getNombre();
         String billetera = m.getTarjeta() != null ? m.getTarjeta().getNombre()

@@ -52,9 +52,13 @@ interface DashboardRepository extends Repository<Movimiento, Long>, JpaSpecifica
     record TotalCategoria(Long categoriaId, String nombre, String emoji, BigDecimal total, long cantidad) {
     }
 
-    /** Una combinación de tarjeta, cuenta y "es efectivo" con su total; el servicio las junta en billeteras. */
-    record FilaBilletera(Long tarjetaId, String tarjeta, String colorTarjeta, Long cuentaId, String cuenta,
-            String colorCuenta, Boolean efectivo, BigDecimal total, long cantidad) {
+    /** Una combinación de tarjeta y medio de pago con su total; el servicio las junta en billeteras. */
+    record FilaBilletera(Long tarjetaId, String tarjeta, String colorTarjeta, String medio, BigDecimal total,
+            long cantidad) {
+
+        boolean credito() {
+            return ar.gastito.catalogo.MedioPago.TARJETA_DE_CREDITO.equals(medio);
+        }
     }
 
     @Query("""
@@ -94,11 +98,11 @@ interface DashboardRepository extends Repository<Movimiento, Long>, JpaSpecifica
 
     @Query("""
             select new ar.gastito.dashboard.DashboardRepository$FilaBilletera(
-                t.id, t.nombre, t.color, c.id, c.nombre, c.color, mp.efectivo, sum(m.monto), count(m))
-            from Movimiento m left join m.tarjeta t left join m.cuenta c left join m.medioPago mp
+                t.id, t.nombre, t.color, mp.nombre, sum(m.monto), count(m))
+            from Movimiento m left join m.tarjeta t left join m.medioPago mp
             where m.estado = ar.gastito.movimiento.EstadoMovimiento.CONFIRMADO
               and m.tipo = ar.gastito.movimiento.TipoMovimiento.GASTO
               and m.fechaHora >= :desde and m.fechaHora < :hasta
-            group by t.id, t.nombre, t.color, c.id, c.nombre, c.color, mp.efectivo""")
+            group by t.id, t.nombre, t.color, mp.nombre""")
     List<FilaBilletera> filasBilletera(@Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta);
 }

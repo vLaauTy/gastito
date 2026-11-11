@@ -422,7 +422,7 @@
     })));
     $('#r-billetera-leyenda').replaceChildren(...lista.map((b) => h('span', {
       class: b.tipo === 'SIN_ESPECIFICAR' ? 'sin-especificar' : null,
-      title: b.tipo === 'SIN_ESPECIFICAR' ? 'Gastos sin medio de pago ni cuenta: corregilos desde el bot' : null,
+      title: b.tipo === 'SIN_ESPECIFICAR' ? 'Gastos con tarjeta de crédito sin decir cuál: corregilos en Movimientos' : null,
     }, window.Iconos.circuloInicial(b.nombre, b.color), `${b.nombre} `, h('span', { class: 'money' }, pesos(b.total)))));
   }
 
@@ -628,8 +628,10 @@
     $('#mv-fecha').value = m.fechaHora.slice(0, 10);
     $('#mv-desc').value = m.descripcion || '';
     $('#mv-categoria').value = m.categoriaId == null ? '' : String(m.categoriaId);
-    $('#mv-medio').value = valorDeMedio($('#mv-medio'), m.medioPagoId, m.tarjetaId);
-    $('#mv-cuenta').value = m.cuentaId == null ? '' : String(m.cuentaId);
+    // Sin medio es Contado (la primera opción).
+    $('#mv-medio').value = valorDeMedio($('#mv-medio'), m.medioPagoId, m.tarjetaId) || $('#mv-medio').options[0]?.value || '';
+    $('#mv-detalle').value = m.detallePago || '';
+    detalleSegunMedio();
     viajesDelEditor(m);
     $('#modal-movimiento').hidden = false;
     (fijo ? $('#mv-fecha') : $('#mv-monto')).focus();
@@ -651,6 +653,14 @@
 
   function cerrarEdicion() { $('#modal-movimiento').hidden = true; editando = null; }
 
+  /** El detalle (débito, QR…) es solo de contado: con una tarjeta (valor −id) o crédito no se muestra. */
+  function detalleSegunMedio() {
+    const opcion = $('#mv-medio').selectedOptions[0];
+    const credito = !!opcion && (Number(opcion.value) < 0 || /cr[eé]dito/i.test(opcion.textContent));
+    $('#mv-detalle').hidden = credito;
+    $('#mv-detalle-label').hidden = credito;
+  }
+
   async function guardarEdicion(evento) {
     evento.preventDefault();
     if (!editando) return;
@@ -668,7 +678,8 @@
           descripcion: $('#mv-desc').value,
           categoriaId: $('#mv-categoria').value ? Number($('#mv-categoria').value) : null,
           medioPagoId: $('#mv-medio').value ? Number($('#mv-medio').value) : null,
-          cuentaId: $('#mv-cuenta').value ? Number($('#mv-cuenta').value) : null,
+          cuentaId: editando.cuentaId,
+          detallePago: $('#mv-detalle').hidden ? '' : $('#mv-detalle').value.trim(),
           viajeId: $('#mv-viaje').hidden ? null : Number($('#mv-viaje').value),
         }),
       });
@@ -1509,7 +1520,7 @@
     $('#f-medio').append(...c.mediosConTarjeta.map((m) => h('option', { value: m.id }, m.nombre)));
     $('#f-cuenta').append(...c.cuentas.map((cu) => h('option', { value: cu.id }, cu.nombre)));
     $('#mv-medio').append(...c.mediosConTarjeta.map((m) => h('option', { value: m.id }, m.nombre)));
-    $('#mv-cuenta').append(...c.cuentas.map((cu) => h('option', { value: cu.id }, cu.nombre)));
+    $('#mv-medio').addEventListener('change', detalleSegunMedio);
   }
 
   // --- Eventos ---

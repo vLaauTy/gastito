@@ -67,7 +67,7 @@
 
   function nombreIconoMedio(medio) {
     const t = sinTildes(medio);
-    if (t.startsWith('efectivo')) return 'banknote';
+    if (t.startsWith('efectivo') || t.startsWith('contado')) return 'banknote';
     if (t.startsWith('debito') || t.startsWith('tarjeta') || t.startsWith('credito')) return 'credit-card';
     if (t.startsWith('transferencia')) return 'landmark';
     if (t.startsWith('qr')) return 'qr-code';

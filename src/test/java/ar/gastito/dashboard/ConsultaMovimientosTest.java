@@ -109,7 +109,7 @@ class ConsultaMovimientosTest {
     }
 
     private Movimiento gasto(String descripcion, String monto, int dia) {
-        return gasto(descripcion, monto, dia, "Kiosco", medio("Efectivo"), null, Origen.TEXTO);
+        return gasto(descripcion, monto, dia, "Kiosco", medio("Contado"), null, Origen.TEXTO);
     }
 
     private void septiembre(String descripcion, String monto) {
@@ -156,14 +156,18 @@ class ConsultaMovimientosTest {
 
     @Test
     void filtraPorCategoriaMedioYOrigen() {
-        gasto("Pan", "100", 1, "Supermercado", medio("Efectivo"), null, Origen.TEXTO);
-        gasto("Alfajor", "100", 2, "Kiosco", medio("QR"), cuenta("Mercado Pago"), Origen.AUDIO);
-        gasto("Chicle", "100", 3, "Kiosco", medio("Efectivo"), null, Origen.TEXTO);
+        gasto("Pan", "100", 1, "Supermercado", medio("Contado"), null, Origen.TEXTO);
+        gasto("Alfajor", "100", 2, "Kiosco", medio("Contado"), cuenta("Mercado Pago"), Origen.AUDIO);
+        gasto("Chicle", "100", 3, "Kiosco", medio("Contado"), null, Origen.TEXTO);
+        gasto("Sin medio", "100", 4, "Otros", null, null, Origen.TEXTO);
 
         assertThat(descripciones(new ConsultaMovimientos.Filtros(OCTUBRE, categoria("Kiosco").getId(), null, null,
                 null))).containsExactly("Chicle", "Alfajor");
-        assertThat(descripciones(new ConsultaMovimientos.Filtros(OCTUBRE, null, medio("QR").getId(), null, null)))
-                .containsExactly("Alfajor");
+        // Contado incluye un gasto sin medio; con crédito no hay ninguno.
+        assertThat(descripciones(new ConsultaMovimientos.Filtros(OCTUBRE, null, medio("Contado").getId(), null, null)))
+                .containsExactly("Sin medio", "Chicle", "Alfajor", "Pan");
+        assertThat(descripciones(new ConsultaMovimientos.Filtros(OCTUBRE, null, medio("Tarjeta de crédito").getId(),
+                null, null))).isEmpty();
         assertThat(descripciones(new ConsultaMovimientos.Filtros(OCTUBRE, null, null, Origen.AUDIO, null)))
                 .containsExactly("Alfajor");
     }
@@ -195,24 +199,24 @@ class ConsultaMovimientosTest {
     }
 
     @Test
-    void laColumnaMedioYSinEspecificar() {
-        gasto("QR", "100", 1, "Kiosco", medio("QR"), cuenta("Mercado Pago"), Origen.TEXTO);
-        gasto("Efectivo", "100", 2, "Kiosco", medio("Efectivo"), null, Origen.TEXTO);
+    void laColumnaMedioEsContadoConSuDetalle() {
+        gasto("QR", "100", 1, "Kiosco", medio("Contado"), cuenta("Mercado Pago"), Origen.TEXTO);
+        gasto("Efectivo", "100", 2, "Kiosco", medio("Contado"), null, Origen.TEXTO);
         gasto("Nada", "100", 3, "Kiosco", null, null, Origen.TEXTO);
 
         assertThat(consulta.buscar(filtros(), 0, 10).elementos())
                 .extracting(ConsultaMovimientos.Fila::medio, ConsultaMovimientos.Fila::sinEspecificar)
                 .containsExactly(
-                        tuple("Sin especificar", true),
-                        tuple("Efectivo", false),
-                        tuple("QR · Mercado Pago", false));
+                        tuple("Contado", false),
+                        tuple("Contado · Efectivo", false),
+                        tuple("Contado · QR", false));
     }
 
     // --- CSV ---
 
     @Test
     void csvParaExcelEnCastellano() {
-        gasto("Pan; papas", "3700.50", 5, "Supermercado", medio("Efectivo"), null, Origen.AUDIO);
+        gasto("Pan; papas", "3700.50", 5, "Supermercado", medio("Contado"), null, Origen.AUDIO);
         gasto("=HYPERLINK(\"x\")", "100", 6);
         ingresos.cargar(ClaseIngreso.SUELDO, new BigDecimal("380000"), "Sueldo", cuenta("Galicia").getId(),
                 LocalDate.of(2026, 10, 1));
@@ -224,8 +228,8 @@ class ConsultaMovimientosTest {
         assertThat(texto.lines().toList()).containsExactly(
                 "﻿Fecha;Hora;Tipo;Clase;Descripción;Categoría;Medio;Origen;Monto",
                 "01/10/2026;00:00;Ingreso;Sueldo;Sueldo;;Galicia;DASHBOARD;380000,00",
-                "05/10/2026;10:00;Gasto;;\"Pan; papas\";Supermercado;Efectivo;AUDIO;3700,50",
-                "06/10/2026;10:00;Gasto;;\"'=HYPERLINK(\"\"x\"\")\";Kiosco;Efectivo;TEXTO;100,00");
+                "05/10/2026;10:00;Gasto;;\"Pan; papas\";Supermercado;Contado;AUDIO;3700,50",
+                "06/10/2026;10:00;Gasto;;\"'=HYPERLINK(\"\"x\"\")\";Kiosco;Contado;TEXTO;100,00");
         assertThat(texto).contains("\r\n");
     }
 
@@ -251,7 +255,7 @@ class ConsultaMovimientosTest {
 
     private Movimiento ticket(String total, List<ItemTicket> items, boolean confirmar) {
         Movimiento m = movimientos.crearPendienteDeTicket(new MovimientoInterpretado(new BigDecimal(total),
-                "Supermercado Día", categoria("Supermercado"), List.of(), medio("Débito"), null, null,
+                "Supermercado Día", categoria("Supermercado"), List.of(), medio("Contado"), null, null,
                 LocalDateTime.of(2026, 10, 18, 17, 20)), DatosTicket.de("Supermercado Día", items), null);
         if (confirmar) {
             movimientos.confirmar(m.getId());
@@ -385,7 +389,7 @@ class ConsultaMovimientosTest {
         ConsultaMovimientos.Pagina todo = consulta.buscar(filtros(), 0, 20);
         assertThat(todo.elementos()).extracting(ConsultaMovimientos.Fila::descripcion, ConsultaMovimientos.Fila::inversion,
                 ConsultaMovimientos.Fila::medio)
-                .containsExactly(tuple("Aporte a Cocos", "APORTE", "Galicia → Cocos"), tuple("Café", null, "Efectivo"));
+                .containsExactly(tuple("Aporte a Cocos", "APORTE", "Galicia → Cocos"), tuple("Café", null, "Contado"));
 
         ConsultaMovimientos.Pagina sinInversiones = consulta.buscar(
                 new ConsultaMovimientos.Filtros(OCTUBRE, null, null, null, null, true), 0, 20);

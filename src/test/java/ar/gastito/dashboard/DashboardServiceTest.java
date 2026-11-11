@@ -126,7 +126,7 @@ class DashboardServiceTest {
     }
 
     private Movimiento gasto(String monto, LocalDateTime fecha) {
-        return gasto(monto, fecha, "Kiosco", medio("Efectivo"), null, null);
+        return gasto(monto, fecha, "Kiosco", medio("Contado"), null, null);
     }
 
     private static LocalDateTime dia(int mes, int dia) {
@@ -336,9 +336,9 @@ class DashboardServiceTest {
 
     @Test
     void porCategoriaDeMayorAMenorConPorcentajes() {
-        gasto("3000", dia(10, 3), "Supermercado", medio("Efectivo"), null, null);
-        gasto("1000", dia(10, 4), "Kiosco", medio("Efectivo"), null, null);
-        gasto("500", dia(10, 5), "Kiosco", medio("Efectivo"), null, null);
+        gasto("3000", dia(10, 3), "Supermercado", medio("Contado"), null, null);
+        gasto("1000", dia(10, 4), "Kiosco", medio("Contado"), null, null);
+        gasto("500", dia(10, 5), "Kiosco", medio("Contado"), null, null);
 
         assertThat(dashboard.porCategoria(OCTUBRE))
                 .extracting(DashboardService.CategoriaDelMes::nombre, c -> c.total().toPlainString(),
@@ -352,40 +352,31 @@ class DashboardServiceTest {
     // --- Billeteras ---
 
     @Test
-    void lasBilleterasSalenDeLaTarjetaLaCuentaOElEfectivo() {
-        gasto("1000", dia(10, 1), "Kiosco", medio("Efectivo"), null, null);
-        gasto("2000", dia(10, 2), "Kiosco", medio("Débito"), cuenta("Galicia"), null);
-        gasto("500", dia(10, 3), "Kiosco", medio("QR"), cuenta("Galicia"), null);
-        gasto("3000", dia(10, 4), "Kiosco", medio("QR"), cuenta("Mercado Pago"), null);
+    void lasBilleterasSonContadoYCadaTarjeta() {
+        gasto("1000", dia(10, 1), "Kiosco", medio("Contado"), null, null);
+        gasto("2000", dia(10, 2), "Kiosco", medio("Contado"), cuenta("Galicia"), null);
+        gasto("3000", dia(10, 4), "Kiosco", medio("Contado"), cuenta("Mercado Pago"), null);
         gasto("4000", dia(10, 5), "Kiosco", medio("Tarjeta de crédito"), null, mastercard());
-        gasto("300", dia(10, 6), "Kiosco", null, null, null); // sin medio de pago
-        gasto("200", dia(10, 7), "Kiosco", medio("Débito"), null, null); // débito sin cuenta
+        gasto("300", dia(10, 6), "Kiosco", null, null, null); // sin medio de pago: también es contado
 
         assertThat(dashboard.porBilletera(OCTUBRE))
                 .extracting(DashboardService.Billetera::nombre, DashboardService.Billetera::tipo,
                         b -> b.total().toPlainString(), DashboardService.Billetera::cantidad,
                         DashboardService.Billetera::color)
                 .containsExactly(
-                        tuple("Efectivo", DashboardService.TipoBilletera.EFECTIVO, "1000.00", 1L, "#8A968E"),
-                        tuple("Mercado Pago", DashboardService.TipoBilletera.CUENTA, "3000.00", 1L, "#2457C5"),
-                        tuple("Galicia", DashboardService.TipoBilletera.CUENTA, "2500.00", 2L, "#1F7A4D"),
-                        tuple("MasterCard Gold", DashboardService.TipoBilletera.TARJETA, "4000.00", 1L, "#B4531F"),
-                        tuple("Sin especificar", DashboardService.TipoBilletera.SIN_ESPECIFICAR, "500.00", 2L,
-                                "#D5DBD2"));
+                        tuple("Contado", DashboardService.TipoBilletera.CONTADO, "6300.00", 4L, "#8A968E"),
+                        tuple("MasterCard Gold", DashboardService.TipoBilletera.TARJETA, "4000.00", 1L, "#B4531F"));
         assertThat(dashboard.porBilletera(OCTUBRE)).extracting(b -> b.porcentaje().toPlainString())
-                .containsExactly("9.1", "27.3", "22.7", "36.4", "4.5");
+                .containsExactly("61.2", "38.8");
     }
 
     @Test
-    void unaCuentaNuevaApareceSolaConUnColorDeReserva() {
+    void unGastoDesdeUnaCuentaNuevaEsContado() {
         Cuenta brubank = cuentas.save(new Cuenta("Brubank", "brubank"));
-        gasto("1000", dia(10, 1), "Kiosco", medio("Débito"), brubank, null);
+        gasto("1000", dia(10, 1), "Kiosco", medio("Contado"), brubank, null);
 
-        DashboardService.Billetera b = dashboard.porBilletera(OCTUBRE).get(0);
-
-        assertThat(b.nombre()).isEqualTo("Brubank");
-        assertThat(b.tipo()).isEqualTo(DashboardService.TipoBilletera.CUENTA);
-        assertThat(DashboardService.COLORES_DE_RESERVA).contains(b.color());
+        assertThat(dashboard.porBilletera(OCTUBRE)).extracting(DashboardService.Billetera::nombre)
+                .containsExactly("Contado");
     }
 
     // --- Ingresos y costos ---
