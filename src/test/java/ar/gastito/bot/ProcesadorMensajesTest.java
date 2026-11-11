@@ -332,7 +332,7 @@ class ProcesadorMensajesTest {
     void editarElMedioDePagoConBotones() {
         when(movimientos.buscar(ID)).thenReturn(conCategoria("3700", KIOSCO));
         assertThat(edicion(tocar("mp:15")).teclado().botones()).extracting(Teclado.Boton::texto)
-                .containsExactly("Efectivo", "Débito", "Sin medio de pago", "↩ Volver");
+                .containsExactly("Contado", "Débito", "↩ Volver");
 
         when(movimientos.cambiarMedioPago(ID, null, null)).thenReturn(conCategoria("3700", KIOSCO));
         tocar("p:15:0");
@@ -680,7 +680,7 @@ class ProcesadorMensajesTest {
         assertThat(tarjeta.html())
                 .startsWith("🧾 <b>Ticket</b> · Supermercado Día\n📅 sáb 10/10 17:20\n🛒 <b>Productos</b>\n<pre>")
                 .contains("Leche 1 L ×2 ")
-                .contains("💰 Total <b>$8.050</b>\n💳 Débito\n🛒 Supermercado")
+                .contains("💰 Total <b>$8.050</b>\n💵 Contado\n🛒 Supermercado")
                 .doesNotContain("⚠️");
         assertThat(tarjeta.teclado().botones()).extracting(Teclado.Boton::datos)
                 .containsExactly("g:15", "e:15", "c:15");
@@ -694,7 +694,7 @@ class ProcesadorMensajesTest {
         procesador.tarjetaEnviada(CHAT, ID, TARJETA);
         // Con el botón queda la misma tarjeta que un guardado automático, y el total del mes como una línea más.
         Accion.Editar editada = edicion(tocar("g:15"));
-        assertThat(editada.html()).startsWith("✅ <b>Guardado</b> · <b>$8.050</b> · 🛒 Supermercado · 💳 Débito\nSupermercado Día")
+        assertThat(editada.html()).startsWith("✅ <b>Guardado</b> · <b>$8.050</b> · 🛒 Supermercado · 💵 Contado\nSupermercado Día")
                 .contains("productos")
                 .endsWith("\n📊 En octubre 2026 llevás <b>$20.000</b> en 🛒 Supermercado.");
         assertThat(editada.teclado().botones()).extracting(Teclado.Boton::datos).containsExactly("e:15", "du:15");
@@ -1012,8 +1012,8 @@ class ProcesadorMensajesTest {
         when(movimientos.hoy()).thenReturn(new MovimientoService.ResumenDia(List.of(m, m), new BigDecimal("7400")));
         assertThat(texto("/hoy")).isEqualTo("""
                 <b>Gastos de hoy</b>
-                • 🍬 Kiosco – $3.700 – Pan de pancho y papas – Efectivo – Hoy 16:42
-                • 🍬 Kiosco – $3.700 – Pan de pancho y papas – Efectivo – Hoy 16:42
+                • 🍬 Kiosco – $3.700 – Pan de pancho y papas – Contado – Hoy 16:42
+                • 🍬 Kiosco – $3.700 – Pan de pancho y papas – Contado – Hoy 16:42
 
                 Total: <b>$7.400</b>""");
     }

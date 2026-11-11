@@ -19,6 +19,7 @@ import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.Cuenta;
 import ar.gastito.catalogo.MedioPago;
 import ar.gastito.movimiento.Movimiento;
+import ar.gastito.movimiento.TipoMovimiento;
 
 /** Cómo se muestran montos, fechas y movimientos en los mensajes del bot. */
 @Component
@@ -107,23 +108,31 @@ public class FormatoMensajes {
                 && (categoria == null || !descripcion.equalsIgnoreCase(categoria.getNombre()))) {
             partes.add(html(descripcion));
         }
-        partes.add(html(medio(m.getMedioPago(), m.getCuenta())));
+        partes.add(html(medio(m)));
         partes.add(fecha(m.getFechaHora()));
         return String.join(SEPARADOR, partes);
     }
 
-    /** "Efectivo", "Débito (Galicia)", "Sin medio de pago". */
-    /** Con tarjeta de crédito, la tarjeta ("MasterCard Gold"); si no, el medio y la cuenta. */
+    /**
+     * Con tarjeta de crédito, la tarjeta ("MasterCard Gold"); un gasto de contado, "Contado" con el detalle si lo
+     * tiene ("Contado · Débito"); lo demás (ingresos, devoluciones), el medio y la cuenta.
+     */
     public static String medio(Movimiento m) {
-        if (m.getTarjeta() != null && m.getMedioPago() != null && m.getMedioPago().esTarjetaDeCredito()) {
-            return m.getTarjeta().getNombre();
+        if (m.isConCredito()) {
+            return m.getTarjeta() != null ? m.getTarjeta().getNombre() : m.getMedioPago().getNombre();
+        }
+        if (m.getTipo() == TipoMovimiento.GASTO) {
+            return MedioPago.CONTADO + (m.getDetallePago() == null ? "" : SEPARADOR_DETALLE + m.getDetallePago());
         }
         return medio(m.getMedioPago(), m.getCuenta());
     }
 
+    private static final String SEPARADOR_DETALLE = " · ";
+
+    /** "Contado", "Tarjeta de crédito", "Contado (Galicia)". Sin medio ni cuenta es Contado. */
     public static String medio(MedioPago medio, Cuenta cuenta) {
         if (medio == null && cuenta == null) {
-            return "Sin medio de pago";
+            return MedioPago.CONTADO;
         }
         if (medio == null) {
             return cuenta.getNombre();

@@ -14,7 +14,7 @@ import ar.gastito.ticket.TicketService;
 /**
  * Los gastos claros se guardan solos y se pueden deshacer o editar; se pide confirmación solo cuando hay una duda
  * real. Acá está la regla de cuándo un gasto es claro (las compras repetidas se buscan antes, en
- * {@link FlujoDeMensajes}), la tarjeta "✅ Guardado" y sus botones: ↩️ Deshacer y el medio de pago con un toque.
+ * {@link FlujoDeMensajes}), la tarjeta "✅ Guardado" y sus botones: ✏️ Editar y ↩️ Deshacer.
  */
 class GuardadoAutomatico {
 
@@ -37,7 +37,7 @@ class GuardadoAutomatico {
      * Un gasto simple recién interpretado que se guarda sin preguntar: monto claro, categoría con confianza alta
      * (si no, no tendría categoría), hasta el tope, y nada de juntadas, cuotas ni fijos. Un ticket, además, con las
      * cuentas cerradas y el medio de pago impreso (un "TARJETA" a secas queda sin medio y se pregunta). El medio de
-     * pago de un texto o un audio no frena el guardado: si no se dijo, se elige después con un toque.
+     * pago de un texto o un audio no frena el guardado: si no se dijo, es Contado.
      */
     boolean corresponde(Movimiento m) {
         if (!properties.guardadoAutomatico() || !m.isPendiente() || m.getTipo() != TipoMovimiento.GASTO) {
@@ -74,7 +74,7 @@ class GuardadoAutomatico {
     }
 
     Teclado teclado(Movimiento m) {
-        return tarjetas.guardadoAutomatico(m, catalogos.cargar());
+        return tarjetas.tecladoGuardado(m);
     }
 
     /** ↩️ Deshacer: el gasto se borra (con sus productos y la foto del ticket), en cualquier momento. */
@@ -88,7 +88,7 @@ class GuardadoAutomatico {
     }
 
     /**
-     * Un toque en la fila rápida: el gasto guardado pasa a tener ese medio de pago.
+     * Un toque en la fila rápida de medios de un mensaje viejo (ya no se muestra): el gasto pasa a tener ese medio.
      *
      * @param valor el id del medio, o −id de una tarjeta ({@link MedioElegido})
      */

@@ -29,7 +29,7 @@ final class DatosDePrueba {
     static final Categoria SALIDAS = new Categoria(3L, "Salidas", "salidas", null, "🍻");
     static final List<Categoria> CATEGORIAS = List.of(KIOSCO, SUPER, SALIDAS);
 
-    static final MedioPago EFECTIVO = efectivo(conId(new MedioPago("Efectivo", "efectivo"), 1L));
+    static final MedioPago EFECTIVO = efectivo(conId(new MedioPago("Contado", "contado,efectivo,debito,qr"), 1L));
     static final MedioPago DEBITO = conId(new MedioPago("Débito", "debito"), 2L);
     static final List<MedioPago> MEDIOS = List.of(EFECTIVO, DEBITO);
 

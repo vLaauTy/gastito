@@ -38,7 +38,7 @@ class TranscripcionServiceTest {
     void elPromptLlevaLosNombresDelCatalogo() {
         assertThat(servicio.prompt(CATALOGO))
                 .contains("Categorías: Kiosco, Supermercado.")
-                .contains("Medios de pago: Efectivo, Débito, QR.")
+                .contains("Medios de pago: Efectivo, Débito, QR, efectivo, débito, transferencia, QR, Mercado Pago.")
                 .contains("Cuentas: Galicia, Mercado Pago.")
                 .doesNotContain("{{")
                 .doesNotEndWith("\n");

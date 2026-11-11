@@ -82,20 +82,20 @@ class FormatoMensajesTest {
         Movimiento m = movimiento(new BigDecimal("3700"), "Pan de pancho y papas", kiosco,
                 new MedioPago("Efectivo", null), null);
 
-        assertThat(formato.linea(m)).isEqualTo("🍬 Kiosco – $3.700 – Pan de pancho y papas – Efectivo – Hoy 16:42");
+        assertThat(formato.linea(m)).isEqualTo("🍬 Kiosco – $3.700 – Pan de pancho y papas – Contado – Hoy 16:42");
     }
 
     @Test
-    void lineaSinMedioYConDescripcionIgualALaCategoria() {
+    void lineaSinMedioEsContadoYConDescripcionIgualALaCategoria() {
         assertThat(formato.linea(movimiento(new BigDecimal("1500"), "Kiosco", kiosco, null, null)))
-                .isEqualTo("🍬 Kiosco – $1.500 – Sin medio de pago – Hoy 16:42");
+                .isEqualTo("🍬 Kiosco – $1.500 – Contado – Hoy 16:42");
     }
 
     @Test
     void lineaConCuentaYSinMonto() {
         Movimiento m = movimiento(null, "Pan", kiosco, new MedioPago("QR", null), new Cuenta("Mercado Pago", null));
 
-        assertThat(formato.linea(m)).isEqualTo("🍬 Kiosco – Pan – QR (Mercado Pago) – Hoy 16:42");
+        assertThat(formato.linea(m)).isEqualTo("🍬 Kiosco – Pan – Contado · Mercado Pago – Hoy 16:42");
     }
 
     @Test

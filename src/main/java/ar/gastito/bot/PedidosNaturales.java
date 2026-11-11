@@ -143,7 +143,8 @@ public class PedidosNaturales {
                     : html(m.getCategoria().getNombreConEmoji())) + " → <b>"
                     + html(c.categoria().getNombreConEmoji()) + "</b>";
             case MEDIO -> "💳 " + html(FormatoMensajes.medio(m)) + " → <b>"
-                    + html(c.medio().getNombre()) + "</b>";
+                    + html(c.medio().getNombre() + (c.detallePago() == null ? "" : " · " + c.detallePago()))
+                    + "</b>";
         };
     }
 
@@ -229,6 +230,9 @@ public class PedidosNaturales {
                 Movimiento m = movimientos.corregir(p.movimientoId(), c.monto(), c.descripcion(), c.fechaHora(),
                         c.categoria() == null ? null : c.categoria().getId(), c.medio() == null ? null
                                 : c.medio().getId());
+                if (c.campo() == ValidadorInterpretacion.Campo.MEDIO && !m.isConCredito()) {
+                    movimientos.cambiarDetallePago(m.getId(), c.detallePago());
+                }
                 Movimiento actualizado = movimientos.buscar(m.getId());
                 yield List.of(new Accion.Editar(mensajeId, "✅ <b>Corregido</b>\n" + resumen(actualizado),
                         Teclado.NINGUNO), new Accion.Avisar("✅ Corregido"));

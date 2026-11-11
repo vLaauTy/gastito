@@ -1,7 +1,7 @@
 package ar.gastito.bot;
 
 import static ar.gastito.bot.DatosDePrueba.AHORA;
-import static ar.gastito.bot.DatosDePrueba.DEBITO;
+import static ar.gastito.bot.DatosDePrueba.EFECTIVO;
 import static ar.gastito.bot.DatosDePrueba.ID;
 import static ar.gastito.bot.DatosDePrueba.RELOJ;
 import static ar.gastito.bot.DatosDePrueba.SUPER;
@@ -88,9 +88,9 @@ class PedidosNaturalesTest {
         when(movimientos.ultimoCargado()).thenReturn(Optional.of(pan()));
 
         Accion.Enviar pregunta = (Accion.Enviar) pedidos.corregir(new ValidadorInterpretacion.Correccion(
-                ValidadorInterpretacion.Campo.MEDIO, null, null, null, null, DEBITO), "");
+                ValidadorInterpretacion.Campo.MEDIO, null, null, null, null, EFECTIVO, "Débito"), "");
 
-        assertThat(pregunta.html()).endsWith("💳 Sin medio de pago → <b>Débito</b>");
+        assertThat(pregunta.html()).endsWith("💳 Contado → <b>Contado · Débito</b>");
     }
 
     @Test

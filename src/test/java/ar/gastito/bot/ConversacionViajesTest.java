@@ -138,7 +138,7 @@ class ConversacionViajesTest {
 
         assertThat(tarjetas.guardadoAutomatico(m)).startsWith("✅ <b>Guardado</b> · <b>$12.000</b>")
                 .contains(" · 🏔 Bariloche");
-        assertThat(datos(tarjetas.guardadoAutomatico(m, List.of()))).contains("wn:" + ID);
+        assertThat(datos(tarjetas.tecladoGuardado(m))).contains("wn:" + ID);
         Movimiento pendiente = conCategoria("12000", SALIDAS);
         pendiente.asociarViaje(VIAJE);
         assertThat(tarjetas.pendiente(pendiente)).contains("🏔 Bariloche");

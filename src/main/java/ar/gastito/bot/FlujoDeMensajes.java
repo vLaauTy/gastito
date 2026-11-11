@@ -181,12 +181,6 @@ class FlujoDeMensajes {
         if (i.dolares() != null && m.getMonto() != null && m.isPendiente()) {
             return dolares.nueva(chatId, m, prefijo, this::tarjetaNueva);
         }
-        // "Con mercado pago" solo: ¿plata de la cuenta o la tarjeta? Se pregunta antes de seguir.
-        if (i.tarjetaDudosa() != null && m.isPendiente() && m.getMonto() != null && !m.isEnDolares()) {
-            return Accion.Enviar.tarjeta(prefijo + tarjetas.pendiente(m) + "\n\n💳 <b>¿Fue con plata de la cuenta o "
-                    + "con la tarjeta de crédito " + html(i.tarjetaDudosa().getNombre()) + "?</b>",
-                    tarjetas.cuentaOTarjeta(m, i.tarjetaDudosa()), m.getId());
-        }
         Optional<GastoFijo> fijo = m.isPendiente() ? gastosFijos.vincular(texto) : Optional.empty();
         fijo.ifPresent(f -> gastosFijos.vincular(m, f));
         if (m.getMonto() == null) {

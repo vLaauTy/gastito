@@ -243,7 +243,7 @@ class GuardadoAutomaticoTest {
         Accion.Enviar tarjeta = mandarGasto("3700 pan de pancho y papas efectivo", conCategoria("3700", KIOSCO));
 
         assertThat(tarjeta.html()).isEqualTo("""
-                ✅ <b>Guardado</b> · <b>$3.700</b> · 🍬 Kiosco · 💵 Efectivo
+                ✅ <b>Guardado</b> · <b>$3.700</b> · 🍬 Kiosco · 💵 Contado
                 Pan de pancho y papas""");
         assertThat(datos(tarjeta.teclado())).containsExactly("e:15", "du:15");
         assertThat(tarjeta.tarjetaDeMovimiento()).isEqualTo(ID);
@@ -251,19 +251,17 @@ class GuardadoAutomaticoTest {
     }
 
     @Test
-    void sinMedioDePagoSumaLaFilaDeBotonesRapidos() {
+    void sinMedioDePagoEsContadoYNoHayFilaDeMedios() {
         alConfirmar(guardado(sinMedio("3700")));
 
         Accion.Enviar tarjeta = mandarGasto("3700 pan de pancho", sinMedio("3700"));
 
-        assertThat(tarjeta.html()).contains("💳 <i>Sin especificar</i>");
-        assertThat(tarjeta.teclado().filas().get(0)).extracting(Teclado.Boton::texto)
-                .containsExactly("💵 Efectivo", "💳 Débito");
-        assertThat(datos(tarjeta.teclado())).containsExactly("gm:15:1", "gm:15:2", "e:15", "du:15");
+        assertThat(tarjeta.html()).contains("💵 Contado");
+        assertThat(datos(tarjeta.teclado())).containsExactly("e:15", "du:15");
     }
 
     @Test
-    void elMedioRapidoActualizaElGuardadoYSacaLaFila() {
+    void elMedioRapidoDeUnMensajeViejoTodaviaActualizaElGuardado() {
         when(movimientos.buscar(ID)).thenReturn(guardado(sinMedio("3700")));
         Movimiento conDebito = guardado(conId(Movimiento.pendiente(new MovimientoInterpretado(new BigDecimal("3700"),
                 "Pan de pancho y papas", KIOSCO, List.of(), DEBITO, null, null, AHORA), Origen.TEXTO, "x", AHORA), ID));
@@ -272,9 +270,9 @@ class GuardadoAutomaticoTest {
 
         List<Accion> acciones = tocar("gm:15:2");
 
-        assertThat(edicion(acciones).html()).contains("💳 Débito");
+        assertThat(edicion(acciones).html()).contains("💵 Contado");
         assertThat(datos(edicion(acciones).teclado())).containsExactly("e:15", "du:15");
-        assertThat(acciones).contains(new Accion.Avisar("💳 Débito"));
+        assertThat(acciones).contains(new Accion.Avisar("💳 Contado"));
     }
 
     @Test
@@ -365,7 +363,7 @@ class GuardadoAutomaticoTest {
                 new FotoRecibida(5L, null, () -> new byte[] {1}));
 
         assertThat(((Accion.Enviar) acciones.get(0)).html())
-                .isEqualTo("✅ <b>Guardado</b> · <b>$8.050</b> · 🛒 Supermercado · 💳 Débito\nSupermercado Día · 3 productos");
+                .isEqualTo("✅ <b>Guardado</b> · <b>$8.050</b> · 🛒 Supermercado · 💵 Contado\nSupermercado Día · 3 productos");
     }
 
     @Test

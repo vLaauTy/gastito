@@ -39,7 +39,7 @@ class TarjetasTest {
                 📝 Pan de pancho y papas (cuota 1 de 6)
                 🗂 Cuota 1 de 6 · total $84.000
                 🍬 Kiosco
-                💳 Efectivo
+                💵 Contado
                 📅 Hoy 16:42""");
     }
 
@@ -61,18 +61,25 @@ class TarjetasTest {
         assertThat(tarjetas.pendiente(m)).contains("💳 Tarjeta de crédito · <b>¿cuál?</b>");
         assertThat(tarjetas.principal(m).botones()).extracting(Teclado.Boton::datos)
                 .containsExactly("tj:15:2", "tj:15:1", "e:15", "c:15");
-        assertThat(tarjetas.medios(ID, catalogos.cargar()).botones()).extracting(Teclado.Boton::texto)
+        assertThat(tarjetas.medios(ID, catalogos.cargar())
+                .botones()).extracting(Teclado.Boton::texto)
                 .startsWith("💳 Mercado Pago", "💳 MasterCard Gold");
     }
 
     @Test
-    void conMercadoPagoSoloPreguntaSiFuePlataDeLaCuentaOLaTarjeta() {
-        Movimiento m = conCategoria("3700", KIOSCO);
+    void guardadoSoloSinFilaDeMediosYConElDetalleDeContado() {
+        Movimiento m = Movimiento.pendiente(MovimientoInterpretado.conCategoria(new BigDecimal("3700"), "Pan",
+                KIOSCO, null, null, null, DatosDePrueba.AHORA), ar.gastito.movimiento.Origen.TEXTO, "pan 3700 con débito",
+                DatosDePrueba.AHORA);
+        org.springframework.test.util.ReflectionTestUtils.setField(m, "id", ID);
 
-        assertThat(tarjetas.cuentaOTarjeta(m, ConversacionTarjetaTest.TARJETA_MP).botones())
-                .extracting(Teclado.Boton::texto, Teclado.Boton::datos).startsWith(
-                        org.assertj.core.groups.Tuple.tuple("💰 Dinero en cuenta", "tj:15:0"),
-                        org.assertj.core.groups.Tuple.tuple("💳 Tarjeta de crédito Mercado Pago", "tj:15:2"));
+        assertThat(tarjetas.tecladoGuardado(m).botones()).extracting(Teclado.Boton::texto)
+                .containsExactly("✏️ Editar", "↩️ Deshacer");
+        assertThat(FormatoMensajes.medio(m)).isEqualTo("Contado · Débito");
+        assertThat(tarjetas.guardadoAutomatico(m)).contains("💵 Contado · Débito");
+        assertThat(tarjetas.medios(ID, new ar.gastito.catalogo.Catalogo(List.of(), MEDIOS, List.of(), List.of()))
+                .botones()).extracting(Teclado.Boton::texto)
+                .doesNotContain("Sin medio de pago");
     }
 
     @Test
@@ -97,7 +104,7 @@ class TarjetasTest {
                 💰 <b>$3.700</b>
                 📝 Pan de pancho y papas
                 🍬 Kiosco
-                💳 Efectivo
+                💵 Contado
                 📅 Hoy 16:42""");
     }
 
@@ -108,7 +115,7 @@ class TarjetasTest {
                 💰 <i>Falta el monto</i>
                 📝 Pan de pancho y papas
                 🏷 <b>¿Qué categoría?</b>
-                💳 Efectivo
+                💵 Contado
                 📅 Hoy 16:42""");
         assertThat(tarjetas.pidiendoMontoFaltante(dudoso(null, SUPER))).endsWith("¿Cuánto fue?</b> Escribime el monto.");
     }
@@ -120,7 +127,7 @@ class TarjetasTest {
                 💰 <b>$3.700</b>
                 📝 Pan de pancho y papas
                 🛒 Supermercado
-                💳 Efectivo
+                💵 Contado
                 📅 Hoy 16:42
 
                 📊 En octubre 2026 llevás <b>$5.200</b> en 🛒 Supermercado.""");
@@ -149,7 +156,7 @@ class TarjetasTest {
                         💰 <b>$3.700</b>
                         📝 Pan de pancho y papas
                         🛒 Supermercado
-                        💳 Efectivo
+                        💵 Contado · Efectivo
                         📅 Hoy 16:42""");
     }
 
@@ -227,9 +234,9 @@ class TarjetasTest {
     }
 
     @Test
-    void mediosConSinMedio() {
+    void mediosSinLaOpcionSinMedio() {
         assertThat(tarjetas.medios(ID, MEDIOS).botones()).extracting(Teclado.Boton::datos)
-                .containsExactly("p:15:1", "p:15:2", "p:15:0", "v:15");
+                .containsExactly("p:15:1", "p:15:2", "v:15");
     }
 
     @Test
@@ -250,7 +257,7 @@ class TarjetasTest {
                 Yerba 500 g ........... $3.900
                 Galletitas ............ $1.250</pre>
                 💰 Total <b>$8.050</b>
-                💳 Débito
+                💵 Contado
                 🛒 Supermercado""");
     }
 

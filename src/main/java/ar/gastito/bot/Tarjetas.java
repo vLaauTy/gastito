@@ -71,7 +71,7 @@ public class Tarjetas {
     /** Pagó menos de lo que debía: queda debiendo la diferencia, o se da por saldado. */
     static final String DEVOLUCION_QUEDA_DEBIENDO = "jq";
     static final String DEVOLUCION_SALDADO = "js";
-    /** Un gasto que se guardó solo: deshacerlo (se borra) o elegir el medio de pago con un toque. */
+    /** Un gasto que se guardó solo: deshacerlo (se borra). MEDIO_RAPIDO es de la fila de medios de mensajes viejos. */
     static final String DESHACER = "du";
     static final String MEDIO_RAPIDO = "gm";
     /**
@@ -216,7 +216,11 @@ public class Tarjetas {
         if (m.isFaltaTarjeta()) {
             return "💳 Tarjeta de crédito · <b>¿cuál?</b>";
         }
-        return "💳 " + html(FormatoMensajes.medio(m))
+        // Un ticket que dice "TARJETA" a secas: no se sabe si fue débito (contado) o crédito, se elige al editar.
+        if (m.getMedioPago() == null && m.getOrigen() == Origen.TICKET && m.isPendiente()) {
+            return "💳 Sin medio de pago";
+        }
+        return (m.isConCredito() ? "💳 " : "💵 ") + html(FormatoMensajes.medio(m))
                 + resumenTarjeta(m).map(r -> " · " + r).orElse("");
     }
 
@@ -300,13 +304,9 @@ public class Tarjetas {
                         .orElse("");
     }
 
-    /** "💵 Efectivo", "💳 Débito (Galicia)" o "💳 <i>Sin especificar</i>". */
+    /** "💵 Contado · Débito" o "💳 MasterCard Gold". */
     private static String medioCorto(Movimiento m) {
-        if (m.getMedioPago() == null && m.getCuenta() == null) {
-            return "💳 <i>Sin especificar</i>";
-        }
-        boolean efectivo = m.getMedioPago() != null && m.getMedioPago().isEfectivo();
-        return (efectivo ? "💵 " : "💳 ") + html(FormatoMensajes.medio(m));
+        return (m.isConCredito() ? "💳 " : "💵 ") + html(FormatoMensajes.medio(m));
     }
 
     /** ↩️ Deshacer: el gasto se borró. */
@@ -647,34 +647,11 @@ public class Tarjetas {
     }
 
     /**
-     * Un gasto que se guardó solo: ✏️ Editar y ↩️ Deshacer. Si no se sabe con qué se pagó, arriba una fila para
-     * elegirlo con un toque.
-     *
-     * @param medios los medios de pago del catálogo, para la fila rápida
+     * Un gasto que se guardó solo: ✏️ Editar y ↩️ Deshacer. Sin fila de medios de pago: si no se dijo, es Contado.
      */
-    public Teclado guardadoAutomatico(Movimiento m, List<MedioPago> medios) {
-        return guardadoAutomatico(m, new Catalogo(List.of(), medios, List.of(), tarjetasActivas.get()));
-    }
-
-    /**
-     * @param catalogo los medios de pago y las tarjetas, para la fila rápida: con más de una tarjeta, "Crédito" se
-     *                 reemplaza por una fila con un botón por tarjeta
-     */
-    public Teclado guardadoAutomatico(Movimiento m, Catalogo catalogo) {
+    public Teclado tecladoGuardado(Movimiento m) {
         long id = m.getId();
         Teclado.Constructor t = Teclado.constructor();
-        if (m.getMedioPago() == null && m.getCuenta() == null && !catalogo.mediosPago().isEmpty()) {
-            List<MedioElegido.Opcion> opciones = MedioElegido.opciones(catalogo);
-            t.fila(opciones.stream().filter(o -> !o.esTarjeta() || !o.medio().esTarjetaDeCredito()
-                    || catalogo.tarjetas().size() <= 1)
-                    .map(o -> boton(medioRapido(o.medio()), MEDIO_RAPIDO, id, o.valor()))
-                    .toArray(Teclado.Boton[]::new));
-            if (catalogo.tarjetas().size() > 1) {
-                t.fila(opciones.stream().filter(MedioElegido.Opcion::esTarjeta)
-                        .map(o -> boton("💳 " + o.nombre(), MEDIO_RAPIDO, id, o.valor()))
-                        .toArray(Teclado.Boton[]::new));
-            }
-        }
         t.fila(boton("✏️ Editar", EDITAR, id), boton("↩️ Deshacer", DESHACER, id));
         if (viaje(m).isPresent()) {
             t.fila(boton("🧳 No es del viaje", ConversacionViajes.NO_ES_DEL_VIAJE, id));
@@ -686,35 +663,6 @@ public class Tarjetas {
     private void filaDeTarjetas(Teclado.Constructor t, long id) {
         t.fila(tarjetasActivas.get().stream().map(c -> boton("💳 " + c.getNombre(), TARJETA_ELEGIDA, id, c.getId()))
                 .toArray(Teclado.Boton[]::new));
-    }
-
-    /**
-     * "Con mercado pago" solo: ¿fue plata de la cuenta o la tarjeta? "💰 Dinero en cuenta" o "💳 Tarjeta de crédito
-     * Mercado Pago", y abajo Editar y Cancelar.
-     */
-    public Teclado cuentaOTarjeta(Movimiento m, TarjetaCredito tarjeta) {
-        long id = m.getId();
-        return Teclado.constructor()
-                .fila(boton("💰 Dinero en cuenta", TARJETA_ELEGIDA, id, 0),
-                        boton("💳 Tarjeta de crédito " + tarjeta.getNombre(), TARJETA_ELEGIDA, id, tarjeta.getId()))
-                .fila(boton("✏️ Editar", EDITAR, id), boton("❌ Cancelar", CANCELAR, id))
-                .build();
-    }
-
-    /** El nombre corto de un medio para la fila rápida: "💵 Efectivo", "💳 Débito", "💳 Crédito", "🏦 Transf.", "QR". */
-    static String medioRapido(MedioPago mp) {
-        String nombre = mp.getNombre();
-        String minusculas = nombre.toLowerCase(java.util.Locale.ROOT);
-        if (mp.isEfectivo()) {
-            return "💵 " + nombre;
-        }
-        if (mp.esTarjetaDeCredito()) {
-            return "💳 Crédito";
-        }
-        if (minusculas.startsWith("transf")) {
-            return "🏦 Transf.";
-        }
-        return minusculas.startsWith("déb") || minusculas.startsWith("deb") ? "💳 " + nombre : nombre;
     }
 
     // --- Juntadas ---
@@ -785,7 +733,6 @@ public class Tarjetas {
                 .map(o -> boton((o.esTarjeta() && catalogo.tarjetas().size() > 1 ? "💳 " : "") + o.nombre(), MEDIO,
                         id, o.valor()))
                 .toList());
-        botones.add(boton("Sin medio de pago", MEDIO, id, SIN_MEDIO));
         return Teclado.constructor().grilla(botones, 2).fila(volver(id)).build();
     }
 
