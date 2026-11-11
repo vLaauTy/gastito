@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.List;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -79,6 +80,10 @@ public class Movimiento {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cuenta_id")
     private Cuenta cuenta;
+
+    /** De contado, cómo se pagó si se dijo ("Débito", "Transferencia", "Mercado Pago"…); null con crédito. */
+    @Column(name = "detalle_pago")
+    private String detallePago;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tarjeta_id")
@@ -181,6 +186,10 @@ public class Movimiento {
         if (m.categoria == null) {
             m.candidatas.addAll(interpretado.candidatas());
         }
+        if (!m.isConCredito()) {
+            String detalle = ar.gastito.catalogo.DetallePago.reconocer(textoOriginal);
+            m.detallePago = detalle != null ? detalle : m.cuenta == null ? null : m.cuenta.getNombre();
+        }
         return m;
     }
 
@@ -193,6 +202,9 @@ public class Movimiento {
     public static Movimiento deTicket(MovimientoInterpretado interpretado, DatosTicket ticket, String textoOriginal,
             LocalDateTime ahora) {
         Movimiento m = pendiente(interpretado, Origen.TICKET, textoOriginal, ahora);
+        if (m.detallePago == null && !m.isConCredito()) {
+            m.detallePago = ticket.medioImpreso();
+        }
         m.comercio = ticket.comercio();
         m.sucursal = ticket.sucursal();
         m.subtotalImpreso = ticket.subtotalImpreso();
@@ -297,6 +309,7 @@ public class Movimiento {
         if (nuevo != null && nuevo.esTarjetaDeCredito()) {
             this.tarjeta = tarjetaCredito;
             this.cuenta = null;
+            this.detallePago = null;
         } else {
             this.tarjeta = null;
         }
@@ -340,6 +353,7 @@ public class Movimiento {
             if (nuevoMedio.esTarjetaDeCredito()) {
                 this.tarjeta = tarjetaCredito;
                 this.cuenta = null;
+                this.detallePago = null;
             } else {
                 this.tarjeta = null;
             }
@@ -397,6 +411,7 @@ public class Movimiento {
         if (nuevoMedio != null && nuevoMedio.esTarjetaDeCredito()) {
             this.tarjeta = tarjetaCredito;
             this.cuenta = null;
+            this.detallePago = null;
         } else {
             this.tarjeta = null;
             this.cuenta = nuevaCuenta;
@@ -884,6 +899,20 @@ public class Movimiento {
 
     public Cuenta getCuenta() {
         return cuenta;
+    }
+
+    public String getDetallePago() {
+        return detallePago;
+    }
+
+    /** Con crédito no se paga de contado: no lleva detalle. */
+    public boolean isConCredito() {
+        return medioPago != null && medioPago.esTarjetaDeCredito();
+    }
+
+    /** Cómo se pagó de contado ("Débito", "Mercado Pago"…), o null. Con crédito queda vacío. */
+    public void cambiarDetallePago(String detalle) {
+        this.detallePago = isConCredito() ? null : ar.gastito.catalogo.DetallePago.limpiar(detalle);
     }
 
     public TarjetaCredito getTarjeta() {

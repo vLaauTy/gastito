@@ -194,7 +194,7 @@ class MovimientoServiceTest {
         assertThat(conTarjeta.isCompleto()).isTrue();
 
         Movimiento conEfectivo = service.cambiarMedioPago(m.getId(), efectivo);
-        assertThat(conEfectivo.getMedioPago().getNombre()).isEqualTo("Efectivo");
+        assertThat(conEfectivo.getMedioPago().getNombre()).isEqualTo("Contado");
         assertThat(conEfectivo.getTarjeta()).isNull();
 
         assertThat(service.cambiarMedioPago(m.getId(), null).getMedioPago()).isNull();

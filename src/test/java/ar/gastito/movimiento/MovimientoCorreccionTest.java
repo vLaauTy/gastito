@@ -26,6 +26,26 @@ class MovimientoCorreccionTest {
     }
 
     @Test
+    void elDetalleDeContadoSaleDelTextoYSeVaAlPasarACredito() {
+        Movimiento m = Movimiento.pendiente(MovimientoInterpretado.conCategoria(new BigDecimal("3700"), "Pan", SUPER,
+                null, null, null, AHORA), Origen.TEXTO, "3700 pan por transferencia", AHORA);
+        assertThat(m.getDetallePago()).isEqualTo("Transferencia");
+
+        m.cambiarDetallePago("  QR ");
+        assertThat(m.getDetallePago()).isEqualTo("QR");
+
+        m.cambiarMedioPago(new MedioPago(MedioPago.TARJETA_DE_CREDITO, "credito"), null);
+        assertThat(m.getDetallePago()).isNull();
+        m.cambiarDetallePago("Débito");
+        assertThat(m.getDetallePago()).isNull(); // con crédito no lleva detalle
+
+        Movimiento conCredito = Movimiento.pendiente(MovimientoInterpretado.conCategoria(new BigDecimal("3700"), "Pan",
+                SUPER, new MedioPago(MedioPago.TARJETA_DE_CREDITO, "credito"), null, null, AHORA), Origen.TEXTO,
+                "3700 pan con crédito, no con débito", AHORA);
+        assertThat(conCredito.getDetallePago()).isNull();
+    }
+
+    @Test
     void seCorrigeLoGuardadoSoloEnLoQueSeDice() {
         Movimiento m = guardado();
 

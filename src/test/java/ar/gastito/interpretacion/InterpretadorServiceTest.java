@@ -204,7 +204,6 @@ class InterpretadorServiceTest {
 
         assertThat(i.movimiento().medioPago()).isSameAs(CatalogoDePrueba.CREDITO);
         assertThat(i.movimiento().tarjeta()).isSameAs(GOLD);
-        assertThat(i.tarjetaDudosa()).isNull();
     }
 
     @Test
@@ -229,12 +228,12 @@ class InterpretadorServiceTest {
     }
 
     @Test
-    void conMercadoPagoSoloQuedaLaDudaEntreLaCuentaYLaTarjeta() {
+    void conMercadoPagoSoloEsContadoSinPreguntar() {
         conDosTarjetas();
 
         InterpretadorService.Interpretado i = conIa("remera 9000 con mercado pago", "", "Mercado Pago");
 
-        assertThat(i.tarjetaDudosa()).isSameAs(MP);
+        assertThat(i.movimiento().medioPago()).isSameAs(CatalogoDePrueba.EFECTIVO);
         assertThat(i.movimiento().tarjeta()).isNull();
         assertThat(i.movimiento().cuenta()).isSameAs(CatalogoDePrueba.MERCADO_PAGO);
     }

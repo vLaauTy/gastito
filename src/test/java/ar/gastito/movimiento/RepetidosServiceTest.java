@@ -86,7 +86,7 @@ class RepetidosServiceTest {
 
     private Movimiento confirmado(String monto, String descripcion, String categoria, LocalDateTime fecha) {
         Movimiento m = movimientos.crearPendiente(MovimientoInterpretado.conCategoria(new BigDecimal(monto),
-                descripcion, categoria(categoria), medio("Efectivo"), null, null, fecha), Origen.AUDIO, descripcion);
+                descripcion, categoria(categoria), medio("Contado"), null, null, fecha), Origen.AUDIO, descripcion);
         movimientos.confirmar(m.getId());
         return m;
     }

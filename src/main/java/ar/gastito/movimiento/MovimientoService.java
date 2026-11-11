@@ -284,6 +284,14 @@ public class MovimientoService {
         return m;
     }
 
+    /** De contado, cómo se pagó ("Débito", "Mercado Pago"…); vacío lo saca. Con crédito no lleva detalle. */
+    @Transactional
+    public Movimiento cambiarDetallePago(Long id, String detalle) {
+        Movimiento m = buscar(id);
+        m.cambiarDetallePago(detalle);
+        return m;
+    }
+
     /**
      * Borra un gasto común de verdad (con sus productos de ticket): ↩️ Deshacer de uno que se guardó solo, o
      * Eliminar en el dashboard. La foto del ticket no se toca. Una juntada o una cuota tienen su propio camino.

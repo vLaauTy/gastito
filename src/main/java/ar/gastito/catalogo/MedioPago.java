@@ -12,6 +12,8 @@ import jakarta.persistence.Table;
 public class MedioPago implements ConPalabrasClave {
 
     public static final String TARJETA_DE_CREDITO = "Tarjeta de crédito";
+    /** Todo lo que no es crédito: efectivo, débito, transferencia o QR (el detalle va en el movimiento). */
+    public static final String CONTADO = "Contado";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

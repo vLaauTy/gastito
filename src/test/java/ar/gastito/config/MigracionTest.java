@@ -135,9 +135,9 @@ class MigracionTest {
     }
 
     @Test
-    void soloElEfectivoEsEfectivoYLasBilleterasTienenColor() {
+    void soloContadoEsEfectivoYLasBilleterasTienenColor() {
         assertThat(jdbc.queryForList("SELECT nombre FROM medio_pago WHERE es_efectivo", String.class))
-                .containsExactly("Efectivo");
+                .containsExactly("Contado");
         assertThat(jdbc.queryForObject("SELECT color FROM cuenta WHERE nombre = 'Galicia'", String.class))
                 .isEqualTo("#1F7A4D");
         assertThat(jdbc.queryForObject("SELECT color FROM cuenta WHERE nombre = 'Mercado Pago'", String.class))

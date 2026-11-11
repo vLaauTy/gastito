@@ -12,13 +12,20 @@ import java.util.List;
  * @param descuentosImpresos el total de descuentos impreso, negativo (o cero), o null si no figura
  * @param lineasIlegibles    las líneas que no se pudieron leer ("el importe de la línea 7 está tapado")
  * @param items              los productos y los descuentos, en el orden impreso
+ * @param medioImpreso       el medio de pago como figura en el ticket ("EFECTIVO", "DEBITO"), o null: de contado,
+ *                           es el detalle
  */
 public record DatosTicket(String comercio, String sucursal, BigDecimal subtotalImpreso,
-        BigDecimal descuentosImpresos, List<String> lineasIlegibles, List<ItemTicket> items) {
+        BigDecimal descuentosImpresos, List<String> lineasIlegibles, List<ItemTicket> items, String medioImpreso) {
 
     public DatosTicket {
         lineasIlegibles = lineasIlegibles == null ? List.of() : List.copyOf(lineasIlegibles);
         items = items == null ? List.of() : List.copyOf(items);
+    }
+
+    public DatosTicket(String comercio, String sucursal, BigDecimal subtotalImpreso, BigDecimal descuentosImpresos,
+            List<String> lineasIlegibles, List<ItemTicket> items) {
+        this(comercio, sucursal, subtotalImpreso, descuentosImpresos, lineasIlegibles, items, null);
     }
 
     /** Solo comercio y productos. */

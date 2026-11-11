@@ -11,8 +11,9 @@ import java.util.stream.Stream;
 
 /**
  * Qué tarjeta de crédito nombra un mensaje, por sus alias ("con la master", "con la de mercado pago"). Un alias que
- * también nombra una cuenta ("galicia", "mercado pago", "mp") es débil: solo, sin "tarjeta" ni "crédito", puede ser
- * plata en esa cuenta (QR, transferencia) y se pregunta. Sin IA: sale de las palabras clave de la base.
+ * también nombra una cuenta ("galicia", "mercado pago", "mp") es débil: solo, sin "tarjeta" ni "crédito", es dudoso
+ * (en un gasto es Contado con ese detalle; para el ciclo de la tarjeta alcanza). Sin IA: sale de las palabras clave
+ * de la base.
  */
 public final class ReconocedorTarjeta {
 

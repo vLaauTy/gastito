@@ -14,6 +14,7 @@ import ar.gastito.catalogo.Catalogo;
 import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.ConPalabrasClave;
 import ar.gastito.catalogo.Cuenta;
+import ar.gastito.catalogo.DetallePago;
 import ar.gastito.catalogo.MedioPago;
 import ar.gastito.catalogo.TarjetaCredito;
 import ar.gastito.movimiento.ClaseIngreso;
@@ -137,10 +138,16 @@ public class ValidadorInterpretacion {
     /**
      * "El último era 3500, no 3700": solo viene el valor del campo que se corrige.
      *
-     * @param campo null si no se entendió qué cambiar (o el valor nuevo no es válido)
+     * @param campo       null si no se entendió qué cambiar (o el valor nuevo no es válido)
+     * @param detallePago con MEDIO de contado, cómo dijo que pagó ("Débito"), o null
      */
     public record Correccion(Campo campo, BigDecimal monto, String descripcion, LocalDateTime fechaHora,
-            Categoria categoria, MedioPago medio) implements Resultado {
+            Categoria categoria, MedioPago medio, String detallePago) implements Resultado {
+
+        public Correccion(Campo campo, BigDecimal monto, String descripcion, LocalDateTime fechaHora,
+                Categoria categoria, MedioPago medio) {
+            this(campo, monto, descripcion, fechaHora, categoria, medio, null);
+        }
     }
 
     /** "Borrá lo último que cargué". */
@@ -264,10 +271,11 @@ public class ValidadorInterpretacion {
         } catch (IllegalArgumentException e) {
             clase = ClaseIngreso.EXTRA;
         }
-        MedioPago medio = buscar(ia.medioPago(), catalogo.mediosPago()).orElse(null);
+        // Un ingreso va a una cuenta; "en efectivo" (no "por transferencia", que también es Contado) va sin cuenta.
+        boolean efectivo = DetallePago.EFECTIVO.equals(DetallePago.reconocer(ia.medioPago()));
         return new Ingreso(clase, monto(ia.monto()).orElse(null),
                 clase == ClaseIngreso.EXTRA ? texto(ia.descripcion()) : null,
-                buscar(ia.cuenta(), catalogo.cuentas()).orElse(null), medio != null && medio.isEfectivo(),
+                buscar(ia.cuenta(), catalogo.cuentas()).orElse(null), efectivo,
                 fechas.resolver(ia.fecha(), ia.hora(), ahora));
     }
 
@@ -296,7 +304,8 @@ public class ValidadorInterpretacion {
         return switch (campo) {
             case MONTO -> monto.map(m -> new Correccion(Campo.MONTO, m, null, null, null, null))
                     .orElseGet(() -> new Correccion(null, null, null, null, null, null));
-            case MEDIO -> medio.map(m -> new Correccion(Campo.MEDIO, null, null, null, null, m))
+            case MEDIO -> medio.map(m -> new Correccion(Campo.MEDIO, null, null, null, null, m,
+                            m.esTarjetaDeCredito() ? null : DetallePago.reconocer(ia.medioPago())))
                     .orElseGet(() -> new Correccion(null, null, null, null, null, null));
             case CATEGORIA -> categoria.map(c -> new Correccion(Campo.CATEGORIA, null, null, null, c, null))
                     .orElseGet(() -> new Correccion(null, null, null, null, null, null));
@@ -342,6 +351,9 @@ public class ValidadorInterpretacion {
         if (medio != null && medio.esTarjetaDeCredito()) {
             tarjeta = catalogo.tarjetaUnica().orElse(null);
             cuenta = null;
+        } else {
+            // Si no dijo crédito, es Contado (efectivo, débito, transferencia o QR: el detalle sale del texto).
+            medio = catalogo.contado().orElse(medio);
         }
         String descripcion = descripcion(ia.descripcion(), candidatas.get(0));
         LocalDateTime fechaHora = fechas.resolver(ia.fecha(), ia.hora(), ahora);

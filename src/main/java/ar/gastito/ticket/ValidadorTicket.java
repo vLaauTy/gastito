@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import ar.gastito.catalogo.Catalogo;
 import ar.gastito.catalogo.Categoria;
 import ar.gastito.catalogo.Cuenta;
+import ar.gastito.catalogo.DetallePago;
 import ar.gastito.catalogo.MedioPago;
 import ar.gastito.catalogo.TarjetaCredito;
 import ar.gastito.catalogo.ReconocedorTarjeta;
@@ -175,6 +176,10 @@ public class ValidadorTicket {
         // Solo el nombre exacto: un ticket que dice "TARJETA" puede ser débito o crédito, y la palabra clave
         // "tarjeta" lo llevaría a crédito. Sin aclarar, queda sin medio de pago y lo elige el usuario.
         MedioPago medio = ValidadorInterpretacion.buscarPorNombre(ia.medioPago(), catalogo.mediosPago()).orElse(null);
+        // Efectivo, débito, transferencia o QR impresos son Contado (aunque la IA no lo haya dicho con ese nombre).
+        if ((medio == null || !medio.esTarjetaDeCredito()) && DetallePago.reconocer(ia.medioPagoImpreso()) != null) {
+            medio = catalogo.contado().orElse(medio);
+        }
         // Aunque el prompt lo pide, con el ticket real la IA eligió crédito para un "TARJETA" a secas: lo decide Java.
         if (!conTextoDelUsuario && tarjetaSinAclarar(ia.medioPagoImpreso())) {
             medio = null;
@@ -198,7 +203,8 @@ public class ValidadorTicket {
                 : new MovimientoInterpretado(total.get(), descripcion, null, candidatas.categorias(), medio, cuenta,
                         tarjeta, fechaHora);
         DatosTicket ticket = new DatosTicket(comercio, sucursal(ia.sucursal()), subtotalImpreso, descuentosImpresos,
-                lineasIlegibles(ia.lineasIlegibles()), items);
+                lineasIlegibles(ia.lineasIlegibles()), items, medio != null && !medio.esTarjetaDeCredito()
+                        ? DetallePago.reconocer(ia.medioPagoImpreso()) : null);
         return new Valido(movimiento, candidatas.confianza(), ticket, diferencias);
     }
 

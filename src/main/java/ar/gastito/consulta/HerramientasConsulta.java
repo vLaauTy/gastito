@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ar.gastito.catalogo.Catalogo;
 import ar.gastito.catalogo.CatalogoService;
 import ar.gastito.catalogo.ConPalabrasClave;
+import ar.gastito.catalogo.MedioPago;
 import ar.gastito.interpretacion.ValidadorInterpretacion;
 import ar.gastito.movimiento.IngresoService;
 import ar.gastito.movimiento.InicioRegistro;
@@ -211,8 +212,10 @@ public class HerramientasConsulta {
             filtro = filtro.and(m -> m.getCategoria() != null && id.equals(m.getCategoria().getId()));
         }
         if (lleno(f.medioPago())) {
-            Long id = opcion(f.medioPago(), catalogo.mediosPago(), "medio de pago").getId();
-            filtro = filtro.and(m -> m.getMedioPago() != null && id.equals(m.getMedioPago().getId()));
+            MedioPago elegido = opcion(f.medioPago(), catalogo.mediosPago(), "medio de pago");
+            // Contado es todo lo que no es crédito (también un gasto sin medio).
+            filtro = filtro.and(elegido.isEfectivo() ? m -> !m.isConCredito()
+                    : m -> m.getMedioPago() != null && elegido.getId().equals(m.getMedioPago().getId()));
         }
         if (lleno(f.cuenta())) {
             Long id = opcion(f.cuenta(), catalogo.cuentas(), "cuenta").getId();
@@ -252,6 +255,12 @@ public class HerramientasConsulta {
     }
 
     private static String medio(Movimiento m) {
+        if (!m.isConCredito()) {
+            return MedioPago.CONTADO + (m.getDetallePago() == null ? "" : " · " + m.getDetallePago());
+        }
+        if (m.getTarjeta() != null) {
+            return m.getMedioPago().getNombre() + " · " + m.getTarjeta().getNombre();
+        }
         if (m.getMedioPago() != null && m.getCuenta() != null) {
             return m.getMedioPago().getNombre() + " · " + m.getCuenta().getNombre();
         }

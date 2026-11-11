@@ -136,7 +136,7 @@ class ValidadorInterpretacionTest {
     void comparaNombresSinTildesNiMayusculas() {
         MovimientoInterpretado m = valida(ia("100", "x", "comida afuera / DELIVERY", "debito", "mercado pago"));
         assertThat(m.categoria()).isSameAs(COMIDA);
-        assertThat(m.medioPago()).isSameAs(DEBITO);
+        assertThat(m.medioPago()).isSameAs(EFECTIVO); // débito es Contado
         assertThat(m.cuenta()).isSameAs(MERCADO_PAGO);
     }
 
@@ -146,9 +146,9 @@ class ValidadorInterpretacionTest {
     }
 
     @Test
-    void medioYCuentaQueNoExistenQuedanVacios() {
+    void unMedioQueNoExisteEsContadoYUnaCuentaQueNoExisteQuedaVacia() {
         MovimientoInterpretado m = valida(ia("100", "Algo", "Kiosco", "Bitcoin", "Banco Nación"));
-        assertThat(m.medioPago()).isNull();
+        assertThat(m.medioPago()).isSameAs(EFECTIVO);
         assertThat(m.cuenta()).isNull();
     }
 

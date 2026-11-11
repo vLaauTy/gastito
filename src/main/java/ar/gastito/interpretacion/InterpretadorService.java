@@ -72,18 +72,9 @@ public class InterpretadorService {
      * @param cuotas  si es una compra en cuotas (el monto es el total), o null
      * @param dolares si es una compra en dólares: cuántos (el movimiento trae el mismo número), o null
      */
-    /**
-     * @param tarjetaDudosa se nombró una tarjeta con un alias que también es una cuenta ("con mercado pago"): no se
-     *                      sabe si fue esa tarjeta o plata en la cuenta, y se pregunta; null si no hay duda
-     */
     public record Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId,
-            PedidoJuntada juntada, PedidoCuotas cuotas, BigDecimal dolares, TarjetaCredito tarjetaDudosa,
-            PedidoPrestamo prestamo) implements Resultado {
-
-        public Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId,
-                PedidoJuntada juntada, PedidoCuotas cuotas, BigDecimal dolares, TarjetaCredito tarjetaDudosa) {
-            this(movimiento, confianza, usoIaId, juntada, cuotas, dolares, tarjetaDudosa, null);
-        }
+            PedidoJuntada juntada, PedidoCuotas cuotas, BigDecimal dolares, PedidoPrestamo prestamo)
+            implements Resultado {
 
         public Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId,
                 PedidoJuntada juntada, PedidoCuotas cuotas, BigDecimal dolares) {
@@ -95,21 +86,20 @@ public class InterpretadorService {
         }
 
         /**
-         * La tarjeta que nombra el texto ("con la master"): con un alias claro, pasa a ser con crédito y esa tarjeta;
-         * con uno dudoso, queda anotada para preguntar.
+         * La tarjeta que nombra el texto ("con la master"): pasa a ser con crédito y esa tarjeta. Contado es el medio
+         * por defecto, así que no impide reconocerla; un alias que también es una cuenta ("con mercado pago"), solo,
+         * es Contado.
          */
         Interpretado conTarjetaDelTexto(String texto, Catalogo catalogo) {
-            ReconocedorTarjeta.Mencion mencion = ReconocedorTarjeta.reconocer(texto, movimiento.medioPago(), catalogo);
-            if (mencion.tarjeta() == null) {
+            MedioPago dicho = movimiento.medioPago() != null && movimiento.medioPago().esTarjetaDeCredito()
+                    ? movimiento.medioPago() : null;
+            ReconocedorTarjeta.Mencion mencion = ReconocedorTarjeta.reconocer(texto, dicho, catalogo);
+            if (!mencion.clara()) {
                 return this;
-            }
-            if (mencion.dudosa()) {
-                return new Interpretado(movimiento, confianza, usoIaId, juntada, cuotas, dolares, mencion.tarjeta(),
-                        prestamo);
             }
             MedioPago credito = catalogo.medioCredito().orElse(movimiento.medioPago());
             return new Interpretado(movimiento.conMedio(credito, null, mencion.tarjeta()), confianza, usoIaId,
-                    juntada, cuotas, dolares, null, prestamo);
+                    juntada, cuotas, dolares, prestamo);
         }
 
         public Interpretado(MovimientoInterpretado movimiento, Confianza confianza, Long usoIaId,
@@ -198,7 +188,8 @@ public class InterpretadorService {
         if (simple.isPresent()) {
             ParserSimple.Resultado r = simple.get();
             return new Interpretado(MovimientoInterpretado.conCategoria(r.monto(), r.descripcion(), r.categoria(),
-                    r.medioPago(), cuenta(r.medioPago(), r.cuenta()), tarjeta(r.medioPago(), catalogo), ahora),
+                    medio(r.medioPago(), catalogo), cuenta(r.medioPago(), r.cuenta()), tarjeta(r.medioPago(), catalogo),
+                    ahora),
                     Confianza.ALTA, null).conTarjetaDelTexto(texto, catalogo);
         }
 
@@ -209,7 +200,7 @@ public class InterpretadorService {
             Optional<HistorialCategorias.Aprendido> aprendido = historial.buscar(s.resto(), catalogo);
             if (aprendido.isPresent()) {
                 return new Interpretado(MovimientoInterpretado.conCategoria(s.monto(), aprendido.get().descripcion(),
-                        aprendido.get().categoria(), s.medioPago(), cuenta(s.medioPago(), s.cuenta()),
+                        aprendido.get().categoria(), medio(s.medioPago(), catalogo), cuenta(s.medioPago(), s.cuenta()),
                         tarjeta(s.medioPago(), catalogo), fechas.resolver(s.fecha(), "", ahora)),
                         Confianza.ALTA, null).conTarjetaDelTexto(texto, catalogo);
             }
@@ -264,13 +255,18 @@ public class InterpretadorService {
         Optional<HistorialCategorias.Aprendido> aprendido = historial.buscar(v.movimiento().descripcion(), catalogo);
         return aprendido.isPresent()
                 ? new Interpretado(v.movimiento().conCategoriaElegida(aprendido.get().categoria()), Confianza.ALTA,
-                        usoIaId, v.juntada(), v.cuotas(), v.dolares(), null, v.prestamo())
-                : new Interpretado(v.movimiento(), v.confianza(), usoIaId, v.juntada(), v.cuotas(), v.dolares(), null,
+                        usoIaId, v.juntada(), v.cuotas(), v.dolares(), v.prestamo())
+                : new Interpretado(v.movimiento(), v.confianza(), usoIaId, v.juntada(), v.cuotas(), v.dolares(),
                         v.prestamo());
     }
 
     private static Cuenta cuenta(MedioPago medio, Cuenta cuenta) {
         return medio != null && medio.esTarjetaDeCredito() ? null : cuenta;
+    }
+
+    /** Si no dijo crédito, es Contado. */
+    private static MedioPago medio(MedioPago medio, Catalogo catalogo) {
+        return medio != null && medio.esTarjetaDeCredito() ? medio : catalogo.contado().orElse(medio);
     }
 
     private static TarjetaCredito tarjeta(MedioPago medio, Catalogo catalogo) {

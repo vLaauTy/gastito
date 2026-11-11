@@ -83,8 +83,8 @@ class HerramientasConsultaTest {
 
     @BeforeEach
     void datos() {
-        gasto("Kiosco", "Kiosco", "1500", LocalDate.of(2026, 10, 3), "Efectivo", null);
-        gasto("Kiosco", "Alfajor", "900", LocalDate.of(2026, 10, 10), "QR", "Mercado Pago");
+        gasto("Kiosco", "Kiosco", "1500", LocalDate.of(2026, 10, 3), "Contado", null);
+        gasto("Kiosco", "Alfajor", "900", LocalDate.of(2026, 10, 10), "Contado", "Mercado Pago");
         gasto("Transporte / Moto", "Nafta", "12000", LocalDate.of(2026, 10, 12), "Tarjeta de crédito", null);
         ticket("Día", "8000", LocalDate.of(2026, 10, 15), List.of(
                 new ItemTicket("Seven Up lata 354 ml", "SEVEN UP LATA", SEVEN_UP, new BigDecimal("2"),
@@ -95,8 +95,8 @@ class HerramientasConsultaTest {
         ticket("Día", "2250", LocalDate.of(2026, 10, 20), List.of(
                 new ItemTicket("Seven Up", null, SEVEN_UP, new BigDecimal("1"), new BigDecimal("2250"),
                         new BigDecimal("2250"))));
-        gasto("Kiosco", "Kiosco", "2000", LocalDate.of(2026, 9, 5), "Efectivo", null);
-        gasto("Supermercado", "Coto", "30000", LocalDate.of(2026, 9, 20), "Débito", "Galicia");
+        gasto("Kiosco", "Kiosco", "2000", LocalDate.of(2026, 9, 5), "Contado", null);
+        gasto("Supermercado", "Coto", "30000", LocalDate.of(2026, 9, 20), "Contado", "Galicia");
         ingresos.cargar(ClaseIngreso.SUELDO, new BigDecimal("380000"), null, null, OCT_1);
         ingresos.cargar(ClaseIngreso.EXTRA, new BigDecimal("25000"), "Arreglo de PC", null, LocalDate.of(2026, 10, 12));
     }
@@ -183,7 +183,7 @@ class HerramientasConsultaTest {
                 .movimientos()).hasSize(5);
         assertThat(herramientas.listarMovimientos(OCT_1, OCT_31, new HerramientasConsulta.Filtros("Kiosco", null,
                 null, null), 20).movimientos()).extracting(HerramientasConsulta.MovimientoListado::medio)
-                .containsExactly("QR · Mercado Pago", "Efectivo");
+                .containsExactly("Contado · Mercado Pago", "Contado");
     }
 
     @Test
@@ -240,7 +240,7 @@ class HerramientasConsultaTest {
 
     private void ticket(String comercio, String monto, LocalDate dia, List<ItemTicket> items) {
         Movimiento m = movimientos.crearPendienteDeTicket(
-                interpretado("Supermercado", comercio, monto, dia, "Débito", null), DatosTicket.de(comercio, items),
+                interpretado("Supermercado", comercio, monto, dia, "Contado", null), DatosTicket.de(comercio, items),
                 null);
         movimientos.confirmar(m.getId());
     }

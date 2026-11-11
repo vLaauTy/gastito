@@ -306,7 +306,7 @@ class ValidadorTicketTest {
         assertThat(valido(ticket().medioPagoImpreso("TARJETA").medioPago("Tarjeta de crédito").build())
                 .movimiento().medioPago()).isNull();
         assertThat(valido(ticket().medioPagoImpreso("TARJETA DE DEBITO").medioPago("Débito").build())
-                .movimiento().medioPago()).isEqualTo(CatalogoDePrueba.DEBITO);
+                .movimiento().medioPago()).isEqualTo(CatalogoDePrueba.EFECTIVO); // débito es Contado
     }
 
     @Test

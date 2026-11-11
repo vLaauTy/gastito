@@ -94,7 +94,7 @@ class TicketRealDiaTest {
     @Test
     void unaTarjetaAclaradaSeRespeta() {
         assertThat(validar(conMedio("TARJETA DEBITO", "Débito")).movimiento().medioPago())
-                .isEqualTo(CatalogoDePrueba.DEBITO);
+                .isEqualTo(CatalogoDePrueba.EFECTIVO); // débito es Contado
         assertThat(validar(conMedio("VISA", "Tarjeta de crédito")).movimiento().medioPago())
                 .isEqualTo(CatalogoDePrueba.CREDITO);
         assertThat(ValidadorTicket.tarjetaSinAclarar("Tarjeta de Débito")).isFalse();

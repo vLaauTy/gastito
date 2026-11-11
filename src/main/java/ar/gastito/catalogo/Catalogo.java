@@ -33,6 +33,11 @@ public record Catalogo(List<Categoria> categorias, List<MedioPago> mediosPago, L
         return tarjetas.size() == 1 ? Optional.of(tarjetas.getFirst()) : Optional.empty();
     }
 
+    /** Contado: todo lo que no es tarjeta de crédito (efectivo, débito, transferencia, QR). Es el medio por defecto. */
+    public Optional<MedioPago> contado() {
+        return mediosPago.stream().filter(MedioPago::isEfectivo).findFirst();
+    }
+
     public Optional<MedioPago> medioCredito() {
         return mediosPago.stream().filter(MedioPago::esTarjetaDeCredito).findFirst();
     }

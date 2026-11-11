@@ -202,7 +202,9 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
         int conCredito = 0;
         for (PlanDatosPrueba.Gasto g : plan.gastos()) {
             Categoria categoria = buscar(categorias, g.categoria());
-            MedioPago medio = buscar(medios, g.medio());
+            // El plan dice cómo se pagó (efectivo, débito, QR…): todo lo que no es crédito es Contado con ese detalle.
+            boolean credito = PlanDatosPrueba.TARJETA.equals(g.medio());
+            MedioPago medio = credito ? buscar(medios, g.medio()) : buscar(medios, MedioPago.CONTADO);
             Cuenta cuenta = g.cuenta() == null ? null : buscar(cuentas, g.cuenta());
             MovimientoInterpretado interpretado = MovimientoInterpretado.conCategoria(g.monto(), g.descripcion(),
                     categoria, medio, cuenta,
@@ -214,6 +216,9 @@ public class GeneradorDatosPrueba implements ApplicationRunner {
                     : movimientos.crearPendienteDeTicket(interpretado, new DatosTicket(g.ticket().comercio(),
                             g.ticket().sucursal(), g.ticket().subtotal(), g.ticket().descuentos(), List.of(),
                             g.ticket().items()), null);
+            if (!credito) {
+                movimientos.cambiarDetallePago(m.getId(), g.medio());
+            }
             movimientos.confirmar(m.getId());
         }
         for (PlanDatosPrueba.Ingreso i : plan.ingresos()) {
